@@ -1,0 +1,60 @@
+services:
+  server:
+    build: { context: ., target: server }
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8080}
+      LIVEKIT_URL: ${LIVEKIT_URL:-ws://livekit:7880}
+      PUBLIC_LIVEKIT_URL: ${PUBLIC_LIVEKIT_URL:-ws://localhost:7880}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?defina LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?defina LIVEKIT_API_SECRET}
+    volumes:
+      - workverse-data:/data
+  web:
+    build: { context: ., target: web }
+    restart: unless-stopped
+    depends_on: [server]
+    ports:
+      - "8080:80"
+  livekit:
+    image: livekit/livekit-server:v1.13.10
+    restart: unless-stopped
+    command: --config /etc/livekit.yaml
+    environment:
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY:?defina LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET:?defina LIVEKIT_API_SECRET}"
+    volumes:
+      - ./deploy/livekit.yaml:/etc/livekit.yaml:ro
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "50000-50100:50000-50100/udp"
+  # Opcionais (perfis): docker compose --profile db up   |   --profile redis up
+  # Para usar o Postgres, defina no servidor DATABASE_URL=postgres://workverse:<senha>@postgres:5432/workverse
+  # e MIGRATE_ON_BOOT=1 (veja docs/database.md).
+  postgres:
+    profiles: [db]
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: workverse
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}
+      POSTGRES_DB: workverse
+    volumes:
+      - workverse-pg:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U workverse -d workverse"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+  redis:
+    profiles: [redis]
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - workverse-redis:/data
+volumes:
+  workverse-data:
+  workverse-pg:
+  workverse-redis:

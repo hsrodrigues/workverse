@@ -1,0 +1,609 @@
+/* Editor de avatar: janela pixel art, sem blur nem degradê; todo o desenho em múltiplos inteiros do pixel. */
+
+.ae-login {
+  padding: 12px;
+}
+
+.ae-root {
+  width: min(1000px, 100%);
+  /* altura fixa: a janela não pula de tamanho ao trocar de aba */
+  height: min(800px, calc(100dvh - 24px));
+  max-height: calc(100dvh - 24px);
+  display: flex;
+  flex-direction: column;
+  outline: none;
+}
+
+.ae-root .win-title {
+  flex: none;
+}
+
+.ae-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 14px;
+  padding: 12px 14px;
+}
+
+/* ---------- preview ---------- */
+
+.ae-preview {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  justify-items: center;
+}
+
+.ae-stage {
+  position: relative;
+  background: #8fa7bf;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  box-shadow: inset 0 -16px 0 #7a93ad;
+  width: 220px;
+  height: 400px;
+  display: grid;
+  place-items: center;
+}
+
+.ae-canvas {
+  width: 192px; /* 3x do quadro 64x128 */
+  height: 384px;
+  image-rendering: pixelated;
+}
+
+.ae-before {
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  padding: 3px 3px 2px;
+  font-size: 10px;
+}
+
+.ae-before.show {
+  display: flex;
+}
+
+.ae-canvas-small {
+  width: 32px; /* 0,5x */
+  height: 64px;
+  image-rendering: pixelated;
+}
+
+.ae-preview-controls {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+}
+
+.ae-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ae-preview-controls .ae-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 220px;
+}
+
+.ae-preview-controls .ae-filters .chip {
+  padding: 6px 4px;
+  text-align: center;
+}
+
+/* ---------- options ---------- */
+
+.ae-options {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ae-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: none;
+}
+
+.ae-tabs .tab {
+  padding: 7px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.ae-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  padding: 12px;
+  scrollbar-width: thin;
+}
+
+.ae-panel:focus-visible,
+.ae-root :focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.ae-section + .ae-section {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 2px dashed var(--paper-2);
+}
+
+.ae-section h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--blue-deep);
+}
+
+.ae-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ae-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 4px 6px;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  box-shadow: 0 3px 0 var(--ink);
+  cursor: pointer;
+  color: var(--ink);
+  min-width: 0;
+}
+
+.ae-card:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--ink);
+}
+
+.ae-card.on {
+  background: var(--gold);
+}
+
+.ae-card.on::after {
+  content: '';
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 10px;
+  height: 10px;
+  background: var(--green);
+  border: 2px solid var(--ink);
+}
+
+.ae-card.locked {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ae-card-name {
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.ae-card-tag {
+  font-size: 9px;
+  padding: 1px 4px;
+  background: var(--ink);
+  color: #fff;
+  border-radius: 2px;
+}
+
+.rar-uncommon {
+  background: #2c7a2c;
+}
+.rar-rare {
+  background: var(--blue-dark);
+}
+.rar-epic {
+  background: #7a4bc8;
+}
+.rar-legendary {
+  background: #b57a1e;
+}
+
+.ae-thumb {
+  box-sizing: content-box; /* tamanho inline = recorte x zoom inteiro, sem escala quebrada pelas bordas */
+  display: block;
+  background: #9db3c9;
+  border: 2px solid var(--ink);
+  image-rendering: pixelated;
+}
+
+.ae-none-box {
+  box-sizing: content-box;
+  display: block;
+  width: 80px;
+  height: 80px;
+  border: 2px dashed var(--ink);
+  background: #e9e4d6;
+  position: relative;
+}
+
+.ae-none-box::before,
+.ae-none-box::after {
+  content: '';
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  background: var(--red);
+}
+
+.ae-none-box::before {
+  transform: rotate(45deg);
+}
+
+.ae-none-box::after {
+  transform: rotate(-45deg);
+}
+
+.ae-detail {
+  margin-top: 10px;
+}
+
+.ae-desc {
+  margin: 6px 0;
+  font-size: 12px;
+  color: #4a4558;
+  line-height: 1.4;
+}
+
+.ae-warn {
+  color: #9a5b00;
+}
+
+.ae-warn-box {
+  margin: 8px 0;
+  padding: 6px 8px;
+  border: 2px solid var(--ink);
+  background: #fff3c9;
+  font-size: 12px;
+}
+
+/* ---------- colors ---------- */
+
+.ae-colors {
+  margin-top: 8px;
+}
+
+.ae-colors-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: #5b5668;
+  margin-bottom: 6px;
+}
+
+.ae-colors-head b {
+  color: var(--ink);
+}
+
+.ae-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ae-swatch {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 2px solid var(--ink);
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.ae-swatch.on {
+  outline: 3px solid var(--gold);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.ae-color-groups {
+  display: grid;
+  gap: 6px;
+}
+
+.ae-color-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ae-color-group-name {
+  flex: none;
+  width: 70px;
+  font-size: 10px;
+  color: #5b5668;
+  text-transform: capitalize;
+}
+
+/* ---------- wardrobe ---------- */
+
+.ae-worn {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 8px;
+}
+
+.ae-worn-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  border-radius: 3px;
+}
+
+.ae-worn-row .ae-thumb {
+  flex: none;
+}
+
+.ae-worn-name {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  font-size: 12px;
+}
+
+.ae-worn-name small {
+  color: #5b5668;
+}
+
+.ae-worn-fixed {
+  font-size: 10px;
+  color: #5b5668;
+  padding-right: 4px;
+}
+
+.ae-label {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.ae-save-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ae-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  background: #fff;
+  box-shadow: inset 2px 2px 0 var(--paper-2);
+}
+
+.ae-outfits {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.ae-outfit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+.ae-outfit.on {
+  background: var(--gold);
+}
+
+.ae-outfit.locked {
+  background: #eadada;
+}
+
+.ae-look-thumb {
+  box-sizing: content-box;
+  width: 80px; /* 2x */
+  height: 192px;
+  image-rendering: pixelated;
+  background: #9db3c9;
+  border: 2px solid var(--ink);
+}
+
+.ae-outfit-info {
+  display: grid;
+  text-align: center;
+  font-size: 12px;
+}
+
+.ae-outfit-info small {
+  font-size: 10px;
+}
+
+.ae-outfit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+}
+
+.chip.danger {
+  background: var(--red);
+  color: #fff;
+}
+
+/* ---------- status and footer ---------- */
+
+.ae-live {
+  flex: none;
+  min-height: 20px;
+  padding: 2px 14px 0;
+  font-size: 12px;
+  color: var(--blue-deep);
+}
+
+.ae-error {
+  flex: none;
+  margin: 4px 14px 0;
+  padding: 6px 10px;
+  border: 2px solid var(--ink);
+  background: #fde0e0;
+  color: #7a1212;
+  font-size: 12px;
+}
+
+.ae-error ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.ae-foot {
+  flex: none;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ae-foot-hint {
+  margin-right: auto;
+  font-size: 11px;
+  color: #5b5668;
+}
+
+.btn-primary.ok {
+  background: #2c7a2c;
+}
+
+/* ---------- mobile ---------- */
+
+@media (max-width: 760px) {
+  div.modal {
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .ae-root {
+    width: 100%;
+    max-height: 100dvh;
+    height: 100dvh;
+    border-radius: 0;
+  }
+
+  .ae-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .ae-preview {
+    grid-template-columns: auto 1fr;
+    align-items: start;
+    gap: 10px;
+  }
+
+  .ae-stage {
+    width: 140px;
+    height: 262px;
+    box-shadow: inset 0 -10px 0 #7a93ad;
+  }
+
+  .ae-canvas {
+    width: 128px; /* 2x */
+    height: 256px;
+  }
+
+  .ae-preview-controls {
+    justify-items: stretch;
+    align-content: center;
+    height: 100%;
+  }
+
+  .ae-preview-controls .ae-filters {
+    width: 100%;
+  }
+
+  .ae-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 6px;
+    scrollbar-width: none;
+  }
+
+  .ae-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .ae-outfits {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ae-foot {
+    padding: 8px 10px;
+  }
+
+  .ae-foot-hint {
+    flex: 1 0 100%;
+    margin-right: 0;
+  }
+
+  .ae-foot {
+    gap: 6px;
+  }
+
+  .ae-foot .btn {
+    flex: 1;
+    padding: 9px 4px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ae-card,
+  .btn,
+  .chip {
+    transition: none;
+  }
+}

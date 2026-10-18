@@ -1,0 +1,17 @@
+# Configuracao do livekit-server usada pelo docker-compose.yml.
+# As chaves NAO ficam aqui: o compose as injeta pela variavel LIVEKIT_KEYS ("<chave>: <segredo>"),
+# montada a partir de LIVEKIT_API_KEY e LIVEKIT_API_SECRET.
+port: 7880
+bind_addresses:
+  - ""
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50100
+  # Em producao com IP publico, ative: use_external_ip: true
+  use_external_ip: false
+room:
+  auto_create: true
+  empty_timeout: 300
+logging:
+  level: info

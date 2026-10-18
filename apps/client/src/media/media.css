@@ -1,0 +1,70 @@
+.wvm-bar { position: relative; display: flex; flex-direction: column; gap: 6px; font-family: 'Pixelify Sans', system-ui, sans-serif; color: #eef; }
+.wvm-buttons { display: flex; gap: 6px; }
+.wvm-btn { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 10px; border: 1px solid #3b3768; background: #25214a; color: #c9c6ee; cursor: pointer; }
+.wvm-btn:hover:not(:disabled) { background: #302b5e; }
+.wvm-btn:disabled { opacity: .45; cursor: not-allowed; }
+.wvm-btn.on { background: #2f7a4f; border-color: #49b277; color: #fff; }
+.wvm-btn.blocked { border-color: #c44; color: #f99; }
+.wvm-btn.speaking { box-shadow: 0 0 0 2px #7dffa8; }
+.wvm-btn:focus-visible, .wvm-banner:focus-visible { outline: 2px solid #8fb4ff; outline-offset: 2px; }
+.wvm-icon { display: block; }
+.wvm-banner { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px; background: #25214a; border: 1px solid #3b3768; font-size: 13px; color: #eef; max-width: 340px; }
+.wvm-banner.wvm-warn { background: #4a2430; border-color: #a64a62; }
+.wvm-banner.wvm-action { cursor: pointer; background: #2b4a8a; border-color: #5b86d6; }
+.wvm-x { margin-left: auto; background: none; border: 0; color: inherit; font-size: 18px; cursor: pointer; line-height: 1; }
+.wvm-panel { position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 30; width: 300px; display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: #1d1a3a; border: 1px solid #3b3768; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+.wvm-panel.win { padding: 0; gap: 0; color: #fff; background: #1d1a3a; border: 2px solid #1d1a24; border-radius: 4px; box-shadow: inset 0 0 0 2px #3a3370, 3px 3px 0 rgba(0,0,0,.4); }
+.wvm-panel-body { display: flex; flex-direction: column; gap: 8px; padding: 12px; }
+.wvm-panel.below { bottom: auto; top: calc(100% + 6px); }
+.wvm-field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: #b9b5e6; }
+.wvm-field select { padding: 5px; border-radius: 6px; background: #12102a; color: #eef; border: 1px solid #3b3768; }
+.wvm-hint { margin: 0; font-size: 12px; color: #f0b6c4; }
+
+.wvm-tiles { display: flex; flex-direction: column; gap: 8px; max-width: 100%; }
+.wvm-stage { position: relative; background: #000; border-radius: 12px; overflow: hidden; border: 1px solid #3b3768; }
+.wvm-screen { display: block; width: 100%; max-height: 60vh; object-fit: contain; background: #000; }
+.wvm-stage-name { position: absolute; left: 8px; bottom: 8px; display: flex; gap: 6px; align-items: center; padding: 3px 8px; border-radius: 6px; background: rgba(0,0,0,.65); color: #fff; font-size: 12px; }
+.wvm-stage-pick { position: absolute; right: 8px; top: 8px; display: flex; gap: 4px; }
+.wvm-stage-pick button { padding: 2px 8px; border-radius: 6px; border: 1px solid #5b86d6; background: rgba(0,0,0,.6); color: #fff; cursor: pointer; font-size: 12px; }
+.wvm-stage-pick button.on { background: #2b4a8a; }
+.wvm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.wvm-tile { position: relative; margin: 0; aspect-ratio: 4 / 3; border-radius: 10px; overflow: hidden; background: #181533; border: 2px solid #3b3768; display: flex; align-items: center; justify-content: center; }
+.wvm-tile.speaking { border-color: #7dffa8; box-shadow: 0 0 10px rgba(125,255,168,.6); }
+.wvm-video { width: 100%; height: 100%; object-fit: cover; background: #000; }
+.wvm-video.mirror { transform: scaleX(-1); }
+.wvm-avatar { width: 52px; height: 52px; border-radius: 50%; background: #3d82d6; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 600; }
+.wvm-name { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 4px; padding: 3px 6px; background: linear-gradient(transparent, rgba(0,0,0,.75)); color: #fff; font-size: 12px; }
+.wvm-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wvm-flag { display: inline-flex; color: #7dffa8; }
+.wvm-flag.off { color: #ff8a9b; }
+
+/* ---------- integração no HUD ---------- */
+
+/* Na barra inferior: botões no estilo pixel do jogo; avisos flutuam acima da barra. */
+.bar .wvm-bar { flex-direction: row; align-items: center; }
+.bar .wvm-buttons { gap: 6px; }
+.bar .wvm-btn { width: 36px; height: 34px; border: 2px solid #1d1a24; border-radius: 3px; background: #4a4392; color: #fff; box-shadow: 0 3px 0 #1d1a24; }
+.bar .wvm-btn:hover:not(:disabled) { background: #5d55b5; }
+.bar .wvm-btn.on { background: #2f9d55; }
+.bar .wvm-btn.blocked { background: #7d2f3f; color: #ffd6dd; }
+.bar .wvm-btn.speaking { box-shadow: 0 3px 0 #1d1a24, 0 0 0 2px #7dffa8; }
+.bar .wvm-banner { position: absolute; right: 0; bottom: calc(100% + 14px); width: 320px; max-width: 80vw; white-space: normal; z-index: 40; box-shadow: 3px 3px 0 rgba(0,0,0,.4); }
+.bar .wvm-banner + .wvm-banner { bottom: calc(100% + 66px); }
+.bar .wvm-panel { right: 0; left: auto; }
+
+/* Coluna de vídeos, recolhível */
+.video-dock { position: absolute; left: 12px; top: 128px; width: 252px; max-height: calc(100vh - 128px - 250px); display: flex; flex-direction: column; background: rgba(27,24,48,.92); border: 2px solid #1d1a24; border-radius: 4px; box-shadow: inset 0 0 0 2px #3a3370, 3px 3px 0 rgba(0,0,0,.4); color: #fff; overflow: hidden; }
+.video-dock-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 9px; background: #2c2760; color: #fff; border: 0; cursor: pointer; font-size: 11px; text-align: left; }
+.video-dock-head:hover { background: #3a3480; }
+.video-dock-count { flex: 1; color: #b9b3de; font-size: 10px; }
+.video-dock-body { padding: 8px; overflow-y: auto; }
+.video-dock .wvm-grid { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.video-dock .wvm-screen { max-height: 28vh; }
+
+/* Indicadores na lista de Pessoas */
+.people .mi { display: inline-flex; gap: 3px; align-items: center; margin-left: 2px; }
+.people .mi i { display: inline-flex; width: 16px; height: 16px; align-items: center; justify-content: center; border: 2px solid #1d1a24; border-radius: 3px; background: #2f9d55; color: #fff; }
+.people .mi i.off { background: #b83a3a; }
+.people .mi i.cam { background: #3d82d6; }
+.people .mi i.cam.off { background: #6b717e; }
+.people .mi i.speaking { box-shadow: 0 0 0 2px #7dffa8; animation: blink 0.9s steps(2) infinite; }

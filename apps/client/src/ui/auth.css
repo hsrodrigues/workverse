@@ -1,0 +1,44 @@
+/* Login / cadastro: abas e regras de validação. Reaproveita .win, .field, .btn e .tab de styles.css. */
+
+.auth-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+
+.auth-tabs .tab {
+  flex: 1;
+  cursor: pointer;
+}
+
+.field .rule {
+  font-size: 10px;
+  line-height: 1.4;
+  color: #5b5668;
+}
+
+.field .rule.ok {
+  color: #1f7a3a;
+}
+
+.field .rule.bad {
+  color: #a01c1c;
+}
+
+.login-card .btn-primary {
+  width: 100%;
+}
+
+.login-card .btn-primary[aria-busy='true'] {
+  cursor: progress;
+}
+
+.linklike {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--blue-dark);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}

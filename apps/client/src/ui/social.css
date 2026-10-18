@@ -1,0 +1,119 @@
+/* Social layer: presence status, private messages and team chat. */
+
+.status-select {
+  background: #fff;
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+
+.sdot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border: 1px solid var(--ink);
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+  background: var(--green);
+}
+.sdot-available { background: var(--green); }
+.sdot-busy { background: var(--red); }
+.sdot-focus { background: #8a5ad6; }
+.sdot-meeting { background: #e8a33a; }
+.sdot-away { background: #9a96a6; }
+
+.people .slabel {
+  font-size: 10px;
+  color: #5b5668;
+  margin-left: 4px;
+}
+
+.badge {
+  display: inline-block;
+  min-width: 16px;
+  padding: 0 4px;
+  margin-left: 4px;
+  border-radius: 8px;
+  background: var(--red);
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.panel-chat {
+  position: absolute;
+  top: 80px;
+  left: 12px;
+  right: auto;
+  width: min(380px, calc(100vw - 24px));
+}
+
+.chat-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.chat-tabs button {
+  font-family: var(--font);
+  font-size: 11px;
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  padding: 3px 7px;
+  cursor: pointer;
+}
+
+.chat-tabs button.on {
+  background: var(--gold);
+}
+
+.chat-thread {
+  height: 200px;
+  overflow-y: auto;
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  padding: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.chat-thread .mine b { color: var(--blue-dark); }
+.chat-thread .empty { color: #5b5668; }
+
+.chat-form {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.chat-form input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font);
+  font-size: 12px;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  padding: 5px 7px;
+}
+
+.chat-notice {
+  color: var(--red);
+  font-size: 11px;
+  margin-top: 6px;
+}
+
+.ctx-status {
+  font-size: 11px;
+  padding: 2px 8px 6px;
+  color: #5b5668;
+}

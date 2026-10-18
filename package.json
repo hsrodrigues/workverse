@@ -1,0 +1,36 @@
+{
+  "name": "workverse",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:server": "npm run dev -w @workverse/server",
+    "dev:client": "npm run dev -w @workverse/client",
+    "build": "npm run build -w @workverse/client",
+    "typecheck": "tsc -p packages/shared --noEmit && tsc -p apps/server --noEmit && tsc -p apps/client --noEmit && tsc -p tools/powerpoint-connector --noEmit",
+    "powerpoint:connector": "tsx tools/powerpoint-connector/src/main.ts",
+    "test": "vitest run",
+    "loadtest": "npm run loadtest -w @workverse/server --",
+    "livekit:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-livekit.ps1",
+    "livekit:dev": "node scripts/livekit-dev.mjs",
+    "pg:dev": "node scripts/pg-dev.mjs",
+    "pg:tools": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-pg-tools.ps1",
+    "db:migrate": "npm run db:migrate -w @workverse/server",
+    "db:import-json": "npm run db:import-json -w @workverse/server",
+    "db:backup": "node scripts/backup.mjs",
+    "db:restore": "node scripts/restore.mjs",
+    "build:prod": "node scripts/prod.mjs build",
+    "start:prod": "node scripts/prod.mjs start",
+    "account:create": "npm run account:create -w @workverse/server --"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "concurrently": "^10.0.6",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.5"
+  }
+}

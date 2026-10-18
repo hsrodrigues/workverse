@@ -1,0 +1,27 @@
+node_modules
+dist
+data
+*.log
+.env
+tools/livekit/
+tools/pg/
+tools/pg-data/
+backups/
+tools/redis/
+
+# producao
+.env.production
+.env.*.local
+tools/cloudflared/
+
+.env.*
+!.env.example
+*.pem
+*.key
+*.bak-v2
+.env.local
+
+# configs temporarias de teste (agentes/e2e)
+vite.*.tmp.config.ts
+vite.tmp*.config.ts
+vite.e2e*.config.ts

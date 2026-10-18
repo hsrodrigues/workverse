@@ -1,0 +1,10 @@
+{
+  "name": "@workverse/powerpoint-connector",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Conector local que deixa o WorkVerse controlar o PowerPoint do palestrante (Windows).",
+  "scripts": {
+    "start": "tsx src/main.ts"
+  }
+}

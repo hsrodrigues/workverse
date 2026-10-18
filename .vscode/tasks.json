@@ -1,0 +1,8 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    { "label": "dev (server + client)", "type": "npm", "script": "dev", "isBackground": true, "problemMatcher": [] },
+    { "label": "conector do PowerPoint", "type": "npm", "script": "powerpoint:connector", "isBackground": true, "problemMatcher": [] },
+    { "label": "test", "type": "npm", "script": "test", "group": "test", "problemMatcher": [] }
+  ]
+}

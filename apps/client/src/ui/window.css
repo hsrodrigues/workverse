@@ -1,0 +1,25 @@
+/* Janelas arrastáveis: a área de arrasto é a barra de título (ou o cabeçalho indicado). */
+
+.wv-drag .win-title,
+.wv-drag .stage-head,
+.wv-drag .video-dock-head {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.wv-dragging,
+.wv-dragging * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
+.wv-drag .win-title .x,
+.wv-drag .stage-head button {
+  cursor: pointer;
+}
+
+.wv-window:focus-within {
+  outline: none;
+}

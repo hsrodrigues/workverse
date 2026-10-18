@@ -1,0 +1,35 @@
+{
+  "name": "@workverse/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "bots": "tsx scripts/bots.ts",
+    "loadtest": "tsx scripts/loadtest.ts",
+    "db:migrate": "tsx src/db/migrateCli.ts",
+    "db:import-json": "tsx src/db/importJsonCli.ts",
+    "staff:grant": "tsx src/staffCli.ts grant",
+    "staff:revoke": "tsx src/staffCli.ts revoke",
+    "staff:list": "tsx src/staffCli.ts list",
+    "account:create": "tsx src/accountCli.ts"
+  },
+  "dependencies": {
+    "@fastify/compress": "^9.2.2",
+    "@fastify/static": "^10.1.6",
+    "@fastify/websocket": "^11.3.4",
+    "@workverse/shared": "*",
+    "fastify": "^5.12.7",
+    "ioredis": "^6.0.0",
+    "livekit-server-sdk": "^2.19.1",
+    "pg": "^8.23.1",
+    "tsx": "^4.23.15",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1",
+    "@types/ws": "^8.18.1",
+    "embedded-postgres": "^18.4.0-beta.17"
+  }
+}

@@ -1,0 +1,309 @@
+/* ---------- Controle do PowerPoint (painel do palestrante) ---------- */
+
+.ppt {
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  background: #12102a;
+  box-shadow: 0 0 0 2px #3a3370;
+  min-width: 0;
+}
+.ppt-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  background: #2b2660;
+  color: #fff;
+  border: 0;
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+.ppt-head:hover {
+  background: #342e75;
+}
+.ppt-state {
+  color: #b9b3de;
+  font-size: 11px;
+  flex: 1;
+}
+.ppt-caret {
+  color: var(--gold);
+}
+.ppt-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #7a2f2f;
+  border: 1px solid var(--ink);
+  flex: none;
+}
+.ppt-dot.on {
+  background: #4cd964;
+}
+.ppt-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  font-size: 12px;
+  min-width: 0;
+}
+.ppt-help {
+  margin: 0;
+  line-height: 1.5;
+  color: #cfcaf0;
+}
+.ppt-help.small {
+  font-size: 10px;
+  color: #8f8ab8;
+}
+.ppt-help code {
+  background: #000;
+  padding: 0 4px;
+  border-radius: 2px;
+  color: var(--gold);
+}
+.ppt-pair {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.ppt-code {
+  width: 110px;
+  font-size: 18px;
+  letter-spacing: 3px;
+  text-align: center;
+  background: #000;
+  color: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  padding: 4px;
+}
+.ppt-adv {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  color: #b9b3de;
+}
+.ppt-adv input,
+.ppt-goto input,
+.ppt-select {
+  background: #000;
+  color: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  padding: 3px 6px;
+  font-size: 12px;
+}
+.ppt-link {
+  align-self: flex-start;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: #9fd4f2;
+  cursor: pointer;
+  font-size: 11px;
+  text-decoration: underline;
+}
+.ppt-msg {
+  margin: 0;
+  font-size: 11px;
+  color: #9fd4f2;
+}
+.ppt-msg.bad {
+  color: #ffb4b4;
+}
+.ppt-ways {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.ppt-way {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  padding: 6px 8px;
+  background: #1d1a3d;
+  color: #cfcaf0;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.ppt-way small {
+  color: #8f8ab8;
+  font-size: 10px;
+  line-height: 1.35;
+}
+.ppt-way.on {
+  background: #3a3370;
+  border-color: var(--gold);
+  color: #fff;
+}
+.ppt-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ppt-timer {
+  font-variant-numeric: tabular-nums;
+  color: var(--gold);
+  font-size: 13px;
+}
+.ppt-file {
+  margin: 0;
+  color: #b9b3de;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ppt-nav {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+}
+.ppt-big {
+  background: #4a4392;
+  color: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  padding: 14px 8px;
+  font-size: 16px;
+  cursor: pointer;
+  box-shadow: 0 4px 0 var(--ink);
+}
+.ppt-big.next {
+  background: var(--green);
+  text-shadow: 1px 1px 0 #2c7a2c;
+}
+.ppt-big:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+.ppt-big:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--ink);
+}
+.ppt-big:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.ppt-counter {
+  font-size: 15px;
+  color: var(--gold);
+  min-width: 110px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.ppt-goto {
+  display: flex;
+  gap: 4px;
+}
+.ppt-goto input {
+  width: 90px;
+}
+.ppt-thumbs {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 4px;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+}
+.ppt-thumb {
+  flex: none;
+  width: 112px;
+}
+.ppt-thumb button {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  padding: 0;
+  background: #000;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  cursor: pointer;
+  overflow: hidden;
+}
+.ppt-thumb.cur button {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(255, 207, 74, 0.45);
+}
+.ppt-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.ppt-thumb-empty {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(45deg, #1d1a3d, #1d1a3d 6px, #24204a 6px, #24204a 12px);
+}
+.ppt-thumb em {
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-size: 9px;
+  font-style: normal;
+  padding: 0 4px;
+  border-radius: 2px;
+}
+.ppt-notes {
+  background: #0c0a1f;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  padding: 6px 8px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.ppt-notes h4 {
+  margin: 0 0 4px;
+  font-size: 11px;
+  color: var(--gold);
+}
+.ppt-notes h4 small {
+  color: #8f8ab8;
+  font-weight: normal;
+}
+.ppt-slide-title {
+  margin: 0 0 4px;
+  font-size: 11px;
+  color: #9fd4f2;
+}
+.ppt-notes-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: #fff;
+}
+.ppt-send {
+  display: grid;
+  gap: 6px;
+}
+.ppt-progress {
+  display: grid;
+  gap: 3px;
+  font-size: 11px;
+  color: #b9b3de;
+}
+.ppt-progress progress {
+  width: 100%;
+  height: 10px;
+}
+.ppt-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+  color: #8f8ab8;
+}
