@@ -1,0 +1,44 @@
+# Render Blueprint: sobe o WorkVerse (site + API + WebSocket, tudo no mesmo servico Node) a partir do GitHub.
+# Como usar: Render > New > Blueprint > escolha este repositorio. Os valores marcados `sync: false` sao pedidos
+# no painel (segredos nunca ficam no repositorio). Guia: docs/deploy.md (secao D).
+services:
+  - type: web
+    name: workverse
+    runtime: node
+    # `free` dorme apos alguns minutos sem acesso (a primeira visita demora e as conexoes caem). Para uso real, troque o plano.
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run start -w @workverse/server
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY
+        value: "1"
+      - key: REGISTRATION_MODE
+        value: closed
+      - key: MIGRATE_ON_BOOT
+        value: "1"
+      # Endereco publico, sem barra no final (ex.: https://workverse.onrender.com ou seu dominio).
+      - key: PUBLIC_URL
+        sync: false
+      # PostgreSQL (Neon): connection string com sslmode=require.
+      - key: DATABASE_URL
+        sync: false
+      - key: BOOTSTRAP_STAFF_EMAILS
+        sync: false
+      - key: BOOTSTRAP_OWNER_EMAIL
+        sync: false
+      # LiveKit Cloud (audio, video e tela).
+      - key: LIVEKIT_URL
+        sync: false
+      - key: PUBLIC_LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
+      - key: METRICS_TOKEN
+        generateValue: true
