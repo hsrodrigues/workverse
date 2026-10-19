@@ -176,7 +176,7 @@ export function windowSpots(room: BuiltRoom, theme?: Theme): WindowSpot[] {
   const busyW = new Set<number>();
   for (const f of room.def.furniture) {
     // wall hangings, and tall pieces leaning on the wall (shelf, rack, fridge), would hide the window
-    const tall = f.kind === 'bookshelf' || f.kind === 'rack' || f.kind === 'fridge' || f.kind === 'server_rack';
+    const tall = f.kind === 'bookshelf' || f.kind === 'rack' || f.kind === 'fridge' || f.kind === 'snack_machine' || f.kind === 'soda_machine' || f.kind === 'server_rack';
     if (!FURNI_KINDS[f.kind].wall && !tall) continue;
     // hangings: dir 0 = north wall, 1 = west wall. Floor pieces: furniFront 1 (+y) leans on the north wall, 0 (+x) on the west
     const north = FURNI_KINDS[f.kind].wall ? f.dir % 2 === 0 : furniFront(f) === 1;

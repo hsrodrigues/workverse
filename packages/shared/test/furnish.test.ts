@@ -130,7 +130,7 @@ describe('validateLayout: walking', () => {
 describe('validateLayout: soft warnings', () => {
   it('warns (without blocking) about a sofa facing the wall and a shelf away from the wall', () => {
     const lounge = room('lounge');
-    const r = checkOps(lounge, lounge.furniture, [add(piece('n1', 'sofa', 0, 5, 2)), add(piece('n2', 'bookshelf', 7, 1, 0))]);
+    const r = checkOps(lounge, lounge.furniture, [...lounge.furniture.filter((f) => f.kind.endsWith('_machine')).map((f) => ({ op: 'remove' as const, id: f.id })), add(piece('n1', 'sofa', 0, 5, 2)), add(piece('n2', 'bookshelf', 7, 1, 0))]);
     expect(r.ok, JSON.stringify(r.errors)).toBe(true);
     const wc = r.warnings.map((w) => w.code);
     expect(wc).toContain('seat_wall');

@@ -50,7 +50,10 @@ export type FurniKind =
   | 'videowall'
   | 'arch_board'
   | 'hardware_bench'
-  | 'espresso';
+  | 'espresso'
+  | 'snack_machine'
+  | 'soda_machine'
+  | 'microwave';
 
 export interface FurniKindDef {
   label: string;
@@ -112,6 +115,12 @@ export const FURNI_KINDS: Record<FurniKind, FurniKindDef> = {
   hardware_bench: { label: 'Bancada de hardware', w: 3, d: 1, blocks: true, seat: false, usable: false },
   /** Máquina de café premium (balcão com espresso). Entrega café como a cafeteira. */
   espresso: { label: 'Máquina de café premium', w: 2, d: 1, blocks: true, seat: false, usable: true },
+  /** Máquina de salgadinhos e lanches (vending): o avatar "compra" e passa a comer um lanche. */
+  snack_machine: { label: 'Máquina de lanches', w: 1, d: 1, blocks: true, seat: false, usable: true },
+  /** Máquina de refrigerantes e bebidas geladas: entrega uma lata. */
+  soda_machine: { label: 'Máquina de refrigerantes', w: 1, d: 1, blocks: true, seat: false, usable: true },
+  /** Micro-ondas sobre um gabinete: esquenta a marmita (a luz acende por alguns segundos) e entrega uma marmita. */
+  microwave: { label: 'Micro-ondas', w: 1, d: 1, blocks: true, seat: false, usable: true },
   auditorium_seat: { label: 'Poltrona', w: 1, d: 1, blocks: true, seat: true, usable: false },
   /** Raised platform, drawn flat: avatars walk on it. */
   stage: { label: 'Palco', w: 8, d: 3, blocks: false, seat: false, usable: false },
@@ -288,7 +297,7 @@ export function furniFront(f: Furniture): 0 | 1 | 2 | 3 {
 }
 
 /** Pieces that belong against the north or west wall with their front toward the room (see furniFront). */
-export const WALL_BACKED_KINDS: readonly FurniKind[] = ['bookshelf', 'fridge', 'cooler', 'coffee', 'printer', 'rack', 'counter', 'espresso', 'hardware_bench'];
+export const WALL_BACKED_KINDS: readonly FurniKind[] = ['bookshelf', 'fridge', 'cooler', 'coffee', 'printer', 'rack', 'counter', 'espresso', 'hardware_bench', 'snack_machine', 'soda_machine', 'microwave'];
 
 const rect = (w: number, h: number) => Array.from({ length: h }, () => '.'.repeat(w));
 
@@ -439,12 +448,15 @@ const LOUNGE: RoomDef = {
     { id: fid('plant'), kind: 'plant', x: 0, y: 0, dir: 0 },
     { id: fid('plant'), kind: 'plant', x: 0, y: 8, dir: 0 },
     { id: fid('basket'), kind: 'basket', x: 7, y: 8, dir: 0 },
-    { id: fid('bin'), kind: 'bin', x: 6, y: 1, dir: 0 },
+    { id: fid('bin'), kind: 'bin', x: 10, y: 8, dir: 0 },
+    // Micro-ondas ao lado da bancada e as máquinas de lanches e bebidas na parede oeste, entre as duas portas
+    { id: fid('micro'), kind: 'microwave', x: 6, y: 0, dir: 1 },
+    { id: fid('vend'), kind: 'snack_machine', x: 0, y: 5, dir: 0 },
+    { id: fid('vend'), kind: 'soda_machine', x: 0, y: 6, dir: 0 },
     // Wall decor
     { id: fid('tv'), kind: 'tv', x: 2, y: 0, dir: 0 },
     { id: fid('frame'), kind: 'frame', x: 4, y: 0, dir: 0 },
     { id: fid('clock'), kind: 'clock', x: 5, y: 0, dir: 0 },
-    { id: fid('frame'), kind: 'frame', x: 0, y: 6, dir: 1 },
     { id: fid('frame'), kind: 'frame', x: 0, y: 3, dir: 1 },
   ],
 };
@@ -585,6 +597,8 @@ const RECEPTION: RoomDef = {
     { id: fid('plant'), kind: 'plant', x: 0, y: 0, dir: 0 },
     // Water cooler on the north wall, in the corner next to the last door
     { id: fid('cooler'), kind: 'cooler', x: 21, y: 0, dir: 1 },
+    // Máquina de lanches no canto noroeste do hall
+    { id: fid('vend'), kind: 'snack_machine', x: 0, y: 1, dir: 0 },
     // Wall: logo above the desk, TV, clock and frames
     { id: fid('frame'), kind: 'frame', x: 8, y: 0, dir: 0 },
     { id: fid('logo'), kind: 'logo', x: 10, y: 0, dir: 0 },
@@ -814,6 +828,10 @@ const TI: RoomDef = {
     // Premium coffee corner on the north wall
     { id: fid('espresso'), kind: 'espresso', x: 1, y: 0, dir: 0 },
     { id: fid('fridge'), kind: 'fridge', x: 3, y: 0, dir: 1 },
+    // Lanches, energéticos e micro-ondas na parede norte, entre o videowall e os racks
+    { id: fid('vend'), kind: 'snack_machine', x: 9, y: 0, dir: 1 },
+    { id: fid('vend'), kind: 'soda_machine', x: 10, y: 0, dir: 1 },
+    { id: fid('micro'), kind: 'microwave', x: 11, y: 0, dir: 1 },
     { id: fid('plant'), kind: 'plant', x: 0, y: 0, dir: 0 },
     { id: fid('plant'), kind: 'plant', x: 13, y: 11, dir: 0 },
     { id: fid('plant'), kind: 'plant', x: 0, y: 11, dir: 0 },

@@ -857,7 +857,7 @@ export class WorldScene extends Phaser.Scene {
       this.furni.push(fa);
       if (f.kind === 'screen' || f.kind === 'tv_stand') this.screens.push(new StageScreen(this, f, () => img.depth + 1));
     }
-    const BLINK: Partial<Record<Furniture['kind'], number>> = { server_rack: 520, videowall: 1500, command_desk: 1100 };
+    const BLINK: Partial<Record<Furniture['kind'], number>> = { server_rack: 520, videowall: 1500, command_desk: 1100, snack_machine: 1100, soda_machine: 1500 };
     this.blinkers = this.furni
       .filter((fa) => BLINK[fa.f.kind])
       .map((fa) => ({ fa, period: BLINK[fa.f.kind]!, offset: Math.floor(hashStr(fa.f.id) * 1000), last: 0 }));

@@ -6,12 +6,12 @@ import type { FurniKind } from './rooms';
  *
  * - `idle`: nothing special.
  * - `working`: seated in a chair that faces a computer (the monitor turns on).
- * - `holding:<item>`: carrying a cup picked up at the coffee machine or the water cooler.
+ * - `holding:<item>`: carrying a cup, can, snack or lunch box picked up at a machine (coffee, water, vending, microwave).
  */
-export type HeldItem = 'coffee' | 'water';
-export const HELD_ITEMS: readonly HeldItem[] = ['coffee', 'water'];
+export type HeldItem = 'coffee' | 'water' | 'snack' | 'soda' | 'meal';
+export const HELD_ITEMS: readonly HeldItem[] = ['coffee', 'water', 'snack', 'soda', 'meal'];
 export type Activity = 'idle' | 'working' | `holding:${HeldItem}`;
-export const ACTIVITIES: readonly Activity[] = ['idle', 'working', 'holding:coffee', 'holding:water'];
+export const ACTIVITIES: readonly Activity[] = ['idle', 'working', 'holding:coffee', 'holding:water', 'holding:snack', 'holding:soda', 'holding:meal'];
 
 export const isActivity = (v: unknown): v is Activity => typeof v === 'string' && (ACTIVITIES as readonly string[]).includes(v);
 export const heldOf = (a: Activity): HeldItem | null => (a.startsWith('holding:') ? (a.slice(8) as HeldItem) : null);
@@ -28,10 +28,19 @@ export const FURNI_HOLDS: Partial<Record<FurniKind, HeldItem>> = {
   espresso: 'coffee',
   cooler: 'water',
   fridge: 'water',
+  snack_machine: 'snack',
+  soda_machine: 'soda',
+  microwave: 'meal',
 };
+
+/** Aparelhos que demoram a entregar: a luz fica acesa (estado `furni`) por este tempo e só então o item vai para a mão. */
+export const FURNI_DELAY_MS: Partial<Record<FurniKind, number>> = { microwave: 3000 };
 
 /** Line written to the system chat when somebody picks an item up. */
 export const HELD_CHAT: Record<HeldItem, string> = {
   coffee: 'pegou um café.',
   water: 'pegou um copo d’água.',
+  snack: 'comprou um lanche na máquina.',
+  soda: 'pegou uma latinha de refrigerante.',
+  meal: 'esquentou a marmita no micro-ondas.',
 };

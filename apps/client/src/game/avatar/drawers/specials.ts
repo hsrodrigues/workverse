@@ -185,6 +185,103 @@ registerDrawer('sp.cup', {
     }),
 });
 
+// ---- snack bag, soda can and lunch box (vending machines and microwave; not wardrobe items, see ../held.ts) ------------
+
+/** Common anchor of the small things held in the right hand: top-left corner of a box of `w` x `h` around the fist. */
+function handBox(c: Ctx2, w: number, h: number): [number, number] {
+  const { rig } = c;
+  const wr = rig.wrist[1];
+  const dir = vNorm(vSub(wr, rig.elbow[1]));
+  const tip = c.Pv(vAdd(wr, [dir[0] * 3.4, dir[1] * 3.4, dir[2] * 3.4]));
+  return [Math.round(tip[0]) - Math.floor(w / 2), Math.round(tip[1]) - h];
+}
+
+registerDrawer('sp.snack', {
+  hold: () => ({ side: 1, target: (rig: Rig) => v3(6.2, rig.hipY + 14.2, rig.bz + 9) }),
+  draw: (c, it, e) =>
+    e.part(armDepth(c, 1) + 0.02, () => {
+      const [x0, y0] = handBox(c, 6, 8);
+      // crimped bag: 6px wide, 8px tall, slightly pinched at both ends
+      MAIN.clear();
+      for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 6; x++) MAIN.set(x0 + x, y0 + y);
+      }
+      c.paint(MAIN, it.t, { lw: 1, sw: 2 });
+      // crimps (zig-zag) at the top and bottom
+      for (let x = 0; x < 6; x++) {
+        c.px(x0 + x, y0, x % 2 ? '#f4c542' : '#d98e1f');
+        c.px(x0 + x, y0 + 7, x % 2 ? '#d98e1f' : '#f4c542');
+      }
+      // yellow label with a red chip drawn on it and a light edge
+      for (let y = 2; y <= 5; y++) for (let x = 1; x <= 4; x++) c.px(x0 + x, y0 + y, y === 2 ? '#ffe27a' : '#ffd24a');
+      c.px(x0 + 2, y0 + 3, '#c4301f');
+      c.px(x0 + 3, y0 + 3, '#e8593a');
+      c.px(x0 + 2, y0 + 4, '#a82616');
+      c.px(x0 + 1, y0 + 1, mix(it.t.lt, '#ffffff', 0.55));
+      c.px(x0 + 5, y0 + 5, it.t.sh);
+      MAIN.clear();
+      c.clip = null;
+    }),
+});
+
+registerDrawer('sp.can', {
+  hold: () => ({ side: 1, target: (rig: Rig) => v3(6.2, rig.hipY + 14.2, rig.bz + 9) }),
+  draw: (c, it, e) =>
+    e.part(armDepth(c, 1) + 0.02, () => {
+      const [x0, y0] = handBox(c, 4, 7);
+      // can: 4px wide, 7px tall, aluminium lid and base
+      MAIN.clear();
+      for (let y = 0; y < 7; y++) for (let x = 0; x < 4; x++) MAIN.set(x0 + x, y0 + y);
+      c.paint(MAIN, it.t, { lw: 1, sw: 2 });
+      for (let x = 0; x < 4; x++) {
+        c.px(x0 + x, y0, '#d9dde6');
+        c.px(x0 + x, y0 + 6, '#9aa0ac');
+      }
+      c.px(x0 + 1, y0, '#ffffff');
+      // white wave stripe across the body and a highlight on the left side
+      c.px(x0, y0 + 3, '#ffffff');
+      c.px(x0 + 1, y0 + 4, '#ffffff');
+      c.px(x0 + 2, y0 + 3, '#ffffff');
+      c.px(x0 + 3, y0 + 4, '#ffffff');
+      c.px(x0, y0 + 2, mix(it.t.lt, '#ffffff', 0.5));
+      c.px(x0, y0 + 1, mix(it.t.lt, '#ffffff', 0.35));
+      c.px(x0 + 3, y0 + 2, it.t.sh);
+      MAIN.clear();
+      c.clip = null;
+    }),
+});
+
+registerDrawer('sp.lunchbox', {
+  hold: () => ({ side: 1, target: (rig: Rig) => v3(6.2, rig.hipY + 14.2, rig.bz + 9) }),
+  draw: (c, it, e) =>
+    e.part(armDepth(c, 1) + 0.02, () => {
+      const [x0, y0] = handBox(c, 8, 6);
+      // rectangular container with a clear lid: food visible, steam on top
+      MAIN.clear();
+      for (let y = 0; y < 6; y++) for (let x = 0; x < 8; x++) MAIN.set(x0 + x, y0 + y);
+      c.paint(MAIN, it.t, { lw: 1, sw: 2 });
+      for (let x = 0; x < 8; x++) c.px(x0 + x, y0, '#f4f1ea');
+      for (let x = 1; x < 7; x++) {
+        c.px(x0 + x, y0 + 1, x % 2 ? '#e8892a' : '#f2b64a');
+        c.px(x0 + x, y0 + 2, x % 3 === 0 ? '#58b45f' : '#f7e3a4');
+      }
+      c.px(x0 + 2, y0 + 2, '#58b45f');
+      c.px(x0 + 5, y0 + 1, '#d44a2a');
+      c.px(x0 + 1, y0, '#ffffff');
+      for (let x = 0; x < 8; x++) c.px(x0 + x, y0 + 3, '#2f7fbf');
+      for (let x = 1; x < 7; x++) c.px(x0 + x, y0 + 4, '#3b8fd0');
+      c.px(x0 + 1, y0 + 4, '#7fc4ea');
+      // steam
+      const steam = '#e9eaf0';
+      c.px(x0 + 2, y0 - 2, steam);
+      c.px(x0 + 3, y0 - 3, mix(steam, '#9aa0b4', 0.4));
+      c.px(x0 + 5, y0 - 2, mix(steam, '#9aa0b4', 0.3));
+      c.px(x0 + 5, y0 - 4, mix(steam, '#9aa0b4', 0.6));
+      MAIN.clear();
+      c.clip = null;
+    }),
+});
+
 // ---- badge on a lanyard --------------------------------------------------------------------------------------------
 
 registerDrawer('sp.badge', (c, it, e) => {

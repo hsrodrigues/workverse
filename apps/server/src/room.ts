@@ -1,6 +1,8 @@
 import {
   FURNI_KINDS,
+  FURNI_DELAY_MS,
   FURNI_HOLDS,
+  type HeldItem,
   WORKSTATION_KINDS,
   HELD_CHAT,
   HOLD_MS,
@@ -73,6 +75,8 @@ export class Player {
   activity: Activity = 'idle';
   /** When a held cup is put down automatically. */
   holdUntil = 0;
+  /** Item being prepared at an appliance with a delay (microwave): it reaches the hand when `at` passes, unless the player walks away. */
+  pendingHold: { item: HeldItem; at: number; furniId: string } | null = null;
   /** Computer this player is working at, while `activity` is `working`. */
   workingAt: string | null = null;
   /** `status` was set to `focus` by working (not chosen by the player), so leaving the desk may undo it. */
@@ -131,6 +135,8 @@ export class RoomInstance {
   readonly furniState: Record<string, boolean> = {};
   /** Last clock value seen (arrival actions happen deep inside `sync`, which knows the time). */
   private lastNow = 0;
+  /** Appliances with their light on while they heat something (furniture id -> when the light goes off). */
+  private heatUntil = new Map<string, number>();
 
   constructor(
     def: RoomDef,
@@ -266,6 +272,7 @@ export class RoomInstance {
 
   remove(p: Player) {
     if (!this.players.delete(p.id)) return;
+    p.pendingHold = null;
     this.stopWork(p);
     p.activity = 'idle';
     p.roomId = null;
@@ -352,6 +359,18 @@ export class RoomInstance {
     for (const p of [...this.players.values()]) {
       this.sync(p, now);
       if (heldOf(p.activity) && now >= p.holdUntil) this.setActivity(p, 'idle');
+      if (p.pendingHold && now >= p.pendingHold.at) {
+        const item = p.pendingHold.item;
+        p.pendingHold = null;
+        this.setActivity(p, `holding:${item}`);
+        this.broadcast({ t: 'chat', id: null, name: '', text: `${p.name} ${HELD_CHAT[item]}`, kind: 'system' });
+      }
+    }
+    // appliances that were heating switch their light off once the time is over and nobody is still waiting for them
+    for (const [id, until] of this.heatUntil) {
+      if (now < until) continue;
+      this.heatUntil.delete(id);
+      this.setFurni(id, false);
     }
   }
 
@@ -399,6 +418,7 @@ export class RoomInstance {
     p.path = path;
     p.pathStart = now + remaining;
     p.sitting = false;
+    p.pendingHold = null;
     if (p.activity === 'working') this.setActivity(p, 'idle');
     p.action = path.length === 0 ? null : pending;
     this.broadcast({ t: 'path', id: p.id, from: p.origin, path, stepRemainingMs: remaining });
@@ -491,6 +511,16 @@ export class RoomInstance {
       this.hooks.onPodium?.(p);
     } else if (FURNI_HOLDS[f.kind]) {
       const item = FURNI_HOLDS[f.kind]!;
+      const delay = FURNI_DELAY_MS[f.kind];
+      if (delay) {
+        // microwave: the light turns on, the player waits, and only then holds the lunch box
+        if (p.pendingHold) return;
+        this.setActivity(p, 'idle');
+        p.pendingHold = { item, at: this.lastNow + delay, furniId: f.id };
+        this.heatUntil.set(f.id, Math.max(this.heatUntil.get(f.id) ?? 0, this.lastNow + delay));
+        this.setFurni(f.id, true);
+        return;
+      }
       this.setActivity(p, `holding:${item}`);
       this.broadcast({ t: 'chat', id: null, name: '', text: `${p.name} ${HELD_CHAT[item]}`, kind: 'system' });
     }

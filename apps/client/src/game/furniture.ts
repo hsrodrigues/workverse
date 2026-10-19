@@ -191,6 +191,99 @@ const rearPanel = (side: 'n' | 'w', color: string) => (ctx: Ctx, ox: number, oy:
   p.rectFn(3, W - 3, 4, b.h - 3, (a, z) => (z % 4 === 0 && a % 6 < 4 ? tone(side, shade(color, -0.22)) : null));
 };
 
+
+const SNACK_COLORS = ['#e8593a', '#f2b64a', '#3b8fd0', '#58b45f', '#9a5bd0', '#f08aa8', '#7a4a2a'] as const;
+const CAN_COLORS = ['#d6342a', '#3b82c4', '#58b45f', '#f08a2a', '#9a5bd0', '#c9ced8', '#f2d24a'] as const;
+
+/**
+ * Vending machine (snacks or drinks): tall cabinet, lit header, glass window with shelves of products, keypad and display on the
+ * right, dispenser flap at the bottom. `phase` is the blink phase of the display (the scene flips it, see WorldScene `blinkers`).
+ */
+function vendingMachine(f: Furniture, phase: boolean, kind: 'snack' | 'soda'): Parts {
+  const side = faceOf(f);
+  const snack = kind === 'snack';
+  const shell = snack ? '#c8372d' : '#2d63b8';
+  const shellDark = shade(shell, -0.34);
+  const body = withDetail(
+    { x: 0.1, y: 0.14, z: 0, w: 0.8, d: 0.72, h: 66, top: shade(shell, 0.2), left: shade(shell, 0.04), right: shade(shell, -0.3) },
+    isBack(f)
+      ? rearPanel(side, shade(shell, 0.04))
+      : (ctx, ox, oy, b) => {
+          const p = boxPlane(ctx, ox, oy, b, side);
+          const W = Math.round((side === 'n' ? b.w : b.d) * 32);
+          const t = (c: string) => tone(side, c);
+          // casing, plinth and edge bevels
+          p.rect(0, W, 0, 66, t(shell));
+          p.rect(0, 1, 0, 66, t(shade(shell, 0.28)));
+          p.rect(W - 1, W, 0, 66, t(shellDark));
+          p.rect(0, W, 0, 3, t('#1b1e27'));
+          p.rect(0, W, 3, 4, t(shade(shell, -0.5)));
+          // lit header strip with the sign
+          p.rect(2, W - 2, 58, 64, t('#fff4c9'));
+          p.rect(2, W - 2, 58, 59, t('#e6c970'));
+          p.rect(2, W - 2, 63, 64, t('#ffffff'));
+          for (let a = 4; a < W - 4; a += 2) p.rect(a, a + 1, 60, 62 + (hash2(a, 3, 9) < 0.4 ? 1 : 0), t(shell));
+          // product window (dark glass) with a frame
+          const A0 = 2;
+          const A1 = W - 8;
+          p.rect(A0 - 1, A1 + 1, 11, 57, t('#11151d'));
+          p.rect(A0, A1, 12, 56, t('#1c2433'));
+          for (let r = 0; r < 4; r++) {
+            const z0 = 13 + r * 11;
+            p.rect(A0, A1, z0, z0 + 1, t('#aab2c0'));
+            if (z0 > 13) p.rect(A0, A1, z0 - 1, z0, t('#4b5262'));
+            for (let a = A0 + 1; a + 3 <= A1; a += 4) {
+              if (hash2(a, r, 21) < 0.1) continue; // empty slot
+              const col = snack ? SNACK_COLORS[Math.floor(hash2(a, r, 22) * SNACK_COLORS.length)]! : CAN_COLORS[Math.floor(hash2(a, r, 23) * CAN_COLORS.length)]!;
+              const ph = snack ? 7 + Math.floor(hash2(a, r, 24) * 3) : 8;
+              p.rect(a, a + 3, z0 + 1, z0 + 1 + ph, t(col));
+              p.rect(a, a + 1, z0 + 1, z0 + ph, t(shade(col, 0.3)));
+              p.rect(a + 2, a + 3, z0 + 1, z0 + ph, t(shade(col, -0.28)));
+              if (snack) {
+                p.rect(a, a + 3, z0 + ph, z0 + ph + 1, t('#e9edf3'));
+                p.px(a + 1, z0 + 1 + (ph >> 1), t('#fff1a8'));
+              } else {
+                p.rect(a, a + 3, z0 + ph, z0 + ph + 1, t('#d9dde6'));
+                p.rect(a + 1, a + 2, z0 + 3, z0 + 4, t('#ffffff'));
+              }
+            }
+            if (snack) for (let a = A0 + 1; a < A1 - 1; a += 2) p.px(a, z0 + 1, t('#7d8696'));
+          }
+          // glass glint: two diagonal light streaks
+          p.rectFn(A0, A1, 12, 56, (a, z) => {
+            const d = (a - A0) * 2 + z;
+            if ((d >= 40 && d < 43) || d === 50) return `rgba(255,255,255,${d < 43 ? 0.2 : 0.14})`;
+            return null;
+          });
+          // right panel: display, keypad, coin slot
+          const R0 = W - 6;
+          const R1 = W - 2;
+          p.rect(R0 - 1, R1 + 1, 11, 57, t(shellDark));
+          p.rect(R0, R1, 46, 55, t('#0c1118'));
+          p.rect(R0 + 1, R1 - 1, 48, 53, phase ? t('#4dff9a') : t('#1f8a55'));
+          if (phase) p.px(R0 + 1, 52, t('#d9ffe9'));
+          else p.px(R1 - 2, 49, t('#8dffc4'));
+          for (let k = 0; k < 6; k++) {
+            const aa = R0 + (k % 2) * 2;
+            const zz = 40 - Math.floor(k / 2) * 3;
+            p.rect(aa, aa + 1, zz, zz + 2, t('#e8ecf3'));
+            p.px(aa, zz, t('#9aa3b3'));
+          }
+          p.rect(R0, R1, 27, 30, t('#0c1118'));
+          p.rect(R0 + 1, R1 - 1, 28, 29, t('#6c7586'));
+          // brand ribbon under the keypad
+          p.rect(R0, R1, 14, 17, t(snack ? '#ffd24a' : '#e8f1ff'));
+          p.rect(R0, R1, 14, 15, t(snack ? '#c98f12' : '#9bb6e0'));
+          // dispenser flap with a recess and a light top edge
+          p.rect(A0, A1, 4, 11, t('#0e1218'));
+          p.rect(A0 + 1, A1 - 1, 5, 9, t('#1a1f29'));
+          p.rect(A0 + 1, A1 - 1, 9, 10, t('#8b93a3'));
+          p.rect(A0 + 2, A1 - 2, 4, 5, t('#2c3340'));
+        },
+  );
+  return { z1: 67, shadow: { alpha: 0.32 }, boxes: [body] };
+}
+
 /** Paints a pattern on a horizontal rectangle (tile units) at height z. */
 function paintTop(ctx: Ctx, ox: number, oy: number, x0: number, y0: number, x1: number, y1: number, z: number, fn: (X: number, Y: number, px: number, py: number) => string | null) {
   const cs = [project(ox, oy, x0, y0, z), project(ox, oy, x1, y0, z), project(ox, oy, x1, y1, z), project(ox, oy, x0, y1, z)];
@@ -689,6 +782,60 @@ const BUILDERS: Record<FurniKind, Builder> = {
       p.rect(13, 18, 24, 28, '#3b82c4');
     });
     return { z1: 63, boxes: [body] };
+  },
+
+  snack_machine: (_fw, _fd, f, on) => vendingMachine(f, on, 'snack'),
+  soda_machine: (_fw, _fd, f, on) => vendingMachine(f, on, 'soda'),
+
+  microwave: (fw, fd, f, on) => {
+    const side = faceOf(f);
+    const cab = cabinet(fw, fd, false, side, isBack(f));
+    const shellC = '#dfe3ea';
+    const oven = withDetail(
+      { x: 0.1, y: 0.2, z: CT, w: 0.8, d: 0.6, h: 15, top: '#f1f3f7', left: shellC, right: shade(shellC, -0.3) },
+      isBack(f)
+        ? rearPanel(side, shellC)
+        : (ctx, ox, oy, b) => {
+            const p = boxPlane(ctx, ox, oy, b, side);
+            const W = Math.round((side === 'n' ? b.w : b.d) * 32);
+            const t = (c: string) => tone(side, c);
+            p.rect(0, W, 0, 15, t(shellC));
+            p.rect(0, 1, 0, 15, t('#f8fafc'));
+            p.rect(0, W, 14, 15, t('#f8fafc'));
+            p.rect(0, W, 0, 1, t('#8a92a2'));
+            // door with a glass window (warm light, plate and lunch box while heating)
+            const D1 = W - 8;
+            p.rect(1, D1, 1, 14, t('#4b5262'));
+            p.rect(2, D1 - 1, 2, 13, on ? t('#ffcf6b') : t('#141a24'));
+            if (on) {
+              p.rect(3, D1 - 2, 3, 12, t('#ffe29a'));
+              p.rect(4, D1 - 4, 4, 6, t('#c9d3df'));
+              p.rect(5, D1 - 5, 6, 8, t('#e8864a'));
+              p.px(6, 8, t('#fff2c8'));
+            } else {
+              p.rectFn(2, D1 - 1, 2, 13, (a, z) => ((a + z) % 9 === 0 && z > 4 ? 'rgba(255,255,255,0.16)' : null));
+              p.rect(5, D1 - 4, 3, 4, t('#232b38'));
+            }
+            p.rect(D1 - 1, D1, 4, 12, t('#aeb4c0'));
+            // control panel: display and buttons
+            p.rect(D1 + 1, W - 1, 2, 14, t('#c4cad6'));
+            p.rect(D1 + 2, W - 2, 9, 12, t('#0c1118'));
+            p.rect(D1 + 2, W - 2, 9, 11, on ? t('#ffb347') : t('#3a4a42'));
+            if (on) p.px(D1 + 2, 11, t('#fff0b0'));
+            for (let k = 0; k < 3; k++) p.rect(D1 + 2, W - 2, 3 + k * 2, 4 + k * 2, t(k === 2 ? '#e04848' : '#7f8798'));
+          },
+    );
+    return {
+      z1: CT + 17,
+      shadow: cab.shadow,
+      boxes: [...cab.boxes, oven],
+      post: (ctx, ox, oy) => {
+        if (!on) return;
+        const [cx, cy] = project(ox, oy, 0.5 + (side === 'w' ? 0.34 : 0), 0.5 + (side === 'n' ? 0.34 : 0), CT + 8);
+        ctx.fillStyle = 'rgba(255,200,90,0.28)';
+        ctx.fillRect(cx - 7, cy - 2, 14, 6);
+      },
+    };
   },
 
   tv: (_fw, _fd, f) => ({

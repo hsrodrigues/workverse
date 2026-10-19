@@ -27,7 +27,7 @@ const FACING_SEATS: readonly FurniKind[] = ['sofa', 'armchair'];
 /** Pieces with a back and a front: looking at their back or side from close by is wrong. */
 const ORIENTED: readonly FurniKind[] = ['sofa', 'armchair', 'chair', 'ergo_chair', 'auditorium_seat', ...WALL_BACKED_KINDS, 'reception_desk'];
 /** What a seat may look at: furniture people gather around, a screen, or a conversation. */
-const FOCUS: readonly FurniKind[] = ['table', 'high_table', 'desk', 'tv', 'tv_stand', 'screen', 'whiteboard', 'coffee_table', 'videowall', 'arch_board', 'command_desk', 'stage', 'podium', 'reception_desk', 'counter', 'sofa', 'armchair', 'pouf', 'stool', 'chair', 'fridge', 'coffee', 'cooler'];
+const FOCUS: readonly FurniKind[] = ['table', 'high_table', 'desk', 'tv', 'tv_stand', 'screen', 'whiteboard', 'coffee_table', 'videowall', 'arch_board', 'command_desk', 'stage', 'podium', 'reception_desk', 'counter', 'sofa', 'armchair', 'pouf', 'stool', 'chair', 'fridge', 'coffee', 'cooler', 'snack_machine', 'soda_machine', 'microwave'];
 /** How far (in tiles) the gaze looks for something to land on. */
 const GAZE = 6;
 
