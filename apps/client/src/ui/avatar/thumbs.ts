@@ -35,6 +35,8 @@ const CROPS: Record<ThumbFocus, Crop> = {
   torso: { x: 12, y: 50, w: 40, h: 40, view: 'front', scale: 2 },
   legs: { x: 12, y: 70, w: 40, h: 40, view: 'front', scale: 2 },
   feet: { x: 12, y: 72, w: 40, h: 40, view: 'front', scale: 2 },
+  // whole outfits (dresses): neck to feet, no face
+  body: { x: 12, y: 50, w: 40, h: 56, view: 'front', scale: 2 },
   full: { x: 12, y: 10, w: 40, h: 40, view: 'front', scale: 2 },
   back: { x: 12, y: 42, w: 40, h: 40, view: 'back', scale: 2 },
   wrist: { x: 36, y: 64, w: 20, h: 20, view: 'front', scale: 4 },

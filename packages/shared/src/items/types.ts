@@ -95,7 +95,7 @@ export interface Palette {
 }
 
 /** Which part of the sprite a thumbnail crops to. */
-export type ThumbFocus = 'head' | 'face' | 'torso' | 'legs' | 'feet' | 'full' | 'back' | 'wrist' | 'hand';
+export type ThumbFocus = 'head' | 'face' | 'torso' | 'legs' | 'feet' | 'body' | 'full' | 'back' | 'wrist' | 'hand';
 
 export interface ItemDef {
   /** Unique and stable: it is stored in saved avatars. Never rename or reuse an id. */

@@ -50,7 +50,8 @@ try {
       process.exit(1);
     }
     existing.passwordHash = await hashPassword(password);
-    existing.mustChangePassword = true;
+    if (generated || forceChange) existing.mustChangePassword = true;
+    else delete existing.mustChangePassword;
     store.save(existing);
     await store.flush();
     console.log(`Senha de ${existing.email} redefinida. Reinicie o servidor se ele estiver ligado.`);

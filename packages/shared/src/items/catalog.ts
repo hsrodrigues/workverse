@@ -153,14 +153,14 @@ export const ITEMS: readonly ItemDef[] = [
   top('top.halter', 'Frente única', 'Blusa com alças que se cruzam atrás do pescoço.', 'fem.top', ['casual', 'feminino'], { params: { variant: 'halter' }, defaultColor: 'teal' }),
 
   // dresses: one-piece garments take the top slot and cover the bottom (the saved bottom just is not drawn)
-  top('dress.short', 'Vestido curto', 'Vestido curtinho de alças finas. Peça inteira: cobre a parte de baixo.', 'fem.dress', ['vestido', 'casual', 'feminino'], { params: { variant: 'short' }, covers: ['bottom'], thumb: 'full', defaultColor: 'coral' }),
-  top('dress.midi', 'Vestido midi', 'Vestido midi com decote em V, mangas curtas e cinto dourado. Peça inteira.', 'fem.dress', ['vestido', 'casual', 'corporate', 'feminino'], { params: { variant: 'midi' }, covers: ['bottom'], thumb: 'full', defaultColor: 'teal' }),
-  top('dress.long', 'Vestido longo', 'Vestido longo e fluido de alças largas. Peça inteira.', 'fem.dress', ['vestido', 'festa', 'feminino'], { params: { variant: 'long' }, covers: ['bottom'], thumb: 'full', defaultColor: 'wine', rarity: 'uncommon' }),
-  top('dress.floral', 'Vestido florido', 'Vestido midi estampado de florzinhas. Peça inteira.', 'fem.dress', ['vestido', 'casual', 'feminino'], { params: { variant: 'floral' }, covers: ['bottom'], thumb: 'full', defaultColor: 'sky' }),
-  top('dress.party', 'Vestido de festa', 'Vestido tomara que caia com brilhos e saia rodada. Peça inteira.', 'fem.dress', ['vestido', 'festa', 'feminino'], { params: { variant: 'party' }, covers: ['bottom'], thumb: 'full', defaultColor: 'violet', rarity: 'uncommon' }),
-  top('dress.formal', 'Vestido social', 'Vestido chemise de gola e botões, com cinto. Peça inteira.', 'fem.dress', ['vestido', 'corporate', 'feminino'], { params: { variant: 'formal' }, covers: ['bottom'], thumb: 'full', defaultColor: 'navy' }),
-  top('dress.sheath', 'Vestido tubinho', 'Tubinho justo até o joelho. Peça inteira.', 'fem.dress', ['vestido', 'corporate', 'feminino'], { params: { variant: 'sheath' }, covers: ['bottom'], thumb: 'full', defaultColor: 'charcoal' }),
-  top('dress.strap', 'Vestido de alças', 'Vestido de alças largas com laço sob o busto. Peça inteira.', 'fem.dress', ['vestido', 'casual', 'feminino'], { params: { variant: 'strap' }, covers: ['bottom'], thumb: 'full', defaultColor: 'rose' }),
+  top('dress.short', 'Vestido curto', 'Vestido curtinho de alças finas. Peça inteira: cobre a parte de baixo.', 'fem.dress', ['vestido', 'casual', 'feminino'], { params: { variant: 'short' }, covers: ['bottom'], thumb: 'body', defaultColor: 'coral' }),
+  top('dress.midi', 'Vestido midi', 'Vestido midi com decote em V, mangas curtas e cinto dourado. Peça inteira.', 'fem.dress', ['vestido', 'casual', 'corporate', 'feminino'], { params: { variant: 'midi' }, covers: ['bottom'], thumb: 'body', defaultColor: 'teal' }),
+  top('dress.long', 'Vestido longo', 'Vestido longo e fluido de alças largas. Peça inteira.', 'fem.dress', ['vestido', 'festa', 'feminino'], { params: { variant: 'long' }, covers: ['bottom'], thumb: 'body', defaultColor: 'wine', rarity: 'uncommon' }),
+  top('dress.floral', 'Vestido florido', 'Vestido midi estampado de florzinhas. Peça inteira.', 'fem.dress', ['vestido', 'casual', 'feminino'], { params: { variant: 'floral' }, covers: ['bottom'], thumb: 'body', defaultColor: 'sky' }),
+  top('dress.party', 'Vestido de festa', 'Vestido tomara que caia com brilhos e saia rodada. Peça inteira.', 'fem.dress', ['vestido', 'festa', 'feminino'], { params: { variant: 'party' }, covers: ['bottom'], thumb: 'body', defaultColor: 'violet', rarity: 'uncommon' }),
+  top('dress.formal', 'Vestido social', 'Vestido chemise de gola e botões, com cinto. Peça inteira.', 'fem.dress', ['vestido', 'corporate', 'feminino'], { params: { variant: 'formal' }, covers: ['bottom'], thumb: 'body', defaultColor: 'navy' }),
+  top('dress.sheath', 'Vestido tubinho', 'Tubinho justo até o joelho. Peça inteira.', 'fem.dress', ['vestido', 'corporate', 'feminino'], { params: { variant: 'sheath' }, covers: ['bottom'], thumb: 'body', defaultColor: 'charcoal' }),
+  top('dress.strap', 'Vestido de alças', 'Vestido de alças largas com laço sob o busto. Peça inteira.', 'fem.dress', ['vestido', 'casual', 'feminino'], { params: { variant: 'strap' }, covers: ['bottom'], thumb: 'body', defaultColor: 'rose' }),
 
   // ---- outer layer (over the top) ----------------------------------------------------
   outer('outer.blazer', 'Blazer', 'Blazer com lapelas sobre a camisa.', 'outer.blazer', ['corporate'], { rarity: 'uncommon' }),
@@ -416,7 +416,7 @@ export const ITEMS: readonly ItemDef[] = [
     defaultColor: 'purple',
     unlock: 'achievement:top-collaborator',
     rarity: 'legendary',
-    thumb: 'full',
+    thumb: 'feet',
   }),
   ...EVENT_ITEMS,
 
@@ -498,7 +498,7 @@ export const ITEMS: readonly ItemDef[] = [
     defaultColor: 'gold',
     unlock: 'staff',
     rarity: 'legendary',
-    thumb: 'full',
+    thumb: 'feet',
   }),
 ];
 
