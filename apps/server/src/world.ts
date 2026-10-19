@@ -25,12 +25,16 @@ import { Player, RoomInstance, cleanChat } from './room';
 import { StageManager, isStageMessage, type PermissionSync } from './stage';
 import type { Account, AccountStore } from './store';
 import { DEFAULT_ORG_ID, permissionsOf, type Role } from '@workverse/shared';
-import { MESSAGE_POLICY, can, type Actor, type Resource } from './authz';
+import { MESSAGE_POLICY, can, type Actor, type Decision, type Resource } from './authz';
+import { RoomConfig } from './roomConfig';
+import { RoomAdmin, isRoomAdminMessage } from './roomAdmin';
 import { OrgService } from './org';
 import { OrgWorld } from './orgWorld';
 import { StaffService, applyBootstrapStaff, isStaffMessage, parseStaffEmails } from './staff';
+import { EventsService, parseCompanyDate, parseOptionalEvents, type EventsConfig } from './eventsService';
+import { setActiveEventsProvider } from './wardrobe';
 import { accessBlock } from './accountState';
-import type { RoomAdminEntry, RoomOp } from '@workverse/shared';
+import { roomAccessOf, type RoomAdminEntry, type RoomListEntry, type RoomOp } from '@workverse/shared';
 
 export interface Connection {
   send(msg: ServerMessage): void;
@@ -58,6 +62,10 @@ export interface WorldOptions {
   bootstrapOwnerEmail?: string;
   /** `email[:nivel],...` das contas que viram staff da plataforma (BOOTSTRAP_STAFF_EMAILS). Unica via de concessao alem do CLI. */
   bootstrapStaffEmails?: string;
+  /** Throws a person out of the LiveKit room (revoked access): `(orgId, roomId, identity)`. See media.ts. */
+  removeMediaParticipant?: (orgId: string, roomId: string, identity: string) => void;
+  /** Eventos/comemoracoes: data do aniversario da empresa e eventos opcionais (padrao: WORKVERSE_COMPANY_DATE / WORKVERSE_OPTIONAL_EVENTS). */
+  events?: EventsConfig;
 }
 
 const MAX_STRIKES = 20;
@@ -87,9 +95,16 @@ export class World {
   private readonly permissionSync?: PermissionSync;
   /** Staff da plataforma (moderacao, auditoria): ver staff.ts e docs/staff.md. */
   readonly staff: StaffService;
+  /** Eventos e comemoracoes ativos (data do relogio + controle manual da staff): ver eventsService.ts. */
+  readonly events: EventsService;
   private readonly online = new Map<string, { player: Player; conn: Connection; account: Account }>();
   /** Salas trancadas / fechadas pela staff (chave `org\0sala`). Em memoria: voltam abertas ao reiniciar o servidor. */
   private readonly roomLocks = new Map<string, 'locked' | 'closed'>();
+  /** Customized layouts and access policies of the rooms, per organization (see roomConfig.ts). */
+  readonly roomConfig: RoomConfig;
+  /** Room editor and access control (see roomAdmin.ts). */
+  readonly roomAdmin: RoomAdmin;
+  private readonly removeMedia?: WorldOptions['removeMediaParticipant'];
   private readonly store: AccountStore;
   private readonly allowDevLogin: boolean;
   private readonly clock: () => number;
@@ -102,12 +117,37 @@ export class World {
     this.idleAwayMs = opts.idleAwayMs ?? AUTO_AWAY_MS;
     this.log = opts.log ?? (() => undefined);
     this.permissionSync = opts.permissionSync;
+    this.removeMedia = opts.removeMediaParticipant;
+    this.roomConfig = new RoomConfig(opts.store.orgs, this.log);
     this.orgService = new OrgService(opts.store.orgs, {
       clock: this.clock,
       bootstrapOwnerEmail: opts.bootstrapOwnerEmail ?? process.env.BOOTSTRAP_OWNER_EMAIL,
       saveAccount: (a) => this.store.save(a),
       log: this.log,
     });
+    this.roomAdmin = new RoomAdmin({
+      store: opts.store,
+      orgService: this.orgService,
+      roomConfig: this.roomConfig,
+      clock: this.clock,
+      log: this.log,
+      org: (id) => this.org(id),
+      orgWorlds: () => this.orgWorlds.values(),
+      players: (orgId) => this.playersOfOrg(orgId),
+      isStaffAdmin: (p) => this.isStaffAdmin(p),
+      actorOf: (p) => this.actorOf(p),
+      canEnter: (p, roomId) => this.canEnter(p, roomId),
+      evict: (p, roomId, message) => this.evict(p, roomId, message),
+      sendRooms: (p) => this.sendRooms(p),
+      findOnline: (actor, target) => {
+        const e = this.findOnline(actor, target);
+        return e ? { player: e.player, send: (m) => e.conn.send(m) } : undefined;
+      },
+      mutedFor: (id, now) => this.staff.mutedFor(id, now),
+    });
+    this.events = new EventsService(this.clock, opts.events ?? { companyDate: parseCompanyDate(process.env.WORKVERSE_COMPANY_DATE), optional: parseOptionalEvents(process.env.WORKVERSE_OPTIONAL_EVENTS) });
+    // itens de avatar `event:<id>` ficam liberados enquanto o evento estiver ativo (wardrobe.ts)
+    setActiveEventsProvider(() => this.events.activeIds());
     this.org(DEFAULT_ORG_ID);
     const staffEmails = parseStaffEmails(opts.bootstrapStaffEmails ?? process.env.BOOTSTRAP_STAFF_EMAILS);
     applyBootstrapStaff(this.store, staffEmails, this.log);
@@ -134,6 +174,11 @@ export class World {
         roomsOverview: () => this.roomsOverview(),
         roomControl: (orgId, roomId, op) => this.roomControl(orgId, roomId, op),
         roomExists: (orgId, roomId) => !!this.store.orgs.getOrg(orgId) && this.org(orgId).rooms.has(roomId),
+        setEvent: (id, mode) => {
+          const changed = this.events.setMode(id, mode);
+          if (changed) this.broadcastEvents();
+          return { changed, view: this.events.view() };
+        },
       },
       staffEmails,
     );
@@ -148,6 +193,7 @@ export class World {
         log: this.log,
         clock: this.clock,
         permissionSync: this.permissionSync,
+        resolveRoom: (base) => this.roomConfig.resolve(orgId, base),
       });
       this.orgWorlds.set(orgId, w);
     }
@@ -179,6 +225,82 @@ export class World {
   /** Occupants per room of one organization (the default one when omitted). Never mixes organizations. */
   population(orgId: string = DEFAULT_ORG_ID): Record<string, number> {
     return this.orgWorlds.get(orgId)?.population() ?? {};
+  }
+
+  // ---- acesso as salas ---------------------------------------------------------------------------------
+
+  isStaffAdmin(p: Player): boolean {
+    return p.staff === 'admin' && p.onDuty;
+  }
+
+  *playersOfOrg(orgId: string): Iterable<Player> {
+    for (const { player } of this.online.values()) if (player.orgId === orgId) yield player;
+  }
+
+  /**
+   * May this person be in this room right now? One answer for every way in: join, portal, reconnect, media token, and the
+   * periodic check that throws out whoever lost access. Org owners/admins and platform staff admins on duty always pass.
+   */
+  canEnter(player: Player, roomId: string): Decision {
+    const room = this.roomOf(player, roomId);
+    if (!room) return { allow: false, reason: 'no_room' };
+    if (this.isStaffAdmin(player)) return { allow: true, reason: 'staff_admin' };
+    const def = room.built.def;
+    return can(this.actorOf(player), 'room.enter', {
+      orgId: player.orgId,
+      guestAllowed: def.guestAllowed === true,
+      roomAccess: roomAccessOf(def),
+      roomTeamId: def.accessTeamId ?? null,
+      invited: !!this.roomConfig.liveInvite(player.orgId, roomId, player.accountId, this.clock()),
+    });
+  }
+
+  /** Head count per room, ONLY for the rooms this person may enter (a restricted room never reveals who is inside). */
+  visiblePopulation(player: Player): Record<string, number> {
+    const out: Record<string, number> = {};
+    const w = this.orgWorlds.get(player.orgId);
+    if (!w) return out;
+    for (const [id, r] of w.rooms) if (this.canEnter(player, id).allow) out[id] = r.players.size;
+    return out;
+  }
+
+  /** The rooms as this person sees them in the browser: padlock on the restricted ones, no population for those. */
+  roomListFor(player: Player): RoomListEntry[] {
+    const w = this.org(player.orgId);
+    const out: RoomListEntry[] = [];
+    for (const [id, r] of w.rooms) {
+      const def = r.built.def;
+      const access = roomAccessOf(def);
+      const d = this.canEnter(player, id);
+      const hidden = !d.allow && access === 'private';
+      out.push({
+        id,
+        name: hidden ? 'Sala privada' : def.name,
+        description: hidden ? 'Acesso restrito.' : def.description,
+        maxPlayers: def.maxPlayers,
+        access,
+        locked: !d.allow,
+        ...(!d.allow
+          ? { lockReason: d.reason === 'guest_room' ? ('guest' as const) : d.reason === 'room_team' ? ('team' as const) : ('invite' as const) }
+          : { population: r.players.size }),
+      });
+    }
+    return out;
+  }
+
+  sendRooms(player: Player) {
+    player.send({ t: 'rooms', rooms: this.roomListFor(player) });
+  }
+
+  /** The person lost access to a room they are in: tell them, move them to a room they may use, and drop their media. */
+  evict(player: Player, roomId: string, message: string) {
+    if (player.roomId !== roomId) return;
+    this.removeMedia?.(player.orgId, roomId, player.id);
+    this.permissionSync?.(roomId, player.id, 'none', player.orgId);
+    player.send({ t: 'error', code: 'kicked_room', message });
+    this.enterRoom(player, this.landingRoom(player, 'reception'));
+    this.sendRooms(player);
+    this.log('room.evict', { player: player.id, org: player.orgId, room: roomId });
   }
 
   // ---- salas (painel de staff) -------------------------------------------------------------------------
@@ -254,10 +376,20 @@ export class World {
     for (const org of this.orgWorlds.values()) {
       if (!org.populationDirty) continue;
       org.populationDirty = false;
-      // Only people of this org learn its numbers.
-      const msg: ServerMessage = { t: 'population', population: org.population() };
-      for (const { player, conn } of this.online.values()) if (player.orgId === org.id) conn.send(msg);
+      // Only people of this org learn its numbers, and only of the rooms they may enter.
+      for (const { player, conn } of this.online.values()) {
+        if (player.orgId === org.id) conn.send({ t: 'population', population: this.visiblePopulation(player) });
+      }
     }
+    this.roomAdmin.sweep(now);
+    // virada do dia / evento forcado: todos veem a mesma decoracao
+    if (this.events.changed(now)) this.broadcastEvents();
+  }
+
+  /** Manda a todos os online a lista de eventos ativos (e os controles manuais). */
+  broadcastEvents() {
+    const msg = { t: 'events' as const, ...this.events.view() };
+    for (const { conn } of this.online.values()) conn.send(msg);
   }
 
   // ---- authorization ---------------------------------------------------------------------------------
@@ -278,6 +410,8 @@ export class World {
     if (!Object.prototype.hasOwnProperty.call(MESSAGE_POLICY, msg.t)) return { allow: false, reason: 'unknown_message' };
     const action = MESSAGE_POLICY[msg.t];
     if (action === null || action === undefined) return { allow: true, reason: 'ok' };
+    // The platform staff admin on duty can decorate and manage access in the organization they are in.
+    if ((action === 'room.furnish' || action === 'room.access.set') && this.isStaffAdmin(player)) return { allow: true, reason: 'staff_admin' };
     return can(this.actorOf(player), action, this.resourceFor(player, msg));
   }
 
@@ -290,11 +424,13 @@ export class World {
     const p = entry.player;
     p.role = actor.role;
     p.teamId = actor.teamId;
-    // A guest cannot stay in a room that is not open to guests.
+    // A guest cannot stay in a room that is not open to guests, and a new role/team may close the door of a restricted room.
     if (p.role === 'guest' && p.roomId && this.roomOf(p)?.built.def.guestAllowed !== true) {
       this.enterRoom(p, this.landingRoom(p));
     }
+    this.roomAdmin.enforcePlayer(p);
     entry.conn.send(this.permsMessage(p));
+    this.sendRooms(p);
   }
 
   private permsMessage(p: Player): Extract<ServerMessage, { t: 'perms' }> {
@@ -305,10 +441,12 @@ export class World {
   /** First room a person may use: their last one when allowed, else the default one, else the first open to guests. */
   private landingRoom(p: Player, preferred?: string): string {
     const rooms = this.org(p.orgId).rooms;
-    const ok = (id: string | undefined) => !!id && rooms.has(id) && (p.role !== 'guest' || rooms.get(id)!.built.def.guestAllowed === true);
+    const ok = (id: string | undefined) => !!id && rooms.has(id) && this.canEnter(p, id).allow;
     if (ok(preferred)) return preferred!;
+    // A last room that is gone or no longer allowed (access revoked while offline) falls back to the reception, the hub.
+    if (preferred !== undefined && ok('reception')) return 'reception';
     if (ok(DEFAULT_ROOM_ID)) return DEFAULT_ROOM_ID;
-    for (const [id, r] of rooms) if (p.role !== 'guest' || r.built.def.guestAllowed === true) return id;
+    for (const id of rooms.keys()) if (ok(id)) return id;
     return DEFAULT_ROOM_ID;
   }
 
@@ -405,6 +543,10 @@ export class World {
         return this.wardrobe(conn, player, { t: 'avatar_save', avatar: msg.avatar }, now);
       }
       default:
+        if (isRoomAdminMessage(msg.t)) {
+          if (!this.roomAdmin.handle(player, msg, now)) this.strike(conn);
+          return;
+        }
         if (isStaffMessage(msg.t)) {
           if (!this.staff.handle(player, msg as never, now)) this.strike(conn);
           return;
@@ -646,6 +788,8 @@ export class World {
       ...(this.staff.selfOf(player) ? { staff: this.staff.selfOf(player) } : {}),
     });
     this.staff.onSession(player);
+    this.sendRooms(player);
+    conn.send({ t: 'events', ...this.events.view() });
   }
 
   /** Ends the live session of an account (logout or revoked cookie). */
@@ -694,10 +838,19 @@ export class World {
   enterRoom(player: Player, roomId: string, at?: Point & { dir: Dir8 }) {
     const room = this.roomOf(player, roomId);
     if (!room) return;
-    // Portals and joins both end here: a guest never gets into a room that is not open to guests.
-    const verdict = can(this.actorOf(player), 'room.enter', { orgId: player.orgId, guestAllowed: room.built.def.guestAllowed === true });
+    // Portals, joins, reconnections and staff moves all end here: a guest never gets into a room that is not open to guests,
+    // and a restricted room only admits its team, its invited people and the organization's owners and admins.
+    const verdict = this.canEnter(player, roomId);
     if (!verdict.allow) {
-      player.send({ t: 'error', code: 'forbidden', message: 'Você não tem acesso a essa sala.' });
+      const restricted = verdict.reason === 'room_team' || verdict.reason === 'room_invite';
+      const why = verdict.reason === 'room_team' ? 'Essa sala é restrita a uma equipe.' : verdict.reason === 'room_invite' ? 'Essa sala é só para convidados.' : 'Você não tem acesso a essa sala.';
+      player.send({ t: 'error', code: restricted ? 'room_denied' : 'forbidden', message: why });
+      this.log('room.denied', { player: player.id, org: player.orgId, room: roomId, reason: verdict.reason });
+      // First entry (reconnecting into a room that is no longer allowed): land somewhere that is.
+      if (!player.roomId) {
+        const fallback = this.landingRoom(player, 'reception');
+        if (fallback !== roomId) this.enterRoom(player, fallback);
+      }
       return;
     }
     if (player.roomId !== roomId && this.roomState(player.orgId, roomId) !== 'open' && !(player.staff && player.onDuty)) {
@@ -717,7 +870,7 @@ export class World {
       this.stageOf(player).onLeave(previous, player);
     }
     const now = this.clock();
-    room.add(player, at ?? room.built.def.spawn, now, this.population(player.orgId));
+    room.add(player, at ?? room.built.def.spawn, now, this.visiblePopulation(player));
     this.stageOf(player).onEnter(roomId, player);
     const entry = this.online.get(player.accountId);
     if (entry) {

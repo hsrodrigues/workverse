@@ -90,7 +90,7 @@ describe('item catalog', () => {
     const slotCount = (s: string) => ITEMS.filter((i) => i.slot === s).length;
     for (const s of ['top', 'outer', 'bottom']) expect(slotCount(s), s).toBeGreaterThanOrEqual(3);
     expect(ITEMS.some((i) => i.unlock !== 'free')).toBe(true);
-    expect(ITEMS.some((i) => i.availability === 'upcoming')).toBe(true);
+    expect(ITEMS.every((i) => ['available', 'hidden', 'retired', 'upcoming'].includes(i.availability))).toBe(true);
   });
 
   it('palettes have unique ids and hex colors', () => {
@@ -257,7 +257,8 @@ describe('validation', () => {
     expect(validateAvatar(a, makePolicy({ unlocks: new Set(['achievement:coffee-lover']) })).ok).toBe(true);
     const santa = base();
     santa.special = [{ id: 'sp.santa_hat' }];
-    expect(issuesOf(validateAvatar(santa, makePolicy({ unlocks: new Set(['event:natal']) }))).map((i) => i.code)).toEqual(['unavailable']);
+    expect(issuesOf(validateAvatar(santa, makePolicy({ unlocks: new Set(['event:natal']) }))).map((i) => i.code)).toEqual([]);
+    expect(issuesOf(validateAvatar(santa, none)).map((i) => i.code)).toEqual(['locked']);
     const staff = base();
     staff.special = [{ id: 'sp.badge_staff' }];
     expect(validateAvatar(staff, none).ok).toBe(false);
@@ -275,7 +276,7 @@ describe('access', () => {
     expect(accessOf(getItem('sp.badge_staff')!, { unlocks: new Set(['staff']) })).toBe('ok');
     expect(accessOf(getItem('sp.party_hat')!, { unlocks: new Set(['event:aniversario']) })).toBe('ok');
     expect(accessOf(getItem('sp.party_hat')!, { unlocks: new Set(['event:natal']) })).toBe('locked');
-    expect(accessOf(getItem('sp.santa_hat')!, { unlocks: new Set(['event:natal', 'staff']) })).toBe('upcoming');
+    expect(accessOf(getItem('sp.santa_hat')!, { unlocks: new Set(['event:natal', 'staff']) })).toBe('ok');
   });
 
   it('grandfathers retired items and hides hidden ones', () => {
@@ -343,5 +344,50 @@ describe('outfit names', () => {
     expect(sanitizeOutfitName('<>')).toBeNull();
     expect(sanitizeOutfitName(42)).toBeNull();
     expect(sanitizeOutfitName('Reunião de diretoria 2')).toBe('Reunião de diretoria 2');
+  });
+});
+
+describe('catalog expansion', () => {
+  it('lists the new wardrobe pieces, with a few locked ones and none hidden/upcoming', () => {
+    const fresh = ['top.plaid', 'top.turtleneck', 'top.jersey', 'top.hoodie_zip', 'outer.denim', 'outer.leather', 'outer.parka', 'outer.labcoat', 'bottom.leggings', 'bottom.joggers', 'bottom.pleated', 'bottom.midi'];
+    for (const id of fresh) expect(ITEMS_BY_ID.has(id), id).toBe(true);
+    expect(ITEMS.length).toBeGreaterThanOrEqual(150);
+    const locked = ['top.jersey', 'outer.leather', 'outer.parka'].map((id) => getItem(id)!);
+    for (const i of locked) {
+      expect(i.unlock).not.toBe('free');
+      expect(accessOf(i, { unlocks: new Set() })).toBe('locked');
+      expect(accessOf(i, { unlocks: new Set([i.unlock]) })).toBe('ok');
+    }
+    expect(getItem('top.plaid')!.unlock).toBe('free');
+  });
+
+  it('locks the special pieces behind achievements/staff and keeps slots coherent', () => {
+    const lockedSpecials: Record<string, string> = {
+      'sp.crown': 'staff',
+      'sp.scepter': 'staff',
+      'sp.halo': 'achievement:team-player',
+      'sp.wings': 'event:aniversario',
+      'sp.aura': 'achievement:top-collaborator',
+      'sp.gamer_headset': 'achievement:night-owl',
+      'sp.trophy': 'achievement:champion',
+    };
+    for (const [id, unlock] of Object.entries(lockedSpecials)) {
+      const i = getItem(id)!;
+      expect(i.unlock, id).toBe(unlock);
+      expect(['rare', 'epic', 'legendary'], id).toContain(i.rarity);
+      expect(accessOf(i, { unlocks: new Set() }), id).toBe('locked');
+      expect(accessOf(i, { unlocks: new Set([unlock]) }), id).toBe('ok');
+    }
+    for (const id of ['sp.cat_ears', 'sp.horns', 'sp.hardhat', 'sp.cape', 'sp.cat_tail', 'shoes.sandals', 'acc.scarf', 'acc.crossbody']) expect(getItem(id)!.unlock, id).toBe('free');
+    // a hat and a special head piece, a backpack and wings, headphones and the gamer headset all compete for the same place
+    expect(itemsConflict(getItem('acc.cap')!, getItem('sp.crown')!)).toBe(true);
+    expect(itemsConflict(getItem('acc.backpack')!, getItem('sp.wings')!)).toBe(true);
+    expect(itemsConflict(getItem('acc.straw')!, getItem('sp.gamer_headset')!)).toBe(true);
+    // neck pieces and an aura go with everything else
+    expect(itemsConflict(getItem('acc.scarf')!, getItem('acc.tie')!)).toBe(true);
+    expect(itemsConflict(getItem('acc.scarf')!, getItem('sp.aura')!)).toBe(false);
+    const dressed = equipItem(equipItem(DEFAULT_AVATAR, 'acc.scarf').ok ? (equipItem(DEFAULT_AVATAR, 'acc.scarf') as { ok: true; avatar: AvatarV2 }).avatar : DEFAULT_AVATAR, 'sp.aura');
+    expect(dressed.ok).toBe(true);
+    for (const i of ITEMS.filter((x) => x.slot === 'neck' || x.slot === 'aura')) expect(i.availability).toBe('available');
   });
 });

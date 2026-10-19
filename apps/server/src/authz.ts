@@ -1,4 +1,4 @@
-import { ROLE_RANK, roleHas, type Permission, type Role } from '@workverse/shared';
+import { ROLE_RANK, roleHas, type Permission, type Role, type RoomAccess } from '@workverse/shared';
 
 /**
  * Central authorization. Every WebSocket message (see MESSAGE_POLICY) and every HTTP route that touches an
@@ -30,6 +30,11 @@ export interface Resource {
   isLastOwner?: boolean;
   // room.enter
   guestAllowed?: boolean;
+  /** Access policy of the target room (default `org`) and the team it admits when `team`. */
+  roomAccess?: RoomAccess;
+  roomTeamId?: string | null;
+  /** The actor holds a live invitation to the room (`invited` / `private` rooms). */
+  invited?: boolean;
   // dm.send
   sameRoom?: boolean;
   sameTeam?: boolean;
@@ -52,7 +57,7 @@ export function can(actor: Actor, action: Permission, resource: Resource): Decis
   switch (action) {
     case 'room.enter':
       if (actor.role === 'guest' && resource.guestAllowed !== true) return deny('guest_room');
-      return ALLOW;
+      return roomAccessDecision(actor, resource);
 
     case 'chat.team':
       if (!actor.teamId) return deny('no_team');
@@ -93,6 +98,18 @@ export function can(actor: Actor, action: Permission, resource: Resource): Decis
     default:
       return ALLOW;
   }
+}
+
+/**
+ * Who gets into a room by its access policy. Owners and admins of the organization always do (the platform staff admin on duty
+ * is handled by the world, which knows about the duty state). Everybody else needs the team, or a live invitation.
+ */
+function roomAccessDecision(actor: Actor, resource: Resource): Decision {
+  const access = resource.roomAccess ?? 'org';
+  if (access === 'org') return ALLOW;
+  if (actor.role === 'owner' || actor.role === 'admin') return ALLOW;
+  if (access === 'team') return actor.teamId && actor.teamId === resource.roomTeamId ? ALLOW : deny('room_team');
+  return resource.invited === true ? ALLOW : deny('room_invite');
 }
 
 // ---- WebSocket message policy ---------------------------------------------------------------------
@@ -140,6 +157,15 @@ export const MESSAGE_POLICY: Readonly<Record<string, Permission | null>> = {
   stage_open: 'stage.host',
   stage_close: 'stage.host',
 
+  // room editor and access (the platform staff admin on duty is let through by the world, see World.authorize)
+  furnish_apply: 'room.furnish',
+  furnish_reset: 'room.furnish',
+  room_access_get: 'room.access.set',
+  room_access_set: 'room.access.set',
+  room_invite_add: 'room.access.set',
+  room_invite_remove: 'room.access.set',
+  meeting_invite: 'dm.send',
+
   // staff da plataforma: a checagem real (nível, serviço, alvo, taxa) fica em staff.ts; sem sessão nada chega até lá
   staff_duty: null,
   staff_invis: null,
@@ -153,5 +179,6 @@ export const MESSAGE_POLICY: Readonly<Record<string, Permission | null>> = {
   staff_dm: null,
   staff_rooms: null,
   staff_room: null,
+  staff_event: null,
 };
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getDayMode, onDayMode, setDayMode, type DayMode } from '../game/dayCycle';
 import { listen } from '../bus';
+import { isDecorOff, rawEvents, setDecorEnabled, useEventsVersion } from '../eventsStore';
 
 const OPTIONS: ReadonlyArray<{ id: DayMode; label: string }> = [
   { id: 'auto', label: 'Automático (hora do computador)' },
@@ -12,6 +13,8 @@ const OPTIONS: ReadonlyArray<{ id: DayMode; label: string }> = [
 export function DayModeButton() {
   const [open, setOpen] = useState<{ x: number; y: number } | null>(null);
   const [mode, setMode] = useState<DayMode>(getDayMode());
+  useEventsVersion();
+  const events = rawEvents();
 
   useEffect(() => onDayMode(() => setMode(getDayMode())), []);
   useEffect(() => {
@@ -63,6 +66,15 @@ export function DayModeButton() {
               {o.label}
             </button>
           ))}
+          {events.length > 0 && (
+            <>
+              <div className="ctx-title">Evento: {events[0]!.name}</div>
+              <button role="menuitemcheckbox" aria-checked={!isDecorOff()} data-testid="event-decor-toggle" onClick={() => setDecorEnabled(isDecorOff())}>
+                {isDecorOff() ? '○ ' : '● '}
+                Decoração de evento
+              </button>
+            </>
+          )}
         </div>
       )}
     </>

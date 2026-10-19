@@ -9,3 +9,7 @@ export * from './rbac';
 export * from './activity';
 export * from './staff';
 export * from './powerpoint';
+export * from './layoutRules';
+export * from './furnish';
+export * from './events';
+export * from './eventLayout';

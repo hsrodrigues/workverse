@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { DEFAULT_AVATAR, MAX_OUTFITS, ITEMS, cloneAvatar, equipItem, getItem, type AvatarV2, type ServerMessage } from '@workverse/shared';
 import { World, type Connection } from '../src/world';
 import { JsonFileAccountStore, MemoryAccountStore, sanitizeOutfits } from '../src/store';
-import { canUse, validateFor } from '../src/wardrobe';
+import { canUse, setActiveEventsProvider, validateFor } from '../src/wardrobe';
 
 class FakeConn implements Connection {
   strikes = 0;
@@ -103,6 +103,8 @@ describe('avatar_save', () => {
 
   it('everything free is usable by default and nothing else is', () => {
     const acc = new MemoryAccountStore().create({ email: 'a@b.co', displayName: 'Zed', passwordHash: 'x' });
+    // no event running: event items are locked (they open only while their event is active)
+    setActiveEventsProvider(() => []);
     for (const item of ITEMS) {
       expect(canUse(acc, item), item.id).toBe(item.unlock === 'free' && item.availability === 'available');
     }

@@ -32,9 +32,26 @@ import type { Account, AccountStore } from './store';
 export const STAFF_BADGE_ID = 'sp.badge_staff';
 const STAFF_ONLY_KEYS = new Set(['staff', `item:${STAFF_BADGE_ID}`]);
 
+/**
+ * Eventos ativos agora (ids): enquanto durarem, todo mundo ganha a chave `event:<id>` e pode vestir os itens do evento.
+ * Quem esta VESTINDO um item de evento continua podendo mante-lo depois que o evento acaba (o item nao some do visual
+ * nem trava o salvamento do avatar); para trocar de item de novo, so no proximo evento. Concessao manual (`event:<id>`
+ * em Account.unlocks, staff_item) continua valendo para sempre. O mundo registra a fonte (ver World).
+ */
+let activeEventIds: () => readonly string[] = () => [];
+export function setActiveEventsProvider(fn: () => readonly string[]): void {
+  activeEventIds = fn;
+}
+
 const unlockSet = (account: Account): Set<string> => {
   const keys = new Set((account.unlocks ?? []).filter((k) => !STAFF_ONLY_KEYS.has(k)));
   if (account.staff) for (const k of STAFF_ONLY_KEYS) keys.add(k);
+  for (const id of activeEventIds()) keys.add(`event:${id}`);
+  // quem ja veste um item de evento o mantem depois que o evento acaba
+  for (const id of wornIds(account.avatar)) {
+    const item = getItem(id);
+    if (item && item.unlock.startsWith('event:') && item.availability === 'available') keys.add(`item:${id}`);
+  }
   return keys;
 };
 

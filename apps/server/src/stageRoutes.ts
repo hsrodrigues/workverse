@@ -73,8 +73,8 @@ export function registerStageRoutes(app: FastifyInstance, deps: AuthDeps, opts: 
       return fail(reply, 403, 'forbidden', 'Você não tem permissão para apresentar.');
     }
     const roomId = player.roomId;
-    if (!roomId || !stage.isStageRoom(roomId)) return fail(reply, 409, 'not_stage_room', 'Aqui não há palco.');
-    if (stage.roleOf(roomId, player) !== 'speaker') return fail(reply, 403, 'not_speaker', 'Só quem está no palco pode enviar slides.');
+    if (!roomId || !stage.hasPresentation(roomId)) return fail(reply, 409, 'not_stage_room', 'Aqui não há palco nem TV de apresentação.');
+    if (stage.roleOf(roomId, player) !== 'speaker') return fail(reply, 403, 'not_speaker', 'Só quem está apresentando (palco ou TV) pode enviar slides.');
     const body = req.body;
     if (!Buffer.isBuffer(body)) return fail(reply, 415, 'unsupported_media_type', 'Envie a imagem como PNG, JPEG ou WebP.');
     const mime = String(req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();

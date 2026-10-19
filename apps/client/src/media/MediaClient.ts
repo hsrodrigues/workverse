@@ -23,7 +23,8 @@ export type PermissionState = 'prompt' | 'granted' | 'denied' | 'unavailable';
 export type MediaStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'unavailable' | 'error';
 export type VideoSource = 'camera' | 'screen';
 /** What the server lets this person publish here: everything, microphone only (audience member given the floor) or nothing. */
-export type PublishRights = 'all' | 'audio' | 'none';
+/** `av`: microphone and camera but no screen share (viewers in a room with a presentation TV). */
+export type PublishRights = 'all' | 'av' | 'audio' | 'none';
 /** `stage` = an auditorium: only the speaker transmits. The server decides; this only labels the request. */
 export type MediaKind = 'room' | 'stage';
 
@@ -93,6 +94,8 @@ export interface MediaClientOptions {
   proximityIntervalMs?: number;
 }
 
+/** Espera antes de pedir o token ao trocar de sala: trocas rapidas em sequencia viram uma so chamada. */
+const CONNECT_DEBOUNCE_MS = 300;
 const LS_MODE = 'wv.media.mode';
 const LS_PROX = 'wv.media.proximity';
 const LS_DEV = 'wv.media.devices';
@@ -130,6 +133,7 @@ const MSG = {
   camMissing: 'Nenhuma câmera encontrada (ou o navegador não permite acesso a ela aqui). O chat continua funcionando.',
   busy: 'O dispositivo está em uso por outro programa. Feche-o e tente de novo.',
   noPublish: 'Você não tem permissão para transmitir nesta sala.',
+  tvScreenOnly: 'Só quem está apresentando na TV da sala compartilha a tela. Clique na TV para apresentar.',
   audienceOnly: 'Na plateia só se fala quando o palestrante dá a palavra. Levante a mão para pedir.',
   rightsLost: 'Sua transmissão foi encerrada: você não está mais com a palavra.',
   screenUnsupported: 'Este navegador não permite compartilhar a tela.',
@@ -169,6 +173,8 @@ export class MediaClient {
   private tilePos: TilePositionProvider = () => undefined;
   private proxTimer: ReturnType<typeof setInterval> | undefined;
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Espera pedida pelo servidor (Retry-After de um 429) para a proxima tentativa. */
+  private retryHintMs = 0;
   private retries = 0;
   private audioHost: HTMLDivElement | undefined;
   private audioEls = new Map<string, HTMLMediaElement>();
@@ -236,7 +242,13 @@ export class MediaClient {
     this.wantedRoom = roomId;
     this.wantedKind = kind;
     this.retries = 0;
-    await this.open(roomId);
+    // Trocas de sala em sequencia rapida pedem so um token (o da sala em que o usuario parou): sem isso cada sala
+    // do caminho gasta uma chamada /api/media/token e o limite do servidor (429) derruba a chamada de verdade.
+    const gen = ++this.generation;
+    clearTimeout(this.retryTimer);
+    this.retryTimer = setTimeout(() => {
+      if (gen === this.generation && this.wantedRoom === roomId) void this.open(roomId);
+    }, CONNECT_DEBOUNCE_MS);
   }
 
   /** Leaves the room and releases the camera, microphone and audio elements. */
@@ -292,6 +304,10 @@ export class MediaClient {
       });
     } catch {
       return 'unavailable';
+    }
+    if (res.status === 429) {
+      const wait = Number(res.headers.get('Retry-After'));
+      this.retryHintMs = Number.isFinite(wait) && wait > 0 ? Math.min(60, wait) * 1000 : 0;
     }
     if (res.status === 503) return 'unavailable';
     if (res.status === 403 || res.status === 404) return 'error'; // not in that room (yet): the caller retries
@@ -352,13 +368,14 @@ export class MediaClient {
     // Keep what the user already enabled when they walk into another room (no new permission prompt: already granted).
     if (rights !== 'none') {
       if (this.wantMic) void this.setEnabled('mic', true);
-      if (this.wantCam && rights === 'all') void this.setEnabled('cam', true);
+      if (this.wantCam && (rights === 'all' || rights === 'av')) void this.setEnabled('cam', true);
     }
   }
 
   private scheduleRetry(roomId: string, gen: number, minMs = 1000) {
     this.retries++;
-    const delay = Math.min(30_000, Math.max(minMs, 1000 * 2 ** this.retries)) + Math.random() * 500;
+    const delay = Math.min(30_000, Math.max(minMs, this.retryHintMs, 1000 * 2 ** this.retries)) + Math.random() * 500;
+    this.retryHintMs = 0;
     this.retryTimer = setTimeout(() => {
       if (gen !== this.generation || this.wantedRoom !== roomId) return;
       void this.open(roomId);
@@ -421,15 +438,15 @@ export class MediaClient {
     else {
       // An empty list means "every source" for LiveKit; 1 = camera, 2 = microphone, 3/4 = screen share.
       const src = perm.canPublishSources ?? [];
-      if (src.length > 0 && !src.includes(1) && !src.includes(3)) rights = 'audio';
+      if (src.length > 0 && !src.includes(3)) rights = src.includes(1) ? 'av' : 'audio';
     }
     if (rights === this.snapshot.rights) return;
     const wasTransmitting = this.snapshot.micOn || this.snapshot.camOn || this.snapshot.screenOn;
     this.patch({ rights, canPublish: rights !== 'none' });
     const lp = room.localParticipant;
-    if (rights !== 'all') {
+    if (rights !== 'all') void lp.setScreenShareEnabled(false).catch(() => undefined);
+    if (rights === 'audio' || rights === 'none') {
       void lp.setCameraEnabled(false).catch(() => undefined);
-      void lp.setScreenShareEnabled(false).catch(() => undefined);
       this.wantCam = false;
     }
     if (rights === 'none') {
@@ -555,8 +572,8 @@ export class MediaClient {
       return;
     }
     const rights = this.snapshot.rights;
-    if (on && (rights === 'none' || (rights === 'audio' && kind !== 'mic'))) {
-      this.patch({ notice: this.wantedKind === 'stage' ? MSG.audienceOnly : MSG.noPublish });
+    if (on && (rights === 'none' || (rights === 'audio' && kind !== 'mic') || (rights === 'av' && kind === 'screen'))) {
+      this.patch({ notice: rights === 'av' ? MSG.tvScreenOnly : this.wantedKind === 'stage' ? MSG.audienceOnly : MSG.noPublish });
       return;
     }
     if (on && kind !== 'screen' && this.snapshot[kind === 'mic' ? 'micPermission' : 'camPermission'] === 'unavailable') {

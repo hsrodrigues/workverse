@@ -30,6 +30,10 @@ export const UNLOCK_LABELS: Readonly<Record<string, string>> = {
   free: 'Gratuito',
   staff: 'Equipe WorkVerse',
   'achievement:coffee-lover': 'Conquista: Fã de café',
+  'achievement:champion': 'Conquista: Campeão',
+  'achievement:team-player': 'Conquista: Jogador de equipe',
+  'achievement:night-owl': 'Conquista: Coruja noturna',
+  'achievement:top-collaborator': 'Conquista: Colaborador destaque',
   'event:aniversario': 'Evento: Aniversário do WorkVerse',
   'event:natal': 'Evento: Natal',
 };

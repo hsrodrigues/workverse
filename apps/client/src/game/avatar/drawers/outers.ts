@@ -8,10 +8,10 @@ import { registerDrawer } from '../registry';
  * part just above the shirt (depth 0.05) and bring their own sleeves, so the top and the jacket recolor independently.
  */
 
-const TOP_Y = 22.4;
+export const TOP_Y = 22.4;
 
 /** Screen-space strip along the front opening, from `y0` up to the neck; half width in torso angle units. */
-function openingStrip(c: Ctx2, y0: number, y1: number, half0: number, half1: number): P2[] {
+export function openingStrip(c: Ctx2, y0: number, y1: number, half0: number, half1: number): P2[] {
   const left: P2[] = [];
   const right: P2[] = [];
   const steps = 7;
@@ -26,7 +26,7 @@ function openingStrip(c: Ctx2, y0: number, y1: number, half0: number, half1: num
   return [...left, ...right.reverse()];
 }
 
-function standCollar(c: Ctx2, col: ReturnType<typeof tonesOf>, high = 22.6, depth = 1.6) {
+export function standCollar(c: Ctx2, col: ReturnType<typeof tonesOf>, high = 22.6, depth = 1.6) {
   const front = !c.back;
   for (let n = 0; n <= 12; n++) {
     const psi = -Math.PI * 0.5 + (n / 12) * Math.PI;

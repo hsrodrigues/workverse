@@ -11,6 +11,7 @@ import {
   footprintTiles,
   idx,
   inBounds,
+  isValidPath,
   isWalkable,
   seatDir,
   stageSpots,
@@ -76,6 +77,8 @@ export class Player {
   /** Auditorium actions (hands, slide changes...) and deck uploads. */
   readonly stageBucket: TokenBucket;
   readonly deckBucket: TokenBucket;
+  /** Room editor and access changes (each one is validated, persisted and broadcast: keep them from flooding). */
+  readonly adminBucket: TokenBucket;
 
   constructor(
     readonly id: string,
@@ -91,6 +94,7 @@ export class Player {
     this.miscBucket = new TokenBucket(10, 5, now);
     this.stageBucket = new TokenBucket(20, 8, now);
     this.deckBucket = new TokenBucket(10, 1, now);
+    this.adminBucket = new TokenBucket(12, 3, now);
   }
 }
 
@@ -120,7 +124,11 @@ export function cleanChat(raw: string): string {
 }
 
 export class RoomInstance {
-  readonly built: BuiltRoom;
+  /** Replaced (never mutated) when the layout changes: see `applyLayout`. */
+  built: BuiltRoom;
+  /** Layout version (0 = original) and whether the organization customized it; both come from the store (roomConfig.ts). */
+  version = 0;
+  customized = false;
   readonly players = new Map<string, Player>();
   readonly furniState: Record<string, boolean> = {};
   /** Last clock value seen (arrival actions happen deep inside `sync`, which knows the time). */
@@ -161,6 +169,71 @@ export class RoomInstance {
     }
   }
 
+  // ---- live layout changes ------------------------------------------------------------------------
+
+  /**
+   * Swaps in a new layout while people are inside. Everyone is first brought up to date (arrival actions still run on the
+   * old layout), then the room is rebuilt and each person is reconciled with it: whoever stood on a tile that now blocks is
+   * moved to the nearest free one, whoever sat on a piece that vanished stands up, walks through newly blocked tiles are cut
+   * short, and a computer nobody can reach is switched off. Spawn and portals never change, so nobody is ever stranded.
+   * `furniture_changed` goes out first so clients rebuild before they receive the per-person corrections.
+   */
+  applyLayout(def: RoomDef, meta: { version: number; customized: boolean; by?: string }, now: number) {
+    for (const p of this.players.values()) this.sync(p, now);
+    const next = buildRoom(def); // throws on an invalid layout: callers validate first and nothing has changed yet
+    this.built = next;
+    this.version = meta.version;
+    this.customized = meta.customized;
+    for (const id of Object.keys(this.furniState)) if (!next.furniById.has(id)) delete this.furniState[id];
+    this.broadcast({ t: 'furniture_changed', roomId: this.id, version: meta.version, customized: meta.customized, furniture: def.furniture, ...(meta.by ? { by: meta.by } : {}) });
+
+    const g = next.grid;
+    const stop = (p: Player) => {
+      p.path = [];
+      p.action = null;
+      p.origin = { x: p.x, y: p.y };
+      this.broadcast({ t: 'path', id: p.id, from: { x: p.x, y: p.y }, path: [], stepRemainingMs: 0 });
+    };
+    for (const p of [...this.players.values()]) {
+      if (p.sitting) {
+        const seat = (next.furniAt.get(idx(g, p.x, p.y)) ?? []).find((f) => FURNI_KINDS[f.kind].seat);
+        if (!seat) {
+          // the seat vanished from under them: stand up where they are (the tile is free unless something else was placed there)
+          p.sitting = false;
+          this.stopWork(p);
+          if (p.activity === 'working') p.activity = 'idle';
+          stop(p);
+          this.broadcast({ t: 'activity', id: p.id, activity: p.activity });
+        } else {
+          if (p.dir !== seatDir(seat)) {
+            p.dir = seatDir(seat);
+            this.broadcast({ t: 'sit', id: p.id, x: p.x, y: p.y, dir: p.dir });
+          }
+          if (p.workingAt && this.computerFacing(p.x, p.y)?.id !== p.workingAt) this.setActivity(p, 'idle');
+        }
+      } else if (p.workingAt) {
+        this.setActivity(p, 'idle');
+      }
+      if (!p.sitting && !isWalkable(g, p.x, p.y)) {
+        const tile = this.freeTileNear({ x: p.x, y: p.y }, p.id);
+        p.x = tile.x;
+        p.y = tile.y;
+        p.path = [];
+        p.action = null;
+        p.origin = { ...tile };
+        this.broadcast({ t: 'path', id: p.id, from: { ...tile }, path: [], stepRemainingMs: 0 });
+        continue;
+      }
+      if (p.path.length > 0) {
+        const sitGoal = p.action?.kind === 'sit' && !!(next.furniAt.get(idx(g, p.action.x, p.action.y)) ?? []).some((f) => FURNI_KINDS[f.kind].seat);
+        if (!isValidPath(g, p.origin, p.path, sitGoal)) stop(p);
+      }
+      if (p.action?.kind === 'use' && !next.furniById.has(p.action.furniId)) p.action = null;
+      if (p.action?.kind === 'sit' && !(next.furniAt.get(idx(g, p.action.x, p.action.y)) ?? []).some((f) => FURNI_KINDS[f.kind].seat)) p.action = null;
+    }
+    this.hooks.onChange();
+  }
+
   // ---- membership -------------------------------------------------------
 
   add(p: Player, spawn: Point & { dir: Dir8 }, now: number, population: Record<string, number>) {
@@ -185,6 +258,8 @@ export class RoomInstance {
         players: [...this.players.values()].filter((o) => !o.invisible || o.id === p.id).map((o) => this.view(o, now)),
         furniState: { ...this.furniState },
         population,
+        furnishVersion: this.version,
+        customized: this.customized,
       },
     });
     if (!p.invisible) this.broadcast({ t: 'joined', player: this.view(p, now) }, p.id);
@@ -202,9 +277,9 @@ export class RoomInstance {
     this.hooks.onChange();
   }
 
-  private freeTileNear(want: Point): Point {
+  private freeTileNear(want: Point, exceptId?: string): Point {
     const g = this.built.grid;
-    const occupied = new Set([...this.players.values()].map((o) => idx(g, o.x, o.y)));
+    const occupied = new Set([...this.players.values()].filter((o) => o.id !== exceptId).map((o) => idx(g, o.x, o.y)));
     const seen = new Set<number>();
     const queue: Point[] = [want];
     while (queue.length) {
@@ -408,7 +483,11 @@ export class RoomInstance {
       // a monitor somebody is working at stays on
       if (this.isWorkedAt(f.id)) return;
       this.setFurni(f.id, !this.furniState[f.id]);
-    } else if (f.kind === 'podium') {
+    } else if (f.kind === 'light_switch') {
+      // estado true = luzes apagadas; visivel para todos na sala (mensagem 'furni')
+      this.setFurni(f.id, !this.furniState[f.id]);
+    } else if (f.kind === 'podium' || f.kind === 'tv_stand') {
+      // the podium takes the stage, the TV on its stand takes the presentation of the room (see StageManager)
       this.hooks.onPodium?.(p);
     } else if (FURNI_HOLDS[f.kind]) {
       const item = FURNI_HOLDS[f.kind]!;
@@ -418,6 +497,11 @@ export class RoomInstance {
   }
 
   // ---- activity (working at a PC, holding a cup) ------------------------------------------------------------------
+
+  /** Turns a piece on or off for everybody in the room (the presentation TV lights up while somebody presents). */
+  setFurniOn(id: string, on: boolean) {
+    if (this.built.furniById.has(id)) this.setFurni(id, on);
+  }
 
   private setFurni(id: string, on: boolean) {
     if ((this.furniState[id] ?? false) === on) return;

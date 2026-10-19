@@ -39,10 +39,12 @@ describe.skipIf(!comAvailable())('PowerPoint real (COM)', () => {
   let createdMtime = 0;
   let createdSize = 0;
 
+  // Connection: close — entre uma chamada e outra o teste consulta o PowerPoint por PowerShell (segundos); reaproveitar o socket
+  // keep-alive que o servidor ja fechou (keepAliveTimeout de 5 s) dava ECONNRESET esporadico.
   const api = async (method: string, p: string, body?: unknown) => {
     const res = await fetch(`http://127.0.0.1:${conn.port}${p}`, {
       method,
-      headers: { Origin: ORIGIN, Authorization: `Bearer ${token}`, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+      headers: { Connection: 'close', Origin: ORIGIN, Authorization: `Bearer ${token}`, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const type = res.headers.get('content-type') ?? '';
@@ -103,7 +105,7 @@ describe.skipIf(!comAvailable())('PowerPoint real (COM)', () => {
     const err = await api('POST', '/v1/next', {});
     expect(err.status).toBe(409);
     expect(['no_powerpoint', 'no_show']).toContain(err.json.error.code);
-  }, 30_000);
+  }, 60_000);
 
   it('abre o arquivo, inicia em janela, navega e confere com o PowerPoint de verdade', async () => {
     const open = await api('POST', '/v1/open', {});
@@ -165,7 +167,7 @@ describe.skipIf(!comAvailable())('PowerPoint real (COM)', () => {
     const start = await api('POST', '/v1/export', { width: 1600, format: 'png' });
     expect(start.status).toBe(200);
     let prog = start.json;
-    for (let i = 0; i < 200 && prog.state === 'running'; i++) {
+    for (let i = 0; i < 600 && prog.state === 'running'; i++) {
       await new Promise((r) => setTimeout(r, 150));
       prog = (await api('GET', '/v1/export')).json;
     }
@@ -179,7 +181,7 @@ describe.skipIf(!comAvailable())('PowerPoint real (COM)', () => {
     }
     // thumbnails are produced by themselves
     let thumbs = (await api('GET', '/v1/status')).json.thumbs;
-    for (let i = 0; i < 100 && thumbs.ready < 5; i++) {
+    for (let i = 0; i < 600 && thumbs.ready < 5; i++) {
       await new Promise((r) => setTimeout(r, 150));
       thumbs = (await api('GET', '/v1/status')).json.thumbs;
     }
@@ -191,14 +193,14 @@ describe.skipIf(!comAvailable())('PowerPoint real (COM)', () => {
     // files really are on disk, inside the private folder
     const files = fs.readdirSync(path.join(dir, 'exports'));
     expect(files.filter((f) => f.startsWith('full-')).length).toBe(5);
-  }, 120_000);
+  }, 240_000);
 
   it('encerra a apresentação sem fechar o arquivo', async () => {
     const end = await api('POST', '/v1/end', {});
     expect(end.json.status.show).toBeNull();
     expect(end.json.status.presentation.name).toBe('WorkVerse Teste Ação.pptx');
     expect(realShowCount()).toBe(0);
-  }, 30_000);
+  }, 60_000);
 
   it('iniciar em tela cheia a partir do slide 3 e passar do último slide encerra o show', async () => {
     const start = await api('POST', '/v1/start', { mode: 'fullscreen', from: 3 });

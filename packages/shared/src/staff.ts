@@ -26,6 +26,7 @@ export type StaffAction =
   | 'item.grant'
   | 'rooms.view'
   | 'rooms.control'
+  | 'events.control'
   | 'accounts.view'
   | 'accounts.create'
   | 'accounts.reset'
@@ -51,6 +52,7 @@ export const STAFF_MIN_LEVEL: Readonly<Record<StaffAction, StaffLevel>> = {
   'item.grant': 'admin',
   'rooms.view': 'helper',
   'rooms.control': 'moderator',
+  'events.control': 'moderator',
   'accounts.view': 'helper',
   'accounts.create': 'moderator',
   'accounts.reset': 'moderator',

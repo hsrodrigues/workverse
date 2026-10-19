@@ -72,13 +72,32 @@ export async function startPg(): Promise<PgHarness | null> {
         await Promise.allSettled(pools.map((p) => p.end()));
         try {
           await pg!.stop();
+        } catch (err) {
+          // O embedded-postgres tambem apaga a pasta ao parar (persistent:false) e no Windows isso pode dar EBUSY/EPERM
+          // por um arquivo ainda preso: o servidor ja parou, entao so a limpeza falhou e isso nao e falha de teste.
+          if (!/EBUSY|EPERM|ENOTEMPTY/.test(String((err as Error).message))) throw err;
         } finally {
-          rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+          // Limpeza de pasta temporaria e best-effort: no Windows o antivirus/indexador pode segurar um arquivo por
+          // alguns segundos (EPERM/EBUSY) e isso nao e uma falha do que o teste verifica.
+          try {
+            rmSync(dir, { recursive: true, force: true, maxRetries: 15, retryDelay: 300 });
+          } catch (err) {
+            console.warn(`[pg.test] nao deu para apagar ${dir} (${(err as Error).message}); fica no temp do sistema.`);
+          }
         }
       },
     };
     return harness;
   } catch (err) {
+    // No CI o Postgres embutido DEVE subir: pular em silencio esconderia uma regressao real.
+    if (process.env.CI && process.env.WV_ALLOW_PG_SKIP !== '1') {
+      try {
+        await pg?.stop();
+      } catch {
+        /* nunca iniciou */
+      }
+      throw new Error(`PostgreSQL embutido nao subiu no CI: ${(err as Error).message}`);
+    }
     console.warn(`[pg.test] PostgreSQL embutido indisponivel, suite sera pulada: ${(err as Error).message}`);
     try {
       await pg?.stop();

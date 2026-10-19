@@ -1,0 +1,434 @@
+/* Modo decoração (editor de salas), aba de acesso e convites para reunião. */
+
+.tool-furnish.on,
+.tool-furnish:hover:not(:disabled) {
+  background: #3f9a54;
+}
+
+.win.panel.panel-furnish {
+  top: 12px;
+  right: 12px;
+  width: min(360px, calc(100vw - 24px));
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.win.panel.panel-furnish .win-title {
+  background: linear-gradient(#3f9a54 0 50%, #2f7a40 50%);
+  text-shadow: 1px 1px 0 #1d4d28;
+  flex: none;
+}
+
+.win.panel.panel-furnish .win-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 8px;
+}
+
+.fz {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  font-size: 13px;
+}
+
+.fz-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fz-tabs button {
+  background: var(--paper-2);
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.fz-tabs button.on {
+  background: #3f9a54;
+  color: #fff;
+}
+
+.fz-tabs button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fz-count {
+  margin-left: auto;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.fz-bar {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  gap: 4px;
+}
+
+.fz-bar .mini {
+  white-space: nowrap;
+  padding: 4px 4px;
+  font-size: 11px;
+}
+
+.fz .mini {
+  margin-left: 0;
+  color: var(--ink);
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  padding: 3px 6px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+.fz .mini:hover:not(:disabled) {
+  background: var(--gold);
+}
+
+.fz .mini:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.fz .mini.danger:hover:not(:disabled),
+.fz .mini.danger {
+  color: #8c1c1c;
+}
+
+.fz .mini.gold {
+  background: var(--gold);
+}
+
+.fz-mode {
+  background: #fff8dc;
+  border: 2px dashed var(--ink);
+  border-radius: 3px;
+  padding: 5px 7px;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.fz-search,
+.fz-invite input,
+.fz-field select,
+.fz-invite select {
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  padding: 5px 7px;
+  font-family: inherit;
+  background: #fff;
+  min-width: 0;
+}
+
+.fz-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.fz-cats button {
+  background: var(--paper-2);
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.fz-cats button.on {
+  background: var(--blue);
+  color: #fff;
+}
+
+.fz-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  overflow-y: auto;
+  min-height: 120px;
+  max-height: 300px;
+  padding: 2px;
+}
+
+.fz-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  padding: 4px 2px;
+  cursor: pointer;
+  font-family: inherit;
+  min-width: 0;
+}
+
+.fz-item:hover {
+  background: #fff8dc;
+}
+
+.fz-item.on {
+  background: #c8f0cf;
+  box-shadow: 0 0 0 2px #3f9a54;
+}
+
+.fz-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 52px;
+}
+
+.fz-thumb img {
+  max-width: 92%;
+  max-height: 52px;
+  image-rendering: pixelated;
+  object-fit: contain;
+}
+
+.fz-name {
+  font-size: 10.5px;
+  line-height: 1.1;
+  text-align: center;
+  word-break: break-word;
+}
+
+.fz-empty,
+.fz-hint {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.fz-foot {
+  display: flex;
+  justify-content: center;
+}
+
+.fz-status {
+  border-top: 2px solid var(--ink);
+  padding-top: 6px;
+  min-height: 34px;
+  font-size: 12.5px;
+}
+
+.fz-status.bad {
+  color: #a31d1d;
+}
+
+.fz-status.ok {
+  color: #1e6b32;
+}
+
+.fz-status.warn {
+  color: #8a5a00;
+}
+
+.fz-status.error {
+  color: #a31d1d;
+}
+
+/* dica ao lado do cursor */
+.fz-tip {
+  position: fixed;
+  z-index: 3000;
+  max-width: 264px;
+  pointer-events: none;
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  padding: 4px 7px;
+  font-size: 12px;
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+.fz-tip.bad {
+  background: #ffe3e3;
+  color: #8c1c1c;
+}
+
+.fz-tip.warn {
+  background: #fff4cc;
+  color: #6e4a00;
+}
+
+/* aba Acesso */
+.fz-access {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  max-height: 460px;
+}
+
+.fz-field {
+  display: grid;
+  gap: 3px;
+  font-size: 12px;
+}
+
+.fz-radios {
+  display: grid;
+  gap: 5px;
+}
+
+.fz-radio {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  padding: 5px 7px;
+  cursor: pointer;
+}
+
+.fz-radio.on {
+  background: #c8f0cf;
+}
+
+.fz-radio.off {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fz-radio span {
+  display: grid;
+}
+
+.fz-radio small,
+.fz-who small {
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.fz-sub {
+  font-weight: 700;
+  margin: 2px 0;
+}
+
+.fz-invite {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 4px;
+}
+
+.fz-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.fz-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: space-between;
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  padding: 4px 7px;
+}
+
+.fz-who {
+  display: grid;
+}
+
+.fz-notice {
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  padding: 4px 7px;
+  font-size: 12px;
+}
+
+.fz-notice.ok {
+  background: #d6f5dc;
+}
+
+.fz-notice.error {
+  background: #ffe3e3;
+}
+
+/* convites para reuniao */
+.fz-invites {
+  position: absolute;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  gap: 6px;
+  z-index: 60;
+  width: min(440px, calc(100vw - 24px));
+}
+
+.fz-invite-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  padding: 7px 10px;
+  box-shadow: 0 3px 0 var(--ink);
+}
+
+.fz-invite-card span {
+  flex: 1;
+  font-size: 13px;
+}
+
+.fz-invite-card .mini {
+  margin-left: 0;
+  color: var(--ink);
+  font-size: 12px;
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  padding: 3px 8px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.fz-invite-card .mini.gold {
+  background: var(--gold);
+}
+
+/* navegador de salas: cadeado */
+.room-row.locked,
+.room-row.locked:disabled {
+  opacity: 1;
+  background: #e6dfcb;
+  color: #3b372f;
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
+.room-row.locked .room-name,
+.room-row.locked .room-desc,
+.room-row.locked .room-pop {
+  color: #4a463d;
+}
+
+.room-row .room-lock {
+  margin-right: 5px;
+  font-size: 13px;
+}

@@ -410,6 +410,83 @@ const legacyRug = (fw: number, fd: number): Parts => ({
   },
 });
 
+/**
+ * Presentation TV on a rolling stand (2 x 1 tiles). The panel is a thin box 58 px wide centred in the footprint; its
+ * screen (54 x 30 px, 16:9) is painted live by stageScreen.ts over the dark glass drawn here. dir 0 shows the screen
+ * on the +y face, dir 1 on the +x face (the plane runs along y); dir 2/3 show the back of the set.
+ */
+export const TV = { margin: 3, w: 58, z0: 24, h: 34, thick: 0.08, across: 0.46, screen: { a0: 2, a1: 56, z0: 2, z1: 32 } } as const;
+
+function tvBody(fw: number, fd: number): { x: number; y: number; w: number; d: number; alongX: boolean } {
+  const alongX = fw >= fd;
+  const m = TV.margin / 32;
+  const len = TV.w / 32;
+  return alongX ? { x: m, y: TV.across, w: len, d: TV.thick, alongX } : { x: TV.across, y: m, w: TV.thick, d: len, alongX };
+}
+
+/** Where the live screen sits: plane side, plane origin in tile coordinates, height and the screen rectangle in plane pixels. */
+export function tvScreenSurface(f: Furniture) {
+  const fp = footprint(f);
+  const dir = ((f.dir % 4) + 4) % 4;
+  const side: 'n' | 'w' = dir % 2 === 0 ? 'n' : 'w';
+  const b = tvBody(fp.w, fp.d);
+  const [ox, oy] = side === 'n' ? [b.x, b.y + b.d] : [b.x + b.w, b.y];
+  return { side, back: dir >= 2, tx: f.x + ox, ty: f.y + oy, z: TV.z0, ...TV.screen };
+}
+
+function tvStand(fw: number, fd: number, f: Furniture, on: boolean): Parts {
+  const back = ((f.dir % 4) + 4) % 4 >= 2;
+  const body = tvBody(fw, fd);
+  const alongX = body.alongX;
+  const side: 'n' | 'w' = alongX ? 'n' : 'w';
+  // across: s grows toward the camera for the screen side; the rear view mirrors it so the pole stays behind the set
+  const ac = (s0: number, s1: number): [number, number] => (back ? [1 - s1, 1 - s0] : [s0, s1]);
+  const at = (l0: number, l1: number, s0: number, s1: number, z: number, h: number, top: string, left?: string, right?: string, extra: Partial<Box> = {}): Box => {
+    const [a, b] = ac(s0, s1);
+    return alongX ? { x: l0, y: a, w: l1 - l0, d: b - a, z, h, top, left, right, ...extra } : { x: a, y: l0, w: b - a, d: l1 - l0, z, h, top, left, right, ...extra };
+  };
+  const t = (c: string) => tone(side, c);
+  const W = TV.w;
+  const H = TV.h;
+  const panel: Box = withDetail({ ...body, z: TV.z0, h: H, top: '#3a3f4c', left: '#1c1f27', right: '#14161d', flat: true }, (ctx, ox, oy, b) => {
+    const p = boxPlane(ctx, ox, oy, b, side);
+    if (back) {
+      p.rect(0, W, 0, H, t('#2b2f3a'));
+      p.rect(0, W, H - 1, H, t('#454b5c'));
+      p.rect(0, W, 0, 1, t('#14161d'));
+      p.rectFn(4, W - 4, 3, H - 3, (a, z) => (z % 4 === 0 && a % 6 < 4 ? t('#1c1f27') : null));
+      p.rect(W / 2 - 8, W / 2 + 8, 11, 23, t('#59606e'));
+      p.rect(W / 2 - 7, W / 2 + 7, 12, 22, t('#454b5c'));
+      for (const [a, z] of [[-6, 13], [5, 13], [-6, 20], [5, 20]] as const) p.px(W / 2 + a, z, t('#8f94a0'));
+      return;
+    }
+    const { a0, a1, z0, z1 } = TV.screen;
+    p.rect(0, W, 0, H, t('#1c1f27'));
+    p.rect(0, W, H - 1, H, t('#454b5c'));
+    p.rect(0, 1, 0, H, t('#2b2f3a'));
+    p.rect(W - 1, W, 0, H, t('#14161d'));
+    p.rect(a0 - 1, a1 + 1, z0 - 1, z1 + 1, t('#0a0b10'));
+    if (on) {
+      // lit glass (the scene paints the slide over it)
+      p.rectFn(a0, a1, z0, z1, (a, z) => t(z > (z1 - z0) * 0.6 + z0 ? '#4a3f9a' : z > (z1 - z0) * 0.3 + z0 ? '#3a3480' : '#2b2766'));
+      p.rect(a0 + 3, a0 + 14, z1 - 6, z1 - 4, t('#ffe27a'));
+    } else {
+      p.rectFn(a0, a1, z0, z1, (a, z) => t((a + z) % 11 === 0 && a > 8 ? '#1c212c' : '#10131b'));
+    }
+    p.px(W - 5, 0, on ? '#58e08a' : '#e04848');
+    p.rect(W / 2 - 2, W / 2 + 2, 0, 1, t('#59606e'));
+  });
+  const boxes: Box[] = [
+    at(0.62, 1.38, 0.2, 0.8, 2, 3, '#4a5062', '#2f3441', '#20242e'),
+    ...[[0.62, 0.22], [1.3, 0.22], [0.62, 0.7], [1.3, 0.7]].map(([l, s]) => at(l, l + 0.08, s, s + 0.08, 0, 2, '#2b2f3a', '#14161d', '#0b0c10', { noOutline: true })),
+    at(0.94, 1.06, 0.34, 0.46, 5, 20, '#8f94a0', '#6b717e', '#4a505c'),
+    at(0.7, 1.3, 0.28, 0.64, 11, 2, '#aeb4c0', '#8f94a0', '#59606e'),
+    at(0.86, 1.14, 0.36, 0.56, 13, 3, '#2b2f3a', '#1c1f27', '#14161d'),
+    panel,
+  ];
+  return { boxes, z0: 0, z1: TV.z0 + H, shadow: { alpha: 0.28 } };
+}
+
 const BUILDERS: Record<FurniKind, Builder> = {
   desk: (fw, fd) => {
     // Modern bench desk: white laminate top on an oak edge, black frame legs, slate modesty panel.
@@ -727,6 +804,36 @@ const BUILDERS: Record<FurniKind, Builder> = {
       p.rect(A0 + 28, A1 - 6, Z1 - 12, Z1 - 9, S('#f4f1ea'));
       p.rect(A0 + 28, A1 - 14, Z1 - 17, Z1 - 15, S('#7fd6cf'));
       p.rect(A0 + 28, A1 - 20, Z1 - 21, Z1 - 20, S('#59606e'));
+    }),
+  }),
+
+  /** Interruptor na parede. `on` aqui significa "luzes APAGADAS" (balancim para baixo, LED apagado). */
+  light_switch: (_fw, _fd, f, off) => ({
+    boxes: [],
+    z0: 30,
+    z1: 62,
+    shadow: null,
+    post: onWall(f, (p, side) => {
+      const dk = side === 'w' ? -0.1 : 0;
+      const S = (c: string) => shade(c, dk);
+      const A0 = 9;
+      const A1 = 23;
+      const Z0 = 32;
+      const Z1 = 54;
+      wallShadow(p, A0, A1, Z0, Z1);
+      p.rect(A0, A1, Z0, Z1, S('#2b2f3a'));
+      p.rect(A0 + 1, A1 - 1, Z0 + 1, Z1 - 1, S('#59606e'));
+      p.rect(A0 + 2, A1 - 2, Z0 + 2, Z1 - 2, S('#fbf8ef'));
+      p.rect(A0 + 2, A0 + 3, Z0 + 2, Z1 - 2, S('#ffffff'));
+      // balancim grande: metade de cima levantada (acesa) ou de baixo (apagada), com sombra
+      const ry0 = off ? Z0 + 4 : Z0 + 11;
+      const ry1 = off ? Z0 + 11 : Z1 - 4;
+      p.rect(A0 + 4, A1 - 4, ry0, ry1, S(off ? '#9aa0ac' : '#e6e1d0'));
+      p.rect(A0 + 4, A1 - 4, off ? ry0 : ry1 - 1, off ? ry0 + 1 : ry1, S('#59606e'));
+      p.rect(A0 + 4, A0 + 5, ry0 + 1, ry1 - 1, S('#ffffff'));
+      // LED acima da placa, bem visivel quando as luzes estao acesas
+      p.rect(A0 + 5, A1 - 5, Z1 + 2, Z1 + 4, S(off ? '#59606e' : '#ffd95a'));
+      if (!off) p.rect(A0 + 6, A1 - 6, Z1 + 3, Z1 + 4, S('#fff3b0'));
     }),
   }),
 
@@ -1498,6 +1605,8 @@ const BUILDERS: Record<FurniKind, Builder> = {
     ];
     return { z1: 42, boxes: [...feet, panel, rail] };
   },
+
+  tv_stand: (fw, fd, f, on) => tvStand(fw, fd, f, on),
 };
 
 const cache = new Map<string, FurniSprite>();

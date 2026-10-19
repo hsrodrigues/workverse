@@ -11,6 +11,7 @@ const POWERS: [StaffAction, string][] = [
   ['announce.room', 'Avisar uma sala'],
   ['dm', 'Mensagem privada de staff'],
   ['rooms.control', 'Trancar, fechar e esvaziar salas'],
+  ['events.control', 'Ligar e desligar eventos (Halloween, Natal...)'],
   ['kick.session', 'Expulsar da sessão'],
   ['announce.all', 'Aviso global e por organização'],
   ['accounts.create', 'Criar contas e redefinir senhas'],

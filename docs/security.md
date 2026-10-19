@@ -40,7 +40,7 @@ Verificado e SEM falha (confirmado por teste/leitura): isolamento entre orgs em 
 - **Bloqueio por conta e DoS**: o limite por e-mail (5/min) permite que alguem impeca o login de uma vitima enquanto atacar. Cloudflare/regras de WAF mitigam.
 - **Origens com curinga** (`https://*.trycloudflare.com`): qualquer pessoa pode abrir um subdominio. Hoje so e seguro porque o cookie e `SameSite=Strict` (trycloudflare.com e site distinto). NUNCA afrouxe o cookie para Lax/None e prefira dominio proprio em producao.
 - Sem CAPTCHA/Turnstile; o limite de cadastro por IP e o modo `invite`/`closed` fazem esse papel.
-- Imagens do auditorio ficam em memoria ate outra pessoa assumir o palco (ate 24 MB por sala de palco por org).
+- Imagens do auditorio ficam em memoria ate o palco ser liberado ou outra pessoa assumir (ate 24 MB por sala de palco por org).
 - Pequena diferenca de tempo no login enquanto existirem hashes antigos (N=2^14) versus o hash falso (N=2^16); desaparece apos o primeiro login de cada conta.
 - Voce nao precisa de `__Host-` no nome do cookie, mas e um endurecimento extra possivel.
 
@@ -68,3 +68,7 @@ Na data desta revisao a superficie `/api/staff/*` ainda NAO existia no codigo, e
 - [ ] No proxy/nginx: `client_max_body_size 2m`, limite de requisicoes por IP, cabecalho HSTS, CSP (o servidor Node ja envia CSP e demais cabecalhos pelo `webServer.ts`).
 - [ ] Conector do PowerPoint: iniciar com `--origin https://seu-endereco`; nunca com origem `*`.
 - [ ] Rode `npm audit --omit=dev`, `npm run typecheck`, `npm test`, `npm run build` antes de cada publicacao.
+
+## Nota: editor de salas e acesso por sala
+
+Toda mudança (`furnish_*`, `room_access_*`, `room_invite_*`) é revalidada no servidor: permissão (`room.furnish` / `room.access.set` ou staff admin em serviço), sala sempre a da sessão e da própria organização, validação compartilhada, versão otimista e limite de taxa; cada mudança vai para a auditoria (`room.furnish`, `room.access`, `room.invite`). Acesso negado vale em join, portal, reconexão e token de mídia; revogar expulsa na hora. Staff moderador/ajudante não atravessa sala restrita (só staff admin em serviço).

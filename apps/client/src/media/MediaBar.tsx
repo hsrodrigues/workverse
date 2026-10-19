@@ -25,8 +25,10 @@ export function MediaBar({ panelPlacement = 'above' }: { /** Where the settings 
   const camBlocked = state.camPermission === 'denied' || state.camPermission === 'unavailable';
   // Auditorium: the server only lets the speaker publish; an audience member given the floor gets the microphone.
   const noMic = connected && state.rights === 'none';
-  const noVideo = connected && state.rights !== 'all';
+  const noVideo = connected && state.rights !== 'all' && state.rights !== 'av';
+  const noScreen = connected && state.rights !== 'all';
   const restricted = 'Só quem está no palco transmite aqui. Levante a mão para pedir a palavra.';
+  const tvOnly = 'Só quem está apresentando na TV compartilha a tela. Clique na TV para apresentar.';
   const label = (on: boolean, what: string, blocked: boolean) =>
     blocked ? `${what}: indisponível (veja o aviso)` : on ? `Desligar ${what.toLowerCase()}` : `Ligar ${what.toLowerCase()}`;
 
@@ -81,8 +83,8 @@ export function MediaBar({ panelPlacement = 'above' }: { /** Where the settings 
           className={`wvm-btn ${state.screenOn ? 'on' : ''}`}
           data-testid="toggle-screen"
           aria-pressed={state.screenOn}
-          title={noVideo ? restricted : state.screenOn ? 'Parar compartilhamento de tela' : 'Compartilhar tela'}
-          disabled={off || noVideo || state.screenPermission === 'unavailable'}
+          title={noScreen ? (state.rights === 'av' ? tvOnly : restricted) : state.screenOn ? 'Parar compartilhamento de tela' : 'Compartilhar tela'}
+          disabled={off || noScreen || state.screenPermission === 'unavailable'}
           onClick={() => void client.toggleScreenShare()}
         >
           <Icon name="screen" />

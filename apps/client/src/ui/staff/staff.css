@@ -263,6 +263,7 @@ textarea.sf-input {
   gap: 8px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-bottom: 6px;
+  align-items: start;
 }
 
 .sf-grid3 {

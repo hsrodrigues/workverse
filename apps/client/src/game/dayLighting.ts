@@ -7,6 +7,8 @@ import { dayModeVersion, dayState, effectiveHour, skySignature, softenTint, type
 /** Above every sprite and avatar (depths grow from 10) but below names, balloons and badges (1_000_000). */
 const OVERLAY_DEPTH = 900_000;
 const GLOW_DEPTH = 900_001;
+/** Luminarias de teto: acima de avatares e moveis, abaixo da camada de tom do dia (para escurecer a noite). */
+const FIXTURE_DEPTH = 800_000;
 const REFRESH_MS = 30_000;
 
 const rgbStr = (c: RGB, k = 1) => `rgb(${Math.round(c[0] * k)},${Math.round(c[1] * k)},${Math.round(c[2] * k)})`;
@@ -72,17 +74,51 @@ function paintSky(layer: SkyLayer, room: BuiltRoom, theme: Theme, sky: SkyState)
   }
 }
 
+
+/** Luminaria de teto: painel de LED em losango isometrico pendurado por cabos (pixel art 2D, luz esquerda-cima). */
+function fixtureCanvas(): HTMLCanvasElement {
+  const W = 48;
+  const H = 52;
+  const { canvas, ctx } = createCanvas(W, H);
+  const px = (x: number, y: number, w: number, h: number, c: string) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(x, y, w, h);
+  };
+  // suporte no teto + cabos
+  px(21, 0, 6, 3, '#4a4f5c');
+  px(22, 0, 4, 1, '#6b717e');
+  px(23, 3, 2, 14, '#2b2f3a');
+  px(10, 14, 1, 10, '#2b2f3a');
+  px(37, 14, 1, 10, '#2b2f3a');
+  // painel: losango 2:1 (largura 36, altura 18) com moldura, luz e face inferior
+  const cx = 24;
+  const top = 22;
+  for (let r = 0; r < 18; r++) {
+    const half = r < 9 ? (r + 1) * 2 : (18 - r) * 2;
+    const x0 = cx - half;
+    const w = half * 2;
+    const frame = r < 2 || r > 15 || half < 4;
+    px(x0, top + r, w, 1, frame ? '#4a4f5c' : '#fff3cf');
+    if (!frame && r > 3 && r < 12) px(x0 + 3, top + r, Math.max(0, w - 6), 1, '#fffbea');
+  }
+  // espessura (face sul) e sombra
+  for (let x = cx - 18; x < cx; x++) px(x, top + 9 + Math.floor((x - (cx - 18)) / 2), 1, 3, '#2f333e');
+  for (let x = cx; x < cx + 18; x++) px(x, top + 18 - Math.floor((x - cx) / 2), 1, 3, '#23262f');
+  return canvas;
+}
+
 // ---------------------------------------------------------------------------
 // Dithered additive glows
 
-function glowCanvas(w: number, h: number, color: RGB, power = 1.7): HTMLCanvasElement {
+function glowCanvas(w: number, h: number, color: RGB, power = 1.7, banded = false): HTMLCanvasElement {
   const { canvas, ctx } = createCanvas(w, h);
   const img = ctx.createImageData(w, h);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const d = Math.hypot((x + 0.5 - w / 2) / (w / 2), (y + 0.5 - h / 2) / (h / 2));
       const level = Math.max(0, 1 - d) ** power;
-      const q = Math.floor(level * 5 + bayer(x, y)) / 5;
+      // banded: degraus finos e limpos (sem pontilhado nem aneis marcados); os demais brilhos seguem pontilhados
+      const q = banded ? Math.round(level * 10) / 10 : Math.floor(level * 5 + bayer(x, y)) / 5;
       if (q <= 0) continue;
       const i = (y * w + x) * 4;
       img.data[i] = color[0];
@@ -95,8 +131,11 @@ function glowCanvas(w: number, h: number, color: RGB, power = 1.7): HTMLCanvasEl
   return canvas;
 }
 
-type GlowKind = 'lampPool' | 'lampHead' | 'screen' | 'tvPool' | 'spotRed' | 'spotBlue' | 'spotGold';
-const GLOWS: Record<GlowKind, { w: number; h: number; color: RGB; power?: number }> = {
+type GlowKind = 'ceilPool' | 'ceilPoolL' | 'lampPool' | 'lampHead' | 'screen' | 'tvPool' | 'spotRed' | 'spotBlue' | 'spotGold';
+const GLOWS: Record<GlowKind, { w: number; h: number; color: RGB; power?: number; banded?: boolean }> = {
+  // luz de teto (luminarias embutidas): ampla, branco-quente, fica ligada tambem de dia
+  ceilPool: { w: 200, h: 100, color: [255, 214, 140], power: 1.9, banded: true },
+  ceilPoolL: { w: 250, h: 126, color: [255, 214, 140], power: 1.9, banded: true },
   lampPool: { w: 176, h: 88, color: [255, 190, 100], power: 1.5 },
   lampHead: { w: 34, h: 34, color: [255, 214, 130], power: 1.2 },
   screen: { w: 52, h: 30, color: [110, 180, 255], power: 1.3 },
@@ -114,6 +153,10 @@ interface Light {
   needsOn: boolean;
   /** Keep a faint glow in the daytime too (stage spots). */
   floorLevel: number;
+  /** Nivel minimo (0..1) mesmo de dia: luz artificial de teto. */
+  dayMin?: number;
+  /** Luz da sala (teto e luminarias): o interruptor da parede apaga todas estas. */
+  room?: boolean;
 }
 
 // Auditorium stage spots (floor tile coordinates, see SPOTS in roomArt.ts)
@@ -128,6 +171,10 @@ export class DayLighting {
   private sky: { layer: SkyLayer; img: Phaser.GameObjects.Image } | null = null;
   private beams: Phaser.GameObjects.Image | null = null;
   private lights: Light[] = [];
+  private fixtures: Phaser.GameObjects.Image[] = [];
+  /** Interruptores de luz da sala (estado `true` = apagada) e se as luzes estao apagadas agora. */
+  private switches = new Set<string>();
+  private lightsOff = false;
   private on = new Map<string, boolean>();
   private room: BuiltRoom | null = null;
   private theme: Theme | null = null;
@@ -142,7 +189,7 @@ export class DayLighting {
     const key = `glow:${kind}`;
     if (!this.scene.textures.exists(key)) {
       const g = GLOWS[kind];
-      this.scene.textures.addCanvas(key, glowCanvas(g.w, g.h, g.color, g.power));
+      this.scene.textures.addCanvas(key, glowCanvas(g.w, g.h, g.color, g.power, g.banded));
     }
     return key;
   }
@@ -164,6 +211,10 @@ export class DayLighting {
     this.sky?.img.destroy();
     this.beams?.destroy();
     this.lights.forEach((l) => l.img.destroy());
+    this.fixtures.forEach((f) => f.destroy());
+    this.fixtures = [];
+    this.switches.clear();
+    this.lightsOff = false;
     this.overlay = null;
     this.sky = null;
     this.beams = null;
@@ -178,6 +229,8 @@ export class DayLighting {
     this.theme = theme;
     this.windowless = theme.windows === false;
     this.on = new Map(Object.entries(furniState));
+    this.switches = new Set(furniture.filter((f) => f.kind === 'light_switch').map((f) => f.id));
+    this.lightsOff = [...this.switches].some((id) => furniState[id] === true);
     this.applied = { tint: -1, lights: -1, beams: -1, sky: '' };
 
     // sky layer sits between the floor and the walls (the glass is a hole in the wall texture)
@@ -211,17 +264,49 @@ export class DayLighting {
       const fp = footprint(f);
       if (f.kind === 'lamp') {
         const c = tileToScreen(f.x + 0.5, f.y + 0.5);
-        this.addGlow('lampPool', c.x, c.y, 0.5);
-        this.addGlow('lampHead', c.x, c.y - 49, 0.7);
+        this.addGlow('lampPool', c.x, c.y, 0.5, { room: true });
+        this.addGlow('lampHead', c.x, c.y - 49, 0.7, { room: true });
       } else if (f.kind === 'computer') {
         const c = tileToScreen(f.x + 0.5, f.y + 0.5);
         this.addGlow('screen', c.x, c.y - 22, 0.5, { furniId: f.id, needsOn: true });
+      } else if (f.kind === 'tv_stand') {
+        // the presentation TV glows only while somebody presents (its `on` state comes from the server)
+        const dir = ((f.dir % 4) + 4) % 4;
+        const c = tileToScreen(f.x + fp.w / 2, f.y + fp.d / 2);
+        this.addGlow('screen', c.x, c.y - 42, 0.9, { furniId: f.id, needsOn: true });
+        if (dir < 2) {
+          const fl = dir === 0 ? tileToScreen(f.x + fp.w / 2, f.y + 1.9) : tileToScreen(f.x + 1.9, f.y + fp.d / 2);
+          this.addGlow('tvPool', fl.x, fl.y, 0.4, { furniId: f.id, needsOn: true });
+        }
       } else if (f.kind === 'tv') {
         const north = f.dir % 2 === 0;
         const c = north ? tileToScreen(f.x + fp.w / 2, f.y + 0.1) : tileToScreen(f.x + 0.1, f.y + fp.d / 2);
         this.addGlow('tvPool', c.x, c.y - 56, 0.28);
         const fl = north ? tileToScreen(f.x + fp.w / 2, f.y + 1.6) : tileToScreen(f.x + 1.6, f.y + fp.d / 2);
         this.addGlow('tvPool', fl.x, fl.y, 0.3);
+      }
+    }
+    // luz artificial de teto: luminarias espalhadas num reticulado regular (a cada 4 tiles) pela sala toda,
+    // penduradas por cabos; tom quente, ligadas o dia todo (mais fortes a noite) e controladas pelo interruptor
+    if (theme.fx !== 'hall') {
+      const g = built.grid;
+      const key = 'fixture:ceil';
+      if (!this.scene.textures.exists(key)) this.scene.textures.addCanvas(key, fixtureCanvas());
+      for (let y = 2; y < g.height; y += 4) {
+        for (let x = 2; x < g.width; x += 4) {
+          if (!g.floor[y * g.width + x]) continue;
+          const c = tileToScreen(x + 0.5, y + 0.5);
+          const fy = c.y - 104;
+          // nao cobre o interruptor da parede com uma luminaria
+          if (furniture.some((f) => {
+            if (f.kind !== 'light_switch') return false;
+            const sp = tileToScreen(f.x + 0.5, f.y + 0.5);
+            return Math.abs(c.x - sp.x) < 56 && Math.abs(fy - (sp.y - 43)) < 40;
+          })) continue;
+          this.addGlow('ceilPool', c.x, c.y, 0.3, { dayMin: 0.3, room: true });
+          this.fixtures.push(this.scene.add.image(Math.round(c.x), Math.round(fy), key).setOrigin(0.5, 0.5).setDepth(FIXTURE_DEPTH));
+          this.addGlow('lampHead', c.x, fy + 6, 1, { dayMin: 0.35, room: true });
+        }
       }
     }
     if (theme.fx === 'hall') {
@@ -237,6 +322,7 @@ export class DayLighting {
 
   setOn(id: string, on: boolean) {
     this.on.set(id, on);
+    if (this.switches.has(id)) this.lightsOff = on; // `true` = luzes apagadas
     this.syncLights(this.lastLights);
   }
 
@@ -253,9 +339,14 @@ export class DayLighting {
   }
 
   private syncLights(level: number) {
+    // luminarias apagadas ficam acinzentadas
+    for (const f of this.fixtures) {
+      if (this.lightsOff) f.setTint(0x777c88);
+      else f.clearTint();
+    }
     for (const l of this.lights) {
-      const on = !l.needsOn || (l.furniId !== undefined && this.on.get(l.furniId) === true);
-      const a = Math.round(level * l.base * 40) / 40;
+      const on = (!l.needsOn || (l.furniId !== undefined && this.on.get(l.furniId) === true)) && !(l.room && this.lightsOff);
+      const a = Math.round(Math.max(level, l.dayMin ?? 0) * l.base * 40) / 40;
       l.img.setVisible(on && a > 0.01).setAlpha(a);
     }
   }

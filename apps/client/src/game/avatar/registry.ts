@@ -19,7 +19,7 @@ export interface Emitter {
 export interface DrawerDef {
   draw(c: Ctx2, it: Resolved, e: Emitter): void;
   /** Garments with sleeves tell the arms how to draw them. Return null for sleeveless. */
-  sleeve?(it: Resolved): Pick<SleeveSpec, 'len' | 'cuff'> | null;
+  sleeve?(it: Resolved): Pick<SleeveSpec, 'len' | 'cuff' | 'tones' | 'deco'> | null;
   /** Held objects change how the arm is posed (only asked in poses where the item is not hidden). */
   hold?(pose: Pose, it: Resolved): HoldSpec | null;
 }

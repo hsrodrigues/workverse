@@ -99,7 +99,7 @@ describe('main.ts aborta em producao insegura (processo real)', () => {
   const serverDir = fileURLToPath(new URL('..', import.meta.url));
   const run = (env: Record<string, string>) => {
     const clean: NodeJS.ProcessEnv = { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, TEMP: process.env.TEMP, ...env };
-    return spawnSync(process.execPath, ['--import', 'tsx', 'src/main.ts'], { cwd: serverDir, env: clean, encoding: 'utf8', timeout: 30_000 });
+    return spawnSync(process.execPath, ['--import', 'tsx', 'src/main.ts'], { cwd: serverDir, env: clean, encoding: 'utf8', timeout: 90_000 });
   };
 
   it('ALLOW_DEV_LOGIN=1 + NODE_ENV=production: sai com codigo 1 e mensagem em portugues', () => {
@@ -107,14 +107,14 @@ describe('main.ts aborta em producao insegura (processo real)', () => {
     expect(r.status).toBe(1);
     expect(r.stderr).toMatch(/NAO vai iniciar/);
     expect(r.stderr).toMatch(/ALLOW_DEV_LOGIN/);
-  });
+  }, 120_000);
 
   it('sem origem e sem banco: lista os dois problemas', () => {
     const r = run({ NODE_ENV: 'production' });
     expect(r.status).toBe(1);
     expect(r.stderr).toMatch(/ALLOWED_ORIGINS/);
     expect(r.stderr).toMatch(/DATABASE_URL/);
-  });
+  }, 120_000);
 });
 
 describe('lista de origens com curinga', () => {

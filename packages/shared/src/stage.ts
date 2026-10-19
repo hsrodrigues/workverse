@@ -43,6 +43,8 @@ export interface HandView {
 
 /** Who holds the stage and who asked for the floor. Sent to everyone in the room. */
 export interface StageView {
+  /** `stage` (auditorium) or `tv` (TV of a meeting room). Absent from old servers: treat as `stage`. */
+  mode?: PresentationMode;
   speakerId: string | null;
   speakerName: string | null;
   /** Audience members waiting for the floor, oldest first. */
@@ -62,6 +64,27 @@ export type StageRole = 'speaker' | 'voice' | 'audience';
 
 /** A room is an auditorium when it has a podium. */
 export const STAGE_FURNI_KIND = 'podium';
+/** A room is a TV room when it has a presentation TV on a stand (and no podium). */
+export const TV_FURNI_KIND = 'tv_stand';
+
+/**
+ * Where a room presents: `stage` = auditorium (podium: speaker, open stage, raised hands, voices); `tv` = a TV on a
+ * stand (anybody in the room may take it while it is free; one presenter at a time, no open stage or hands).
+ */
+export type PresentationMode = 'stage' | 'tv';
+
+/** The presentation target of a room, derived from its furniture (so the room editor changes it automatically). */
+export function presentationOf(def: Pick<BuiltRoom['def'], 'furniture'>): PresentationMode | null {
+  let tv = false;
+  for (const f of def.furniture) {
+    if (f.kind === STAGE_FURNI_KIND) return 'stage';
+    if (f.kind === TV_FURNI_KIND) tv = true;
+  }
+  return tv ? 'tv' : null;
+}
+
+/** The presentation TV of a room, when it has one. */
+export const tvStandOf = (def: Pick<BuiltRoom['def'], 'furniture'>) => def.furniture.find((f) => f.kind === TV_FURNI_KIND);
 
 /**
  * Where the speaker stands: on the stage, behind the podium, facing the audience (+y, the side of the seats).

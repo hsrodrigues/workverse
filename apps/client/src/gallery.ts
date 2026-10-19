@@ -124,6 +124,9 @@ const modernos: Furniture[] = [
   { id: 'net4', kind: 'auditorium_seat', x: 0, y: 0, dir: 3 },
   { id: 'net5', kind: 'rug', x: 0, y: 0, dir: 1 },
   { id: 'net6', kind: 'router', x: 0, y: 0, dir: 1 },
+  { id: 'tvs0', kind: 'tv_stand', x: 0, y: 0, dir: 0 },
+  { id: 'tvs1', kind: 'tv_stand', x: 0, y: 0, dir: 1 },
+  { id: 'tvs2', kind: 'tv_stand', x: 0, y: 0, dir: 2 },
 ];
 for (const f of modernos) show(trimmed(renderFurniture(f).canvas), 3, `fu-${f.id}`);
 

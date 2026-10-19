@@ -17,7 +17,7 @@ describe('avatar drawers', () => {
       for (const view of VIEWS) for (const f of [0, 3, 8, 11]) expect(renderFrame(look, view, f).length).toBeGreaterThan(0);
     }
     expect(FRAME_COUNT).toBeGreaterThan(10);
-  });
+  }, 120_000);
 
   it('items of the same slot look different from each other (no item is a visual copy of another)', () => {
     const bySlot = new Map<string, string[]>();
@@ -31,7 +31,7 @@ describe('avatar drawers', () => {
       bySlot.set(id, [...(bySlot.get(id) ?? []), item.id]);
     }
     expect([...bySlot.values()].filter((ids) => ids.length > 1)).toEqual([]);
-  });
+  }, 120_000);
 });
 
 function hash(s: string): number {

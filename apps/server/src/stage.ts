@@ -3,10 +3,12 @@ import {
   STAGE_LIMITS,
   deckImageIds,
   validateDeck,
-  isStageRoom,
+  presentationOf,
+  tvStandOf,
   type ClientMessage,
   type Deck,
   type ImageMime,
+  type PresentationMode,
   type ServerMessage,
   type SlideState,
   type StageRole,
@@ -14,8 +16,17 @@ import {
 } from '@workverse/shared';
 import type { Player, RoomInstance } from './room';
 
-/** What a participant may publish in the LiveKit room: everything, microphone only, or nothing. */
-export type PublishRights = 'all' | 'audio' | 'none';
+/**
+ * What a participant may publish in the LiveKit room: everything, microphone + camera (no screen share), microphone
+ * only, or nothing.
+ */
+export type PublishRights = 'all' | 'av' | 'audio' | 'none';
+
+/**
+ * What the people WATCHING a TV presentation may publish. They keep talking and showing their camera (it is still a
+ * meeting), but the screen belongs to the presenter. Change to 'none' for a strictly watch-only room.
+ */
+export const TV_VIEWER_RIGHTS: PublishRights = 'av';
 
 /** Tells LiveKit about a change for someone who is already connected (see media.ts). */
 export type PermissionSync = (roomId: string, identity: string, rights: PublishRights, orgId?: string) => void;
@@ -26,6 +37,8 @@ export interface StoredImage {
 }
 
 interface StageRoom {
+  /** `stage` = auditorium (podium); `tv` = TV on a stand in a meeting room. */
+  mode: PresentationMode;
   speaker: Player | null;
   /** Account whose deck and images are stored here. They survive the speaker leaving, F5 or a reconnection. */
   owner: string | null;
@@ -65,6 +78,9 @@ const PARKED_DECK_MS = 12 * 60 * 60 * 1000;
 
 export const isStageMessage = (t: string) => STAGE_MESSAGES.has(t);
 
+/** Auditorium-only features: a TV has no open stage, raised hands or voices. */
+const STAGE_ONLY_MESSAGES = new Set(['hand_raise', 'voice_grant', 'voice_revoke', 'stage_open', 'stage_close']);
+
 export interface StageManagerOptions {
   rooms: Map<string, RoomInstance>;
   sync?: PermissionSync;
@@ -86,19 +102,71 @@ export class StageManager {
     this.sync = opts.sync ?? (() => undefined);
     this.clock = opts.clock ?? Date.now;
     this.log = opts.log ?? (() => undefined);
-    for (const [id, room] of opts.rooms) if (isStageRoom(room.built.def)) this.stages.set(id, this.blank());
   }
 
-  private blank(): StageRoom {
-    return { speaker: null, owner: null, parkedAt: 0, open: false, hands: [], voices: new Set(), deck: null, slide: { live: false, index: 0 }, images: new Map(), imageBytes: 0 };
+  private blank(mode: PresentationMode): StageRoom {
+    return { mode, speaker: null, owner: null, parkedAt: 0, open: false, hands: [], voices: new Set(), deck: null, slide: { live: false, index: 0 }, images: new Map(), imageBytes: 0 };
+  }
+
+  /**
+   * The presentation state of a room, derived from its CURRENT furniture every time (a podium makes it an auditorium, a
+   * TV on a stand makes it a TV room), so the room editor can add or remove the piece while the server runs.
+   */
+  private stageFor(roomId: string): StageRoom | undefined {
+    const room = this.opts.rooms.get(roomId);
+    const mode = room ? presentationOf(room.built.def) : null;
+    const st = this.stages.get(roomId);
+    if (st && st.mode === mode) return st;
+    if (st) this.retire(roomId, st);
+    if (!mode) return undefined;
+    const fresh = this.blank(mode);
+    this.stages.set(roomId, fresh);
+    return fresh;
+  }
+
+  /** The room stopped being a presentation room (or changed kind) while it had state: everybody goes back to normal. */
+  private retire(roomId: string, st: StageRoom) {
+    this.stages.delete(roomId);
+    const people = [...(this.room(roomId)?.players.values() ?? [])];
+    const wasSpeaker = st.speaker;
+    if (wasSpeaker || st.slide.live || st.deck) {
+      this.broadcast(roomId, { t: 'deck', deck: null });
+      this.broadcast(roomId, { t: 'slide', state: { live: false, index: 0 } });
+    }
+    this.setTv(roomId, st, false);
+    // the room is no longer restricted (or is restricted in a new way): rights follow whatever the room is now
+    for (const p of people) this.sync(roomId, p.id, this.rightsOf(roomId, p));
+    this.log('stage.retire', { room: roomId, mode: st.mode, speaker: wasSpeaker?.id ?? null });
+  }
+
+  /** True for any room with a presentation target (stage or TV). */
+  hasPresentation(roomId: string | null | undefined): boolean {
+    return !!roomId && !!this.stageFor(roomId);
   }
 
   isStageRoom(roomId: string | null | undefined): boolean {
-    return !!roomId && this.stages.has(roomId);
+    return !!roomId && this.stageFor(roomId)?.mode === 'stage';
+  }
+
+  isTvRoom(roomId: string | null | undefined): boolean {
+    return !!roomId && this.stageFor(roomId)?.mode === 'tv';
+  }
+
+  /** The TV lights up while somebody presents (shared with everybody through the normal `furni` message and snapshot). */
+  private setTv(roomId: string, st: StageRoom, on: boolean) {
+    if (st.mode !== 'tv') return;
+    const room = this.room(roomId);
+    const tv = room ? tvStandOf(room.built.def) : undefined;
+    if (room && tv) room.setFurniOn(tv.id, on);
+  }
+
+  /** Owners and admins of the organization, and platform staff admins on duty, may take a busy TV. */
+  private canForce(player: Player): boolean {
+    return player.role === 'owner' || player.role === 'admin' || (player.staff === 'admin' && player.onDuty);
   }
 
   roleOf(roomId: string, player: Player): StageRole {
-    const st = this.stages.get(roomId);
+    const st = this.stageFor(roomId);
     if (!st) return 'audience';
     if (st.speaker?.id === player.id) return 'speaker';
     return st.voices.has(player.id) ? 'voice' : 'audience';
@@ -106,18 +174,22 @@ export class StageManager {
 
   /** What this player may publish in the LiveKit room of `roomId`. Rooms without a stage are unrestricted. */
   rightsOf(roomId: string, player: Player): PublishRights {
-    if (!this.stages.has(roomId)) return 'all';
+    const st = this.stageFor(roomId);
+    if (!st) return 'all';
     const role = this.roleOf(roomId, player);
     if (role === 'speaker') return 'all';
+    // A TV room: only the presenter shares the screen; the rest of the meeting keeps microphone and camera.
+    if (st.mode === 'tv') return TV_VIEWER_RIGHTS;
     // Open stage: while the speaker allows it, the whole room may turn on microphone, camera and screen.
-    if (this.stages.get(roomId)?.open) return 'all';
+    if (st.open) return 'all';
     return role === 'voice' ? 'audio' : 'none';
   }
 
   view(roomId: string): StageView | null {
-    const st = this.stages.get(roomId);
+    const st = this.stageFor(roomId);
     if (!st) return null;
     return {
+      mode: st.mode,
       speakerId: st.speaker?.id ?? null,
       speakerName: st.speaker?.name ?? null,
       hands: st.hands.map((p) => ({ id: p.id, name: p.name })),
@@ -127,7 +199,7 @@ export class StageManager {
   }
 
   slideState(roomId: string): SlideState {
-    return { ...(this.stages.get(roomId)?.slide ?? { live: false, index: 0 }) };
+    return { ...(this.stageFor(roomId)?.slide ?? { live: false, index: 0 }) };
   }
 
   private room(roomId: string): RoomInstance | undefined {
@@ -156,7 +228,7 @@ export class StageManager {
 
   /** Sends the current state to someone who just entered (call after the `room` message). */
   onEnter(roomId: string, player: Player) {
-    const st = this.stages.get(roomId);
+    const st = this.stageFor(roomId);
     if (!st) return;
     player.send({ t: 'stage', stage: this.view(roomId)! });
     player.send({ t: 'deck', deck: this.deckFor(st, player) });
@@ -166,7 +238,7 @@ export class StageManager {
   /** Call after the player was removed from the room (moved elsewhere, disconnected). */
   onLeave(roomId: string | null, player: Player) {
     if (!roomId) return;
-    const st = this.stages.get(roomId);
+    const st = this.stageFor(roomId);
     if (!st) return;
     if (st.speaker?.id === player.id) {
       this.releaseStage(roomId, 'saiu da sala');
@@ -187,7 +259,7 @@ export class StageManager {
   onAway(player: Player) {
     const roomId = player.roomId;
     if (!roomId) return;
-    if (this.stages.get(roomId)?.speaker?.id === player.id) this.releaseStage(roomId, 'ficou ausente');
+    if (this.stageFor(roomId)?.speaker?.id === player.id) this.releaseStage(roomId, 'ficou ausente');
   }
 
   /** Tells LiveKit what every person in the room may publish now (open stage, closing, new speaker...). */
@@ -200,8 +272,8 @@ export class StageManager {
    * and the current slide stay on the server for the same account (closing the panel, F5 or coming back later
    * must not lose them); anybody else who takes the stage starts clean.
    */
-  private releaseStage(roomId: string, why: string) {
-    const st = this.stages.get(roomId);
+  private releaseStage(roomId: string, why: string, announce = true) {
+    const st = this.stageFor(roomId);
     if (!st || !st.speaker) return;
     const former = st.speaker;
     const hadDeck = st.deck !== null || st.slide.live;
@@ -213,16 +285,17 @@ export class StageManager {
     st.open = false;
     st.parkedAt = this.clock();
     st.slide = { live: false, index: st.slide.index };
-    this.sync(roomId, former.id, 'none');
+    this.sync(roomId, former.id, this.rightsOf(roomId, former));
     for (const id of voices) this.sync(roomId, id, 'none');
     if (wasOpen) this.resyncRoom(roomId);
-    this.log('stage.release', { room: roomId, player: former.id, why });
+    this.setTv(roomId, st, false);
+    this.log('stage.release', { room: roomId, player: former.id, why, mode: st.mode });
     this.broadcastStage(roomId);
     if (hadDeck) {
       this.broadcast(roomId, { t: 'deck', deck: null });
       this.broadcast(roomId, { t: 'slide', state: { live: false, index: 0 } });
     }
-    this.broadcast(roomId, { t: 'chat', id: null, name: '', text: `${former.name} deixou o palco.`, kind: 'system' });
+    if (announce) this.broadcast(roomId, { t: 'chat', id: null, name: '', text: `${former.name} ${st.mode === 'tv' ? 'parou de apresentar na TV' : 'deixou o palco'}.`, kind: 'system' });
   }
 
   private dropDeck(st: StageRoom) {
@@ -235,13 +308,23 @@ export class StageManager {
   // ---- messages ---------------------------------------------------------
 
   /** Podium interaction (also reachable from the HUD button). */
-  takeStage(player: Player) {
+  takeStage(player: Player, force = false) {
     const roomId = player.roomId;
-    const st = roomId ? this.stages.get(roomId) : undefined;
+    const st = roomId ? this.stageFor(roomId) : undefined;
     if (!roomId || !st) return this.err(player, 'not_stage_room', 'Aqui não há palco.');
+    const tv = st.mode === 'tv';
     if (st.speaker?.id === player.id) return;
-    if (st.speaker) return this.err(player, 'stage_busy', `${st.speaker.name} já está no palco.`);
-    if (player.status === 'away') return this.err(player, 'stage_away', 'Mude seu status para assumir o palco.');
+    if (st.speaker) {
+      // Only a TV can be taken by force, and only by the people who run the organization or the platform.
+      if (!(tv && force && this.canForce(player))) {
+        if (tv && force) this.log('stage.force_denied', { room: roomId, player: player.id, holder: st.speaker.id });
+        return this.err(player, 'stage_busy', tv ? `${st.speaker.name} já está apresentando na TV.` : `${st.speaker.name} já está no palco.`);
+      }
+      if (player.status === 'away') return this.err(player, 'stage_away', 'Mude seu status para apresentar na TV.');
+      this.log('stage.force', { room: roomId, player: player.id, holder: st.speaker.id });
+      this.releaseStage(roomId, `TV assumida por ${player.name}`, false);
+    }
+    if (player.status === 'away') return this.err(player, 'stage_away', tv ? 'Mude seu status para apresentar na TV.' : 'Mude seu status para assumir o palco.');
     // The same account gets its slides back; somebody else (or a deck left behind for too long) starts clean.
     if (st.owner !== null && (st.owner !== player.accountId || this.clock() - st.parkedAt > PARKED_DECK_MS)) this.dropDeck(st);
     st.owner = player.accountId;
@@ -249,20 +332,21 @@ export class StageManager {
     st.hands = st.hands.filter((p) => p.id !== player.id);
     st.voices.delete(player.id);
     this.sync(roomId, player.id, 'all');
-    this.log('stage.take', { room: roomId, player: player.id });
+    this.setTv(roomId, st, true);
+    this.log('stage.take', { room: roomId, player: player.id, mode: st.mode });
     this.broadcastStage(roomId);
-    this.broadcast(roomId, { t: 'chat', id: null, name: '', text: `${player.name} assumiu o palco.`, kind: 'system' });
+    this.broadcast(roomId, { t: 'chat', id: null, name: '', text: tv ? `${player.name} está apresentando na TV.` : `${player.name} assumiu o palco.`, kind: 'system' });
     player.send({ t: 'deck', deck: st.deck });
     player.send({ t: 'slide', state: { ...st.slide } });
-    // Stand behind the podium, facing the audience.
-    this.room(roomId)?.goToStageSpot(player, this.clock());
+    // Stand behind the podium, facing the audience (the TV presenter just stays where they are: next to the TV).
+    if (!tv) this.room(roomId)?.goToStageSpot(player, this.clock());
   }
 
   /** Returns true when the message belonged to the auditorium (even if it was refused). */
   handle(player: Player, msg: ClientMessage, now: number): boolean {
     if (!isStageMessage(msg.t)) return false;
     const roomId = player.roomId;
-    const st = roomId ? this.stages.get(roomId) : undefined;
+    const st = roomId ? this.stageFor(roomId) : undefined;
     if (!roomId || !st) {
       this.err(player, 'not_stage_room', 'Aqui não há palco.');
       return true;
@@ -279,13 +363,17 @@ export class StageManager {
     const isSpeaker = st.speaker?.id === player.id;
     const needSpeaker = () => {
       if (isSpeaker) return false;
-      this.err(player, 'not_speaker', 'Só quem está no palco pode fazer isso.');
+      this.err(player, 'not_speaker', st.mode === 'tv' ? 'Só quem está apresentando na TV pode fazer isso.' : 'Só quem está no palco pode fazer isso.');
       return true;
     };
+    if (st.mode === 'tv' && STAGE_ONLY_MESSAGES.has(msg.t)) {
+      return this.refuse(player, 'tv_room', 'Na TV da sala só quem apresenta transmite: não há palco aberto nem fila de palavra.');
+    }
 
     switch (msg.t) {
       case 'stage_take':
-        this.takeStage(player);
+        if (msg.force !== undefined && typeof msg.force !== 'boolean') return this.refuse(player, 'bad_message', 'Mensagem inválida.');
+        this.takeStage(player, msg.force === true);
         return true;
       case 'stage_alive':
         return true;
@@ -425,7 +513,7 @@ export class StageManager {
 
   /** Stores an already validated image for the speaker. */
   addImage(roomId: string, bytes: Buffer, mime: ImageMime): { ok: true; id: string } | { ok: false; error: string; status: 413 | 409 } {
-    const st = this.stages.get(roomId);
+    const st = this.stageFor(roomId);
     if (!st) return { ok: false, error: 'Aqui não há palco.', status: 409 };
     if (st.imageBytes + bytes.length > STAGE_LIMITS.maxTotalImageBytes) return { ok: false, error: 'Limite total de imagens atingido.', status: 413 };
     if (st.images.size >= STAGE_LIMITS.maxSlides * 2) return { ok: false, error: 'Imagens demais.', status: 413 };
@@ -437,14 +525,14 @@ export class StageManager {
 
   /** Image visible to `player`: the speaker always; the audience only while the presentation is live. */
   getImage(roomId: string, player: Player, id: string): StoredImage | undefined {
-    const st = this.stages.get(roomId);
+    const st = this.stageFor(roomId);
     if (!st) return undefined;
     if (st.speaker?.id !== player.id && !st.slide.live) return undefined;
     return st.images.get(id);
   }
 
   imageStats(roomId: string): { count: number; bytes: number } {
-    const st = this.stages.get(roomId);
+    const st = this.stageFor(roomId);
     return { count: st?.images.size ?? 0, bytes: st?.imageBytes ?? 0 };
   }
 }

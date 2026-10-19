@@ -66,6 +66,54 @@ export function accountStoreContract(label: string, make: () => Promise<Contract
       expect(store.getById(a.id)!.staff).toBeUndefined();
     });
 
+    it('auditoria de staff: guarda, filtra por ator/alvo/acao/data e devolve os mais recentes primeiro', async () => {
+      const { store, settle } = await make();
+      const rec = (id: string, at: number, actor: string, action: string, target?: string) => ({
+        id,
+        at,
+        actorId: `id-${actor}`,
+        actor,
+        level: 'moderator' as const,
+        action,
+        ...(target ? { targetId: `id-${target}`, target } : {}),
+        detail: `d-${id}`,
+      });
+      store.appendAudit(rec('a1', 1_000, 'Moda', 'account.create', 'Ana'));
+      store.appendAudit(rec('a2', 2_000, 'Moda', 'account.ban', 'Ana'));
+      store.appendAudit(rec('a3', 3_000, 'Chefe', 'staff.add', 'Beto'));
+      store.appendAudit(rec('a4', 4_000, 'Chefe', 'announce.room'));
+      await settle();
+      expect(store.queryAudit().map((r) => r.id)).toEqual(['a4', 'a3', 'a2', 'a1']);
+      expect(store.queryAudit({ actor: 'moda' }).map((r) => r.id)).toEqual(['a2', 'a1']);
+      expect(store.queryAudit({ target: 'ana' }).map((r) => r.id)).toEqual(['a2', 'a1']);
+      expect(store.queryAudit({ target: 'id-Beto' }).map((r) => r.id)).toEqual(['a3']);
+      expect(store.queryAudit({ action: 'account' }).map((r) => r.id)).toEqual(['a2', 'a1']);
+      expect(store.queryAudit({ action: 'account.ban' }).map((r) => r.id)).toEqual(['a2']);
+      expect(store.queryAudit({ action: 'acc' })).toHaveLength(0); // prefixo so em fronteira de ponto
+      expect(store.queryAudit({ from: 2_000, to: 3_000 }).map((r) => r.id)).toEqual(['a3', 'a2']);
+      expect(store.queryAudit({ limit: 1 }).map((r) => r.id)).toEqual(['a4']);
+    });
+
+    it('campos de gestao de conta (troca de senha, desativada, banida, silenciada, ultimo login) via save()', async () => {
+      const { store, settle } = await make();
+      const a = store.create(newAccount('gabi'));
+      a.mustChangePassword = true;
+      a.disabled = { at: 1, by: 'Moda', reason: 'x' };
+      a.ban = { at: 2, by: 'Moda', reason: 'spam', until: null };
+      a.mute = { until: 99, by: 'Moda', reason: 'flood' };
+      a.lastLoginAt = 7;
+      store.save(a);
+      await settle();
+      const b = store.getById(a.id)!;
+      expect(b).toMatchObject({ mustChangePassword: true, lastLoginAt: 7, ban: { until: null, reason: 'spam' }, mute: { until: 99 } });
+      delete b.ban;
+      delete b.mustChangePassword;
+      store.save(b);
+      await settle();
+      expect(store.getById(a.id)!.ban).toBeUndefined();
+      expect(store.getById(a.id)!.mustChangePassword).toBeUndefined();
+    });
+
     it('sessoes: cria, le, apaga uma, apaga as da conta e remove expiradas', async () => {
       const { store } = await make();
       const a = store.create(newAccount('duda'));

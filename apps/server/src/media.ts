@@ -42,19 +42,21 @@ export function resolveMediaConfig(env: NodeJS.ProcessEnv = process.env, product
 /** Sources a participant may publish for each level of rights. */
 export function sourcesFor(rights: PublishRights): TrackSource[] {
   if (rights === 'all') return [TrackSource.MICROPHONE, TrackSource.CAMERA, TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO];
+  if (rights === 'av') return [TrackSource.MICROPHONE, TrackSource.CAMERA];
   if (rights === 'audio') return [TrackSource.MICROPHONE];
   return [];
 }
 
-type StageLookup = Pick<StageManager, 'isStageRoom' | 'rightsOf'>;
+type StageLookup = Pick<StageManager, 'hasPresentation' | 'rightsOf'>;
 
 /**
  * Who may publish audio/video/screen in a room. Normal rooms allow everyone; in an auditorium only the speaker
- * publishes everything and an audience member the speaker called on publishes the microphone only.
- * `kind: 'stage'` only makes sense where there is a stage.
+ * publishes everything and an audience member the speaker called on publishes the microphone only; in a room with
+ * a presentation TV only the presenter shares the screen and the others keep microphone and camera.
+ * `kind: 'stage'` only makes sense where there is a stage (or a TV).
  */
 export function publishRights(roomId: string, player: Player, kind: MediaKind = 'room', stage?: StageLookup): PublishRights {
-  if (stage?.isStageRoom(roomId)) return stage.rightsOf(roomId, player);
+  if (stage?.hasPresentation(roomId)) return stage.rightsOf(roomId, player);
   return kind === 'stage' ? 'none' : 'all';
 }
 
@@ -91,6 +93,21 @@ export function createLiveKitSync(config: MediaConfig, log: (event: string, data
     void apply(roomId, identity, orgId);
     for (const ms of [1500, 5000]) setTimeout(() => void apply(roomId, identity, orgId), ms).unref();
     if (latest.size > 5000) latest.clear();
+  };
+}
+
+/**
+ * Throws a person out of the LiveKit room (access to the room revoked). Their token cannot be renewed anyway: the token route
+ * refuses anybody who may not be in the room. Failures are logged, never thrown.
+ */
+export function createLiveKitRemover(config: MediaConfig, log: (event: string, data?: Record<string, unknown>) => void = () => undefined): (orgId: string, roomId: string, identity: string) => void {
+  if (!config.enabled) return () => undefined;
+  const client = new RoomServiceClient(config.url.replace(/^ws/i, 'http'), config.apiKey, config.apiSecret);
+  return (orgId, roomId, identity) => {
+    client.removeParticipant(livekitRoomName(roomId, orgId), identity).catch((err) => {
+      // "Not connected" is the normal case for people without media on.
+      log('livekit.remove_failed', { room: roomId, identity, error: err instanceof Error ? err.message : String(err) });
+    });
   };
 }
 
@@ -160,6 +177,8 @@ export function registerMediaRoutes(app: FastifyInstance, deps: AuthDeps, opts: 
 
     // Isolation: only the room the player is in right now.
     if (!player || player.roomId !== roomId) return fail(reply, 403, 'not_in_room', 'Você não está nessa sala.');
+    // Access to the room itself (team / invitation / guests): a revoked person gets no new token.
+    if (!deps.world.canEnter(player, roomId).allow) return fail(reply, 403, 'forbidden_room', 'Você não tem acesso a essa sala.');
     const decision = can(deps.world.actorOf(player), 'media.use', { orgId: orgWorld.id, guestAllowed: orgWorld.rooms.get(roomId)!.built.def.guestAllowed === true });
     if (!decision.allow) return fail(reply, 403, 'forbidden', 'Você não tem permissão para usar mídia aqui.');
 

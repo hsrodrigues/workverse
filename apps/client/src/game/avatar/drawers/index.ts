@@ -1,12 +1,18 @@
 // Importing this module registers every drawer.
 import './bottoms';
+import './bottoms2';
 import './shoes';
+import './shoes2';
 import './tops';
 import './hair';
 import './face';
 import './faceExtra';
 import './accessories';
 import './accessories2';
+import './accessories3';
 import './outers';
+import './outers2';
 import './hairFem';
 import './specials';
+import './specials2';
+import './events';

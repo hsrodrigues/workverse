@@ -7,7 +7,7 @@ import type { AccountStore } from './store';
 import { AuthGuard, DEFAULT_AUTH_LIMITS, type AuthLimits } from './auth';
 import { authenticate, originAllowed, registerAuthRoutes } from './authRoutes';
 import { TokenBucket } from './limiter';
-import { createLiveKitSync, registerMediaRoutes, resolveMediaConfig, type MediaConfig } from './media';
+import { createLiveKitRemover, createLiveKitSync, registerMediaRoutes, resolveMediaConfig, type MediaConfig } from './media';
 import { registerStageRoutes } from './stageRoutes';
 import { registerOrgRoutes } from './orgRoutes';
 import { registerAdminRoutes } from './adminRoutes';
@@ -95,6 +95,8 @@ export async function createApp(opts: AppOptions): Promise<{ app: FastifyInstanc
     allowDevLogin,
     log,
     permissionSync: opts.permissionSync ?? createLiveKitSync(mediaConfig, log),
+    // A test that replaces the permission sync never talks to a LiveKit server, and neither does the remover.
+    removeMediaParticipant: opts.permissionSync ? undefined : createLiveKitRemover(mediaConfig, log),
   });
   const allowed = opts.allowedOrigins ?? [];
   const limits: SocketLimits = {

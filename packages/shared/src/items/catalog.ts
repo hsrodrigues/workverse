@@ -1,4 +1,5 @@
 import { PALETTES } from './palettes';
+import { EVENT_ITEMS } from './eventItems';
 import type { ItemCategory, ItemDef, ItemSlot, PaletteId, Pose, PoseMode, ThumbFocus } from './types';
 
 /**
@@ -119,12 +120,35 @@ export const ITEMS: readonly ItemDef[] = [
   top('top.hoodie', 'Moletom', 'Moletom com capuz, cordões e bolso canguru.', 'top.hoodie', ['casual']),
   top('top.sweater', 'Suéter', 'Suéter de tricô com gola alta.', 'top.sweater', ['casual'], { rarity: 'uncommon' }),
 
+  // more tops: shirts, knits, prints and team wear (the variants share the tee/shirt/polo/hoodie/sweater drawers)
+  top('top.plaid', 'Camisa xadrez', 'Camisa de flanela xadrez, com colarinho e botões.', 'top.shirt', ['casual'], { params: { pattern: 'plaid' }, defaultColor: 'red' }),
+  top('top.turtleneck', 'Blusa de gola alta', 'Malha fina com gola alta dobrada.', 'top.sweater', ['casual', 'corporate'], { params: { variant: 'turtle' }, defaultColor: 'wine' }),
+  top('top.longsleeve', 'Camiseta manga longa', 'Malha básica de manga comprida.', 'top.tee', ['casual'], { params: { variant: 'long' } }),
+  top('top.vneck', 'Camiseta gola V', 'Camiseta de manga curta com decote em V.', 'top.tee', ['casual'], { params: { variant: 'vneck' }, defaultColor: 'teal' }),
+  top('top.henley', 'Henley', 'Malha de manga longa com três botões no peito.', 'top.tee', ['casual'], { params: { variant: 'henley' }, defaultColor: 'olive' }),
+  top('top.print_bolt', 'Camiseta raio', 'Camiseta estampada com um raio amarelo.', 'top.tee', ['casual', 'estampada'], { params: { print: 'bolt' }, defaultColor: 'navy' }),
+  top('top.print_heart', 'Camiseta coração', 'Camiseta estampada com um coração pixelado.', 'top.tee', ['casual', 'estampada'], { params: { print: 'heart' }, defaultColor: 'off-white' }),
+  top('top.baseball', 'Camisa raglan', 'Camisa de manga longa com mangas em contraste.', 'top.tee', ['casual', 'esporte'], { params: { variant: 'raglan' }, defaultColor: 'red' }),
+  top('top.jersey', 'Camisa de time', 'Camisa esportiva com gola V e o número 10.', 'top.tee', ['esporte', 'uniform'], { params: { variant: 'jersey' }, defaultColor: 'yellow', rarity: 'epic', unlock: 'event:aniversario' }),
+  top('top.sweatshirt', 'Moletom sem capuz', 'Moletom de gola redonda, punhos e barra de ribana.', 'top.sweater', ['casual'], { params: { variant: 'sweat' }, defaultColor: 'gray' }),
+  top('top.rugby', 'Camisa rugby', 'Polo de manga longa com listras largas e gola branca.', 'top.polo', ['casual', 'esporte'], { params: { variant: 'rugby' }, defaultColor: 'navy' }),
+  top('top.hoodie_zip', 'Moletom com zíper', 'Moletom com capuz, zíper na frente e bolsos.', 'top.hoodie', ['casual'], { params: { zip: true }, defaultColor: 'slate' }),
+
   // ---- outer layer (over the top) ----------------------------------------------------
   outer('outer.blazer', 'Blazer', 'Blazer com lapelas sobre a camisa.', 'outer.blazer', ['corporate'], { rarity: 'uncommon' }),
   outer('outer.bomber', 'Jaqueta bomber', 'Jaqueta fechada com punhos e barra de elástico.', 'outer.bomber', ['casual'], { defaultColor: 'olive', rarity: 'uncommon' }),
   outer('outer.cardigan', 'Cardigã', 'Casaco de tricô aberto na frente.', 'outer.cardigan', ['casual', 'corporate'], { defaultColor: 'sand' }),
   outer('outer.vest', 'Colete corporativo', 'Colete sem mangas sobre a camisa.', 'outer.vest', ['corporate', 'uniform'], { defaultColor: 'navy' }),
   outer('outer.apron', 'Avental de barista', 'Avental com bolso, para quem cuida do café.', 'outer.apron', ['uniform'], { defaultColor: 'brown', rarity: 'uncommon' }),
+
+  // more outer layers
+  outer('outer.denim', 'Jaqueta jeans', 'Jaqueta jeans com bolsos no peito e costuras claras.', 'outer.denim', ['casual'], { defaultColor: 'denim' }),
+  outer('outer.leather', 'Jaqueta de couro', 'Jaqueta motoqueira com zíper atravessado e lapelas largas.', 'outer.leather', ['casual'], { defaultColor: 'charcoal', rarity: 'epic', unlock: 'achievement:night-owl' }),
+  outer('outer.parka', 'Parka', 'Parka comprida com capuz de pelo, para os dias de frio.', 'outer.parka', ['casual'], { defaultColor: 'olive', rarity: 'rare', unlock: 'achievement:team-player' }),
+  outer('outer.blazer_double', 'Blazer trespassado', 'Blazer de duas fileiras de botões e lapelas em pico.', 'outer.blazer_double', ['corporate'], { defaultColor: 'navy', rarity: 'uncommon' }),
+  outer('outer.raincoat', 'Capa de chuva', 'Capa impermeável com capuz e botões de pressão.', 'outer.raincoat', ['casual'], { defaultColor: 'yellow' }),
+  outer('outer.labcoat', 'Jaleco', 'Jaleco branco comprido com três bolsos.', 'outer.labcoat', ['uniform'], { defaultColor: 'off-white' }),
+  outer('outer.puffer', 'Jaqueta acolchoada', 'Jaqueta de gomos, fofa e quentinha.', 'outer.puffer', ['casual'], { defaultColor: 'blue', rarity: 'uncommon' }),
 
   // ---- bottoms ----------------------------------------------------------------
   bottom('bottom.pants', 'Calça', 'Calça reta casual.', 'bottom.pants', ['casual']),
@@ -135,6 +159,16 @@ export const ITEMS: readonly ItemDef[] = [
   bottom('bottom.skirt', 'Saia', 'Saia evasê com pregas.', 'bottom.skirt', ['casual'], { defaultColor: 'wine' }),
   bottom('bottom.pencil', 'Saia lápis', 'Saia justa de escritório.', 'bottom.skirt', ['corporate'], { params: { variant: 'pencil' }, defaultColor: 'charcoal' }),
 
+  // more bottoms
+  bottom('bottom.leggings', 'Legging', 'Legging justa, de cós alto.', 'bottom.leggings', ['casual', 'esporte'], { defaultColor: 'charcoal' }),
+  bottom('bottom.joggers', 'Calça de moletom', 'Jogger com cordão na cintura e punhos nos tornozelos.', 'bottom.joggers', ['casual'], { defaultColor: 'gray' }),
+  bottom('bottom.track', 'Calça esportiva', 'Calça de treino com listra lateral.', 'bottom.joggers', ['casual', 'esporte'], { params: { variant: 'track' }, defaultColor: 'navy' }),
+  bottom('bottom.shorts_denim', 'Bermuda jeans', 'Bermuda jeans com barra dobrada.', 'bottom.shorts_kit', ['casual'], { params: { variant: 'denim' }, defaultColor: 'light-denim' }),
+  bottom('bottom.shorts_cargo', 'Bermuda cargo', 'Bermuda larga com bolsos nas pernas.', 'bottom.shorts_kit', ['casual'], { params: { variant: 'cargo' }, defaultColor: 'khaki' }),
+  bottom('bottom.pleated', 'Saia plissada', 'Saia curta de pregas, xadrez.', 'bottom.skirt_kit', ['casual'], { params: { variant: 'pleated' }, defaultColor: 'navy' }),
+  bottom('bottom.mini', 'Minissaia', 'Saia bem curta, levemente evasê.', 'bottom.skirt_kit', ['casual'], { params: { variant: 'mini' }, defaultColor: 'rose' }),
+  bottom('bottom.midi', 'Saia midi', 'Saia fluida até abaixo do joelho.', 'bottom.skirt_kit', ['casual', 'corporate'], { params: { variant: 'midi' }, defaultColor: 'forest' }),
+
   // ---- shoes ------------------------------------------------------------------
   shoes('shoes.sneakers', 'Tênis', 'Tênis casual com solado branco.', 'shoes.sneakers', ['casual']),
   shoes('shoes.runner', 'Tênis de corrida', 'Tênis leve com faixa contrastante.', 'shoes.sneakers', ['casual'], { params: { variant: 'runner' }, defaultColor: 'blue' }),
@@ -143,23 +177,53 @@ export const ITEMS: readonly ItemDef[] = [
   shoes('shoes.loafer', 'Mocassim', 'Mocassim baixo com detalhe lateral.', 'shoes.dress', ['corporate'], { params: { variant: 'loafer' }, defaultColor: 'brown' }),
   shoes('shoes.boots', 'Bota', 'Bota de cano médio.', 'shoes.boots', ['casual'], { defaultColor: 'brown' }),
 
+
+  // more shoes
+  shoes('shoes.sandals', 'Sandália', 'Sandália de tiras com sola de couro.', 'shoes.open', ['casual'], { defaultColor: 'tan' }),
+  shoes('shoes.flipflops', 'Chinelo', 'Chinelo de dedo, para o fim de semana.', 'shoes.open', ['casual'], { params: { variant: 'flip' }, defaultColor: 'blue' }),
+  shoes('shoes.heels', 'Salto alto', 'Scarpin de salto fino e bico fino.', 'shoes.open', ['corporate'], { params: { variant: 'heel' }, defaultColor: 'burgundy', rarity: 'uncommon' }),
+  shoes('shoes.chelsea', 'Botina chelsea', 'Botina de cano baixo com elástico na lateral.', 'shoes.boot_kit', ['casual', 'corporate'], { params: { variant: 'chelsea' }, defaultColor: 'brown' }),
+  shoes('shoes.combat', 'Coturno', 'Bota de cadarço com sola grossa.', 'shoes.boot_kit', ['casual'], { params: { variant: 'combat' }, defaultColor: 'black', rarity: 'uncommon' }),
+  shoes('shoes.rain', 'Galocha', 'Bota de borracha brilhante, à prova d\'água.', 'shoes.boot_kit', ['casual'], { params: { variant: 'rain' }, defaultColor: 'yellow' }),
+  shoes('shoes.slipon', 'Slip-on', 'Tênis de lona sem cadarço, com sola listrada.', 'shoes.flat_kit', ['casual'], { params: { variant: 'slipon' }, defaultColor: 'navy' }),
+  shoes('shoes.colorblock', 'Tênis colorido', 'Tênis retrô com painéis em cores contrastantes.', 'shoes.flat_kit', ['casual'], { params: { variant: 'block' }, defaultColor: 'white' }),
+
   // ---- accessories: eyewear -----------------------------------------------------------
   acc('acc.glasses', 'Óculos de grau', 'eyewear', 'Armação fina com lentes claras.', 'acc.glasses', ['grau'], { palette: 'frame', defaultColor: 'black', thumb: 'face' }),
   acc('acc.glasses_round', 'Óculos redondos', 'eyewear', 'Armação redonda, estilo retrô.', 'acc.glasses', ['grau'], { palette: 'frame', defaultColor: 'tortoise', params: { variant: 'round' }, thumb: 'face' }),
   acc('acc.sunglasses', 'Óculos escuros', 'eyewear', 'Lentes escuras.', 'acc.sunglasses', ['sol'], { palette: 'frame', defaultColor: 'ink', thumb: 'face' }),
   acc('acc.ar', 'Óculos AR', 'eyewear', 'Óculos de realidade aumentada com brilho nas hastes.', 'acc.ar', ['tech'], { palette: 'gadget', defaultColor: 'blue', rarity: 'rare', thumb: 'face' }),
+  acc('acc.glasses_square', 'Óculos quadrados', 'eyewear', 'Armação grossa e quadrada.', 'acc.eyewear_kit', ['grau'], { palette: 'frame', defaultColor: 'tortoise', params: { shape: 'square' }, thumb: 'face' }),
+  acc('acc.aviator', 'Óculos aviador', 'eyewear', 'Lentes em gota com armação fina.', 'acc.eyewear_kit', ['sol'], { palette: 'frame', defaultColor: 'gold', params: { shape: 'aviator' }, rarity: 'uncommon', thumb: 'face' }),
+  acc('acc.cateye', 'Óculos gatinho', 'eyewear', 'Armação com as pontas erguidas.', 'acc.eyewear_kit', ['grau'], { palette: 'frame', defaultColor: 'red', params: { shape: 'cat' }, thumb: 'face' }),
+  acc('acc.shades_round', 'Óculos redondos escuros', 'eyewear', 'Lentes redondas escuras, estilo retrô.', 'acc.eyewear_kit', ['sol'], { palette: 'frame', defaultColor: 'gold', params: { shape: 'roundsun' }, thumb: 'face' }),
   // ---- accessories: head ------------------------------------------------------------
   acc('acc.cap', 'Boné', 'head', 'Boné de aba curva.', 'acc.cap', ['casual'], { palette: 'hat', defaultColor: 'brick', thumb: 'head' }),
   acc('acc.beanie', 'Gorro', 'head', 'Gorro de lã com pompom.', 'acc.beanie', ['casual'], { palette: 'hat', defaultColor: 'blue', thumb: 'head' }),
   acc('acc.fedora', 'Chapéu', 'head', 'Chapéu de aba curta com fita.', 'acc.fedora', ['corporate'], { palette: 'hat', defaultColor: 'brown', rarity: 'uncommon', thumb: 'head' }),
   acc('acc.bucket', 'Chapéu bucket', 'head', 'Chapéu de aba caída.', 'acc.bucket', ['casual'], { palette: 'hat', defaultColor: 'sand', rarity: 'uncommon', thumb: 'head' }),
+  acc('acc.straw', 'Chapéu de palha', 'head', 'Chapéu de palha trançada de aba larga.', 'acc.hat_kit', ['casual', 'verão'], { palette: 'hat', defaultColor: 'sand', params: { shape: 'straw' }, thumb: 'head' }),
+  acc('acc.beret', 'Boina', 'head', 'Boina de lã levemente inclinada.', 'acc.hat_kit', ['casual'], { palette: 'hat', defaultColor: 'brick', params: { shape: 'beret' }, thumb: 'head' }),
+  acc('acc.snapback', 'Boné aba reta', 'head', 'Boné de aba reta e plana.', 'acc.snapback', ['casual'], { palette: 'hat', defaultColor: 'black', thumb: 'head' }),
+  acc('acc.headband', 'Faixa de cabelo', 'head', 'Faixa larga que deixa o cabelo à mostra.', 'acc.hat_kit', ['casual', 'esporte'], { palette: 'hat', defaultColor: 'pink', params: { shape: 'headband', openTop: true }, thumb: 'head' }),
+  acc('acc.hairbow', 'Laço de cabelo', 'head', 'Laço grande preso no alto da cabeça.', 'acc.hat_kit', ['casual'], { palette: 'hat', defaultColor: 'pink', params: { shape: 'bow', openTop: true }, thumb: 'head' }),
   // ---- accessories: ears ------------------------------------------------------------
   acc('acc.headphones', 'Fones', 'ears', 'Fones de ouvido grandes.', 'acc.headphones', ['tech'], { palette: 'gadget', defaultColor: 'red', excludes: ['head'], thumb: 'head' }),
   acc('acc.headset', 'Headset com microfone', 'ears', 'Headset de reunião com microfone.', 'acc.headset', ['tech', 'corporate'], { palette: 'gadget', defaultColor: 'blue', excludes: ['head'], thumb: 'head' }),
+  acc('acc.hoops', 'Argolas', 'ears', 'Brincos de argola.', 'acc.ear_kit', ['joia'], { palette: 'frame', defaultColor: 'gold', params: { shape: 'hoop' }, thumb: 'head' }),
+  acc('acc.earbuds', 'Fones sem fio', 'ears', 'Fones intra-auriculares sem fio.', 'acc.ear_kit', ['tech'], { palette: 'gadget', defaultColor: 'white', params: { shape: 'buds' }, thumb: 'head' }),
+  // ---- accessories: neck ---------------------------------------------------------------
+  acc('acc.scarf', 'Cachecol', 'neck', 'Cachecol de lã enrolado no pescoço.', 'acc.neck_kit', ['casual', 'inverno'], { palette: 'cloth', defaultColor: 'red', params: { shape: 'scarf' }, thumb: 'torso' }),
+  acc('acc.tie', 'Gravata', 'neck', 'Gravata clássica com nó.', 'acc.neck_kit', ['corporate'], { palette: 'cloth', defaultColor: 'wine', params: { shape: 'tie' }, thumb: 'torso' }),
+  acc('acc.bowtie', 'Gravata borboleta', 'neck', 'Gravata borboleta, para os dias de gala.', 'acc.neck_kit', ['corporate'], { palette: 'cloth', defaultColor: 'wine', params: { shape: 'bow' }, thumb: 'torso' }),
+  acc('acc.necklace', 'Colar', 'neck', 'Colar fino com um pingente.', 'acc.neck_kit', ['joia'], { palette: 'frame', defaultColor: 'gold', params: { shape: 'necklace' }, thumb: 'torso' }),
   // ---- accessories: back / wrist ---------------------------------------------------------
   acc('acc.backpack', 'Mochila', 'back', 'Mochila de alças duplas.', 'acc.backpack', ['casual'], { palette: 'bag', defaultColor: 'navy', thumb: 'back' }),
   acc('acc.watch', 'Relógio', 'wrist', 'Relógio de pulso clássico.', 'acc.watch', ['corporate'], { palette: 'strap', defaultColor: 'brown', thumb: 'wrist' }),
   acc('acc.smartwatch', 'Smartwatch', 'wrist', 'Relógio inteligente com tela acesa.', 'acc.watch', ['tech'], { palette: 'strap', defaultColor: 'black', params: { variant: 'smart' }, rarity: 'uncommon', thumb: 'wrist' }),
+  acc('acc.bracelet', 'Pulseira', 'wrist', 'Pulseira de contas coloridas.', 'acc.wrist_kit', ['casual'], { palette: 'strap', defaultColor: 'red', params: { shape: 'beads' }, thumb: 'wrist' }),
+  acc('acc.wristband', 'Munhequeira', 'wrist', 'Faixa de tecido para o pulso, de quem treina.', 'acc.wrist_kit', ['esporte'], { palette: 'strap', defaultColor: 'white', params: { shape: 'sweat' }, thumb: 'wrist' }),
+  acc('acc.crossbody', 'Bolsa transversal', 'back', 'Bolsa pequena com alça cruzada no peito.', 'acc.bag_kit', ['casual'], { palette: 'bag', defaultColor: 'brown', thumb: 'torso' }),
 
   // ---- special items ------------------------------------------------------------------
   special('sp.notebook', 'Notebook', 'hand', 'Notebook: carregado fechado em pé; aberto no colo ao sentar.', 'sp.notebook', ['tech', 'trabalho'], {
@@ -208,11 +272,72 @@ export const ITEMS: readonly ItemDef[] = [
   }),
   special('sp.santa_hat', 'Gorro de Natal', 'head', 'Gorro vermelho com pompom, no clima de fim de ano.', 'sp.santa_hat', ['sazonal', 'desbloqueável'], {
     unlock: 'event:natal',
-    availability: 'upcoming',
     rarity: 'rare',
     thumb: 'head',
-    notes: 'Previsto para o evento de fim de ano; ainda não pode ser equipado.',
+    notes: 'Liberado enquanto o evento de Natal estiver ativo.',
   }),
+
+  // ---- special items: wearables and fantasy ----------------------------------------------
+  special('sp.scepter', 'Cetro real', 'hand', 'Cetro dourado com uma joia vermelha, para quem manda no pedaço.', 'sp.hand_kit', ['fantasia', 'desbloqueável'], {
+    unlock: 'staff',
+    rarity: 'legendary',
+    params: { shape: 'scepter' },
+    thumb: 'hand',
+    poses: { idle: 'full', walk: 'adapted', sit: 'full', wave: 'hidden' },
+    notes: 'Ao andar, o braço segue erguido com o cetro. Ao acenar o cetro fica oculto (não há sprite).',
+  }),
+  special('sp.trophy', 'Troféu', 'hand', 'Troféu dourado de campeão.', 'sp.hand_kit', ['comemorativo', 'desbloqueável'], {
+    unlock: 'achievement:champion',
+    rarity: 'epic',
+    params: { shape: 'trophy' },
+    thumb: 'hand',
+    poses: { idle: 'full', walk: 'adapted', sit: 'full', wave: 'hidden' },
+    notes: 'Ao andar, o braço segue erguido com o troféu. Ao acenar o troféu fica oculto (não há sprite).',
+  }),
+  special('sp.cat_ears', 'Orelhas de gato', 'head', 'Tiara com orelhinhas de gato.', 'sp.head_kit', ['fantasia', 'fofo'], { palette: 'hat', colors: ['black', 'white', 'pink', 'gray', 'brown', 'sand'], defaultColor: 'black', params: { shape: 'cat', openTop: true }, rarity: 'uncommon', thumb: 'head' }),
+  special('sp.horns', 'Chifrinhos', 'head', 'Tiara com chifres de diabinho.', 'sp.head_kit', ['fantasia'], { palette: 'hat', colors: ['brick', 'black', 'blue', 'green'], defaultColor: 'brick', params: { shape: 'horns', openTop: true }, rarity: 'uncommon', thumb: 'head' }),
+  special('sp.hardhat', 'Capacete de obra', 'head', 'Capacete de segurança com faixa refletiva.', 'sp.head_kit', ['uniform', 'trabalho'], { palette: 'hat', colors: ['yellow', 'white', 'green', 'brick', 'blue'], defaultColor: 'yellow', params: { shape: 'hardhat' }, thumb: 'head' }),
+  special('sp.halo', 'Auréola', 'head', 'Aro dourado que flutua sobre a cabeça.', 'sp.head_kit', ['fantasia', 'desbloqueável'], {
+    unlock: 'achievement:team-player',
+    rarity: 'rare',
+    params: { shape: 'halo', openTop: true },
+    thumb: 'head',
+  }),
+  special('sp.crown', 'Coroa dourada', 'head', 'Coroa de ouro com gemas, reservada à equipe.', 'sp.head_kit', ['fantasia', 'desbloqueável'], {
+    unlock: 'staff',
+    rarity: 'legendary',
+    params: { shape: 'crown', openTop: true },
+    thumb: 'head',
+  }),
+  special('sp.gamer_headset', 'Headset gamer', 'ears', 'Headset com orelhas de luz RGB e microfone.', 'sp.gamer_headset', ['tech', 'desbloqueável'], {
+    palette: 'gadget',
+    colors: ['purple', 'blue', 'red', 'green', 'pink', 'orange'],
+    defaultColor: 'purple',
+    excludes: ['head'],
+    unlock: 'achievement:night-owl',
+    rarity: 'rare',
+    thumb: 'head',
+  }),
+  special('sp.cape', 'Capa', 'back', 'Capa longa presa nos ombros por um broche.', 'sp.back_kit', ['fantasia'], { palette: 'cloth', defaultColor: 'red', params: { shape: 'cape' }, rarity: 'rare', thumb: 'back' }),
+  special('sp.wings', 'Asas de anjo', 'back', 'Asas de penas, abertas nas costas.', 'sp.back_kit', ['fantasia', 'comemorativo', 'desbloqueável'], {
+    palette: 'hat',
+    colors: ['white', 'black', 'pink', 'blue'],
+    defaultColor: 'white',
+    params: { shape: 'wings' },
+    unlock: 'event:aniversario',
+    rarity: 'epic',
+    thumb: 'back',
+  }),
+  special('sp.cat_tail', 'Cauda de gato', 'back', 'Cauda felpuda que balança atrás de você.', 'sp.back_kit', ['fantasia', 'fofo'], { palette: 'hat', colors: ['black', 'white', 'brown', 'gray', 'sand', 'pink'], defaultColor: 'black', params: { shape: 'tail' }, rarity: 'uncommon', thumb: 'back' }),
+  special('sp.aura', 'Aura radiante', 'aura', 'Anel de luz e faíscas ao redor dos pés.', 'sp.aura', ['fantasia', 'desbloqueável'], {
+    palette: 'gadget',
+    colors: ['purple', 'blue', 'green', 'orange', 'pink', 'red'],
+    defaultColor: 'purple',
+    unlock: 'achievement:top-collaborator',
+    rarity: 'legendary',
+    thumb: 'full',
+  }),
+  ...EVENT_ITEMS,
 ];
 
 // ---------------------------------------------------------------------------

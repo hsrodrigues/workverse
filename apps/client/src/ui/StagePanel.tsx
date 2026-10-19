@@ -103,7 +103,7 @@ function useKeepAlive(active: boolean) {
 // ---------------------------------------------------------------------------
 // Audience viewer (also used by the speaker's own view of the live slide)
 
-function LiveViewer({ deck, index, speakerId }: { deck: Deck | null; index: number; speakerId: string | null }) {
+function LiveViewer({ deck, index, speakerId, tv }: { deck: Deck | null; index: number; speakerId: string | null; tv: boolean }) {
   const { state } = useMedia();
   const speaker = state.participants.find((p) => p.identity === speakerId);
   const [view, setView] = useState<'slides' | 'screen'>('screen');
@@ -118,7 +118,7 @@ function LiveViewer({ deck, index, speakerId }: { deck: Deck | null; index: numb
         {showScreen && speaker ? (
           <Video p={speaker} source="screen" className="stage-screen" />
         ) : (
-          <SlideCanvas deck={deck} index={index} resolve={resolveServer} progress notice={speakerId ? 'Aguardando…' : 'Palco livre'} />
+          <SlideCanvas deck={deck} index={index} resolve={resolveServer} progress notice={speakerId ? 'Aguardando…' : tv ? 'TV livre' : 'Palco livre'} />
         )}
         {sharing && (
           <div className="stage-switch" role="group" aria-label="O que mostrar">
@@ -144,7 +144,7 @@ function LiveViewer({ deck, index, speakerId }: { deck: Deck | null; index: numb
                   <Icon name="mic" off={!p.micOn} size={11} />
                 </span>
                 <span className="stage-cam-name">{p.isLocal ? 'Você' : p.name}</span>
-                {p.identity === speakerId && <span className="stage-cam-role">Palestrante</span>}
+                {p.identity === speakerId && <span className="stage-cam-role">{tv ? 'Apresentando' : 'Palestrante'}</span>}
               </figcaption>
             </figure>
           ))}
@@ -170,6 +170,7 @@ function SpeakerPanel() {
   const world = useWorld();
   const { state: media } = useMedia();
   const stage = world.stage!;
+  const tv = stage.mode === 'tv';
   const [selected, setSelected] = useState(world.slide.index);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -339,11 +340,12 @@ function SpeakerPanel() {
         )}
         <PowerPointControl deckSlides={n} shown={shown} live={live} goTo={goTo} />
         <p className="stage-tip">
-          Para mostrar PowerPoint, Google Slides ou uma janela, use o botão de compartilhar tela na barra de baixo: a plateia vê sua tela no painel e no telão.
+          Para mostrar PowerPoint, Google Slides ou uma janela, use o botão de compartilhar tela na barra de baixo: {tv ? 'a sala vê sua tela no painel e na TV.' : 'a plateia vê sua tela no painel e no telão.'}
         </p>
       </section>
 
       <aside className="stage-people">
+        {!tv && (
         <button
           type="button"
           className={`stage-btn ${stage.open ? 'on' : 'primary'}`}
@@ -354,9 +356,10 @@ function SpeakerPanel() {
         >
           {stage.open ? '✖ Fechar palco' : '🔓 Liberar palco para todos'}
         </button>
-        {stage.open && <p className="stage-tip">Palco aberto: todos podem ligar microfone, câmera e tela.</p>}
-        <h4>Pedidos de palavra ({stage.hands.length})</h4>
-        {stage.hands.length === 0 && <p className="stage-empty">Ninguém pediu a palavra.</p>}
+        )}
+        {!tv && stage.open && <p className="stage-tip">Palco aberto: todos podem ligar microfone, câmera e tela.</p>}
+        {!tv && <h4>Pedidos de palavra ({stage.hands.length})</h4>}
+        {!tv && stage.hands.length === 0 && <p className="stage-empty">Ninguém pediu a palavra.</p>}
         <ul className="stage-list" data-testid="hand-queue">
           {stage.hands.map((h) => (
             <li key={h.id}>
@@ -370,7 +373,7 @@ function SpeakerPanel() {
             </li>
           ))}
         </ul>
-        {stage.voices.length > 0 && <h4>Com a palavra</h4>}
+        {!tv && stage.voices.length > 0 && <h4>Com a palavra</h4>}
         <ul className="stage-list" data-testid="voice-list">
           {stage.voices.map((id) => (
             <li key={id}>
@@ -382,8 +385,8 @@ function SpeakerPanel() {
           ))}
         </ul>
         <p className="stage-tip">{hasVideo ? 'Você está transmitindo.' : 'Use microfone, câmera e tela na barra de baixo para transmitir.'}</p>
-        <button type="button" className="stage-btn danger" data-testid="release" onClick={() => net.send({ t: 'stage_release' })} title="Seus slides ficam guardados para quando você voltar ao palco">
-          Sair do palco
+        <button type="button" className="stage-btn danger" data-testid="release" onClick={() => net.send({ t: 'stage_release' })} title={tv ? 'Seus slides ficam guardados para quando você apresentar de novo' : 'Seus slides ficam guardados para quando você voltar ao palco'}>
+          {tv ? 'Parar de apresentar' : 'Sair do palco'}
         </button>
       </aside>
     </div>
@@ -398,6 +401,7 @@ export function StagePanel() {
   const { state: media } = useMedia();
   const mode = useStageMode();
   const stage = world.stage;
+  const tv = stage?.mode === 'tv';
   const youId = world.youId;
   const wasLive = useRef(false);
   const wasSpeaker = useRef(false);
@@ -426,11 +430,11 @@ export function StagePanel() {
   const sharingScreen = !!media.participants.find((p) => p.identity === stage.speakerId)?.screenOn;
 
   return (
-    <Window id="stage" className={`stage-win ${isSpeaker ? 'speaker' : 'audience'} ${wide || sharingScreen ? 'wide' : ''} ${sharingScreen && !isSpeaker ? 'sharing' : ''}`} handle=".stage-head" role="dialog" aria-label="Apresentação" data-testid="stage-panel" hidden={mode === 'closed'}>
+    <Window id="stage" className={`stage-win ${isSpeaker ? 'speaker' : 'audience'} ${wide || sharingScreen ? 'wide' : ''} ${sharingScreen && !isSpeaker ? 'sharing' : ''}`} handle=".stage-head" role="dialog" aria-label={tv ? 'Apresentação da sala' : 'Apresentação'} data-testid="stage-panel" data-mode={tv ? 'tv' : 'stage'} hidden={mode === 'closed'}>
       <header className="stage-head">
-        <strong>Auditório</strong>
+        <strong>{tv ? 'Apresentação da sala' : 'Auditório'}</strong>
         <span className="stage-who" data-testid="stage-who">
-          {stage.speakerName ? (isSpeaker ? 'Você está no palco' : `No palco: ${stage.speakerName}`) : 'Palco livre'}
+          {stage.speakerName ? (isSpeaker ? (tv ? 'Você está apresentando' : 'Você está no palco') : tv ? `Apresentando: ${stage.speakerName}` : `No palco: ${stage.speakerName}`) : tv ? 'TV livre' : 'Palco livre'}
         </span>
         {world.slide.live && <span className="stage-live-dot">ao vivo</span>}
         <span className="stage-spacer" />
@@ -448,24 +452,29 @@ export function StagePanel() {
         <SpeakerPanel />
       ) : (
         <div className="stage-audience">
-          <LiveViewer deck={world.slide.live ? world.deck : null} index={world.slide.index} speakerId={stage.speakerId} />
+          <LiveViewer deck={world.slide.live ? world.deck : null} index={world.slide.index} speakerId={stage.speakerId} tv={!!tv} />
           <div className="stage-actions">
             {!stage.speakerId && (
               <button type="button" className="stage-btn primary" data-testid="take-stage" onClick={() => net.send({ t: 'stage_take' })}>
-                🎤 Assumir palco
+                {tv ? '📺 Apresentar na TV' : '🎤 Assumir palco'}
               </button>
             )}
-            {stage.speakerId && !hasVoice && !stage.open && (
+            {tv && stage.speakerId && (
+              <button type="button" className="stage-btn small" data-testid="force-take" title="Só donos e administradores da organização conseguem" onClick={() => net.send({ t: 'stage_take', force: true })}>
+                Assumir a TV (admin)
+              </button>
+            )}
+            {!tv && stage.speakerId && !hasVoice && !stage.open && (
               <button type="button" className={`stage-btn ${raised ? 'on' : ''}`} data-testid="hand" aria-pressed={raised} onClick={() => net.send({ t: raised ? 'hand_lower' : 'hand_raise' })}>
                 {raised ? `✋ Baixar a mão (${queuePos}º na fila)` : '✋ Levantar a mão'}
               </button>
             )}
-            {stage.open && (
+            {!tv && stage.open && (
               <span className="stage-voice" data-testid="stage-open-banner">
                 🔓 Palco aberto: use microfone, câmera ou tela na barra de baixo.
               </span>
             )}
-            {hasVoice && !stage.open && (
+            {!tv && hasVoice && !stage.open && (
               <span className="stage-voice" data-testid="has-voice">
                 🎙 Você está com a palavra: ligue o microfone na barra.
               </span>
@@ -486,11 +495,12 @@ export function StageBarButton() {
   if (!stage) return null;
   const free = !stage.speakerId;
   const mine = stage.speakerId === world.youId;
+  const tv = stage.mode === 'tv';
   return (
     <>
       {free && (
-        <button type="button" className="tool tool-send" data-testid="bar-take-stage" onClick={() => net.send({ t: 'stage_take' })} title="Assumir o palco do auditório">
-          <span className="ico">🎤</span> Assumir palco
+        <button type="button" className="tool tool-send" data-testid="bar-take-stage" onClick={() => net.send({ t: 'stage_take' })} title={tv ? 'Apresentar na TV da sala' : 'Assumir o palco do auditório'}>
+          <span className="ico">{tv ? '📺' : '🎤'}</span> {tv ? 'Apresentar na TV' : 'Assumir palco'}
         </button>
       )}
       <button
@@ -500,7 +510,7 @@ export function StageBarButton() {
         onClick={() => stageUi.set(mode === 'closed' ? 'open' : 'closed')}
         title="Painel da apresentação"
       >
-        <span className="ico">▤</span> {mine ? 'Palco' : 'Apresentação'}
+        <span className="ico">▤</span> {mine ? (tv ? 'Minha TV' : 'Palco') : 'Apresentação'}
         {world.slide.live && <span className="badge live">●</span>}
       </button>
     </>

@@ -1,5 +1,5 @@
-import type { Role, MemberStatus } from '@workverse/shared';
-import type { Invite, Org, OrgData, OrgMember, OrgOp, Team } from '../orgStore';
+import type { Furniture, Role, MemberStatus, RoomAccess } from '@workverse/shared';
+import type { Invite, Org, OrgData, OrgMember, OrgOp, RoomInviteRow, RoomLayout, RoomSetting, Team } from '../orgStore';
 
 /** Mapeamento OrgStore <-> tabelas orgs / teams / org_members / invites (migracao 0002). */
 
@@ -21,6 +21,10 @@ export interface OrgRows {
     uses: number;
     revoked_at: Date | null;
   }>;
+  /** Migracao 0005; ausentes em bancos antigos (lista vazia). */
+  roomFurniture?: Array<{ org_id: string; room_id: string; version: number; furniture: Furniture[] | null; updated_by: string | null; updated_at: Date }>;
+  roomSettings?: Array<{ org_id: string; room_id: string; access: string; team_id: string | null; updated_by: string | null; updated_at: Date }>;
+  roomInvites?: Array<{ org_id: string; room_id: string; account_id: string; invited_by: string | null; created_at: Date; expires_at: Date | null }>;
 }
 
 export function orgDataFromRows(r: OrgRows): OrgData {
@@ -53,6 +57,22 @@ export function orgDataFromRows(r: OrgRows): OrgData {
         revokedAt: i.revoked_at ? i.revoked_at.getTime() : null,
       }),
     ),
+    roomLayouts: (r.roomFurniture ?? []).map(
+      (l): RoomLayout => ({ orgId: l.org_id, roomId: l.room_id, version: l.version, furniture: l.furniture, updatedBy: l.updated_by ?? '', updatedAt: l.updated_at.getTime() }),
+    ),
+    roomSettings: (r.roomSettings ?? []).map(
+      (l): RoomSetting => ({ orgId: l.org_id, roomId: l.room_id, access: l.access as RoomAccess, teamId: l.team_id, updatedBy: l.updated_by ?? '', updatedAt: l.updated_at.getTime() }),
+    ),
+    roomInvites: (r.roomInvites ?? []).map(
+      (l): RoomInviteRow => ({
+        orgId: l.org_id,
+        roomId: l.room_id,
+        accountId: l.account_id,
+        invitedBy: l.invited_by ?? '',
+        createdAt: l.created_at.getTime(),
+        expiresAt: l.expires_at ? l.expires_at.getTime() : null,
+      }),
+    ),
   };
 }
 
@@ -70,6 +90,17 @@ export const DELETE_MEMBER_SQL = 'DELETE FROM org_members WHERE org_id = $1 AND 
 export const UPSERT_INVITE_SQL = `INSERT INTO invites (id, org_id, email, role, team_id, token_hash, created_by, created_at, expires_at, max_uses, uses, revoked_at)
   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
   ON CONFLICT (id) DO UPDATE SET uses = EXCLUDED.uses, revoked_at = EXCLUDED.revoked_at, expires_at = EXCLUDED.expires_at`;
+
+export const UPSERT_ROOM_FURNITURE_SQL = `INSERT INTO room_furniture (org_id, room_id, version, furniture, updated_by, updated_at) VALUES ($1, $2, $3, $4::jsonb, $5, $6)
+  ON CONFLICT (org_id, room_id) DO UPDATE SET version = EXCLUDED.version, furniture = EXCLUDED.furniture, updated_by = EXCLUDED.updated_by, updated_at = EXCLUDED.updated_at`;
+
+export const UPSERT_ROOM_SETTING_SQL = `INSERT INTO room_settings (org_id, room_id, access, team_id, updated_by, updated_at) VALUES ($1, $2, $3, $4, $5, $6)
+  ON CONFLICT (org_id, room_id) DO UPDATE SET access = EXCLUDED.access, team_id = EXCLUDED.team_id, updated_by = EXCLUDED.updated_by, updated_at = EXCLUDED.updated_at`;
+
+export const UPSERT_ROOM_INVITE_SQL = `INSERT INTO room_invites (org_id, room_id, account_id, invited_by, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6)
+  ON CONFLICT (org_id, room_id, account_id) DO UPDATE SET invited_by = EXCLUDED.invited_by, created_at = EXCLUDED.created_at, expires_at = EXCLUDED.expires_at`;
+
+export const DELETE_ROOM_INVITE_SQL = 'DELETE FROM room_invites WHERE org_id = $1 AND room_id = $2 AND account_id = $3';
 
 /** SQL + parametros + chave de fusao para uma mudanca do OrgStore. */
 export function opToSql(op: OrgOp): { sql: string; params: unknown[]; key?: string } {
@@ -110,5 +141,24 @@ export function opToSql(op: OrgOp): { sql: string; params: unknown[]; key?: stri
         key: `invite:${i.id}`,
       };
     }
+    case 'room_layout': {
+      const l = op.row;
+      return {
+        sql: UPSERT_ROOM_FURNITURE_SQL,
+        params: [l.orgId, l.roomId, l.version, l.furniture === null ? null : JSON.stringify(l.furniture), l.updatedBy || null, new Date(l.updatedAt)],
+        key: `room_furniture:${l.orgId}:${l.roomId}`,
+      };
+    }
+    case 'room_setting': {
+      const l = op.row;
+      return { sql: UPSERT_ROOM_SETTING_SQL, params: [l.orgId, l.roomId, l.access, l.teamId, l.updatedBy || null, new Date(l.updatedAt)], key: `room_setting:${l.orgId}:${l.roomId}` };
+    }
+    // Sem chave de fusao: convidar, remover e convidar de novo precisa manter a ordem.
+    case 'room_invite': {
+      const l = op.row;
+      return { sql: UPSERT_ROOM_INVITE_SQL, params: [l.orgId, l.roomId, l.accountId, l.invitedBy || null, new Date(l.createdAt), l.expiresAt === null ? null : new Date(l.expiresAt)] };
+    }
+    case 'room_invite_delete':
+      return { sql: DELETE_ROOM_INVITE_SQL, params: [op.orgId, op.roomId, op.accountId] };
   }
 }

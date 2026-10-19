@@ -1,10 +1,12 @@
 import type { AvatarConfig } from './avatar';
 import type { AvatarClientMessage, AvatarServerMessage } from './items/messages';
 import type { Dir8, Point } from './geometry';
-import type { RoomDef } from './rooms';
+import type { Furniture, RoomAccess, RoomDef, RoomListEntry } from './rooms';
+import type { FurnishIssue, FurnishOp } from './furnish';
 import type { Permission, Role } from './rbac';
 import type { Deck, SlideState, StageView } from './stage';
 import type { Activity } from './activity';
+import type { EventMode, EventsView } from './events';
 import type { OnlineEntry, RoomAdminEntry, RoomOp, StaffLevel, StaffLogEntry } from './staff';
 
 /** Time an avatar takes to cross one tile. Shared so client animation matches the server clock. */
@@ -63,7 +65,23 @@ export interface RoomSnapshot {
   youId: string;
   players: PlayerView[];
   furniState: Record<string, boolean>;
+  /** Only rooms the person may enter (a restricted room never leaks its head count). */
   population: Record<string, number>;
+  /** Version of the room layout (increments on every change; see `furnish_apply`). 0 = original layout, never edited. */
+  furnishVersion?: number;
+  /** True when the organization changed the layout of this room (the original can be restored). */
+  customized?: boolean;
+}
+
+/** Person with a live invite to a restricted room (seen only by people who manage its access). */
+export interface RoomInviteView {
+  accountId: string;
+  name: string;
+  email?: string;
+  invitedBy: string;
+  createdAt: number;
+  /** null = never expires. */
+  expiresAt: number | null;
 }
 
 export type ClientMessage =
@@ -85,8 +103,8 @@ export type ClientMessage =
   | { t: 'team'; text: string }
   | { t: 'ping'; ts: number }
   // ---- auditorium (only meaningful in a room with a podium; the server validates every one of them)
-  /** Takes the stage when nobody holds it. */
-  | { t: 'stage_take' }
+  /** Takes the stage (auditorium) or the TV (meeting room) when nobody holds it. `force`: owners/admins of the organization and staff admins on duty may take the TV from the presenter. */
+  | { t: 'stage_take'; force?: boolean }
   /** The speaker steps down; the presentation ends. */
   | { t: 'stage_release' }
   /** Speaker's client: "I am still here" (counts as activity so the stage is not lost to automatic away). */
@@ -109,6 +127,18 @@ export type ClientMessage =
   /** Speaker only: open stage (anybody may turn on mic, camera and screen) / back to speaker only. */
   | { t: 'stage_open' }
   | { t: 'stage_close' }
+  // ---- room editor and access (permissions `room.furnish` / `room.access.set`; the server validates every one of them)
+  /** Atomic batch of changes to the layout of the CURRENT room. `base` is the version the editor started from (stale = `conflict`). */
+  | { t: 'furnish_apply'; rid: number; base: number; ops: FurnishOp[] }
+  /** Back to the original layout of the room. */
+  | { t: 'furnish_reset'; rid: number; base: number }
+  | { t: 'room_access_get'; roomId: string }
+  | { t: 'room_access_set'; rid: number; roomId: string; access: RoomAccess; teamId?: string | null }
+  /** `who` is a display name or an e-mail of a member of the organization; `hours` 0 = no expiry (default 72). */
+  | { t: 'room_invite_add'; rid: number; roomId: string; who: string; hours?: number }
+  | { t: 'room_invite_remove'; rid: number; roomId: string; accountId: string }
+  /** Invite a person who is online to the room you are in: a private message with an "Entrar" button. */
+  | { t: 'meeting_invite'; target: string }
   | StaffClientMessage;
 
 export type ServerMessage =
@@ -146,7 +176,7 @@ export type ServerMessage =
   | { t: 'status'; id: string; status: PresenceStatus }
   | { t: 'activity'; id: string; activity: Activity }
   /** `peerId` is the other party's account id; `self` is true on the sender's echo. */
-  | { t: 'dm'; peerId: string; peer: string; self: boolean; text: string; at: number }
+  | { t: 'dm'; peerId: string; peer: string; self: boolean; text: string; at: number; /** Meeting invitation: the UI shows an "Entrar" button. */ roomInvite?: { roomId: string; roomName: string } }
   | { t: 'team'; team: string; from: string; self: boolean; text: string; at: number }
   | { t: 'furni'; id: string; on: boolean }
   | { t: 'population'; population: Record<string, number> }
@@ -156,6 +186,16 @@ export type ServerMessage =
   | { t: 'deck'; deck: Deck | null }
   | { t: 'slide'; state: SlideState }
   | { t: 'error'; code: string; message: string }
+  /** The layout of the current room changed (someone decorated it or restored it). Carries the full list; clients rebuild only what differs. */
+  | { t: 'furniture_changed'; roomId: string; version: number; customized: boolean; furniture: Furniture[]; by?: string }
+  | { t: 'furnish_result'; rid: number; ok: boolean; code?: string; message?: string; errors?: FurnishIssue[]; warnings?: FurnishIssue[]; version?: number }
+  /** The rooms the person may see in the browser (padlock on restricted ones); resent when access changes. */
+  | { t: 'rooms'; rooms: RoomListEntry[] }
+  /** Access policy of a room and its invitations (answer of `room_access_get`, and pushed to admins when it changes). */
+  | { t: 'room_access'; roomId: string; access: RoomAccess; teamId: string | null; invites: RoomInviteView[]; teams: Array<{ id: string; name: string }> }
+  | { t: 'room_access_result'; rid: number; ok: boolean; code?: string; message?: string }
+  /** Events (Halloween, Natal...) active now for everybody, plus the staff's manual overrides. Sent on login and on every change. */
+  | ({ t: 'events' } & EventsView)
   | StaffServerMessage;
 
 /** Shape of the HTTP auth API (`/api/*`). */
@@ -206,7 +246,9 @@ export type StaffClientMessage =
   | { t: 'staff_rooms' }
   | { t: 'staff_room'; orgId: string; roomId: string; op: RoomOp }
   /** Concede/revoga uma chave de desbloqueio do guarda-roupa (ex.: event:natal, item:sp.mug_gold). */
-  | { t: 'staff_item'; target: string; key: string; grant: boolean };
+  | { t: 'staff_item'; target: string; key: string; grant: boolean }
+  /** Forca um evento (Halloween, Natal...) ligado ('on'), desligado ('off') ou volta a seguir a data ('auto'). */
+  | { t: 'staff_event'; id: string; mode: EventMode };
 
 export type StaffServerMessage =
   | ({ t: 'staff_self' } & StaffSelf)

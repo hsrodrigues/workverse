@@ -25,6 +25,8 @@ export type ItemSlot =
   | 'ears' // headphones and headsets
   | 'back' // backpack
   | 'wrist'
+  | 'neck' // scarf, tie, necklace
+  | 'aura' // glow around the feet and body
   | 'hand' // held object
   | 'badge'; // corporate badge on the chest
 
@@ -172,7 +174,7 @@ export interface AvatarIssue {
 }
 
 export const MAX_ACCESSORIES = 6;
-export const MAX_SPECIAL = 4;
+export const MAX_SPECIAL = 6;
 export const MAX_OUTFITS = 12;
 export const MIN_OUTFIT_NAME = 1;
 export const MAX_OUTFIT_NAME = 24;

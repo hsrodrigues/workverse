@@ -20,16 +20,18 @@ A **Recepção Central** é o hub: tem uma porta para cada uma das outras oito s
 
 Portas só existem nas paredes norte (`y = 0`) e oeste (`x = 0`). O tile de chegada (`toX`, `toY`) é o tile ao lado da porta de retorno da sala de destino.
 
-## Campos `type` e `access`
+## Acesso às salas (aplicado no servidor)
 
-Dois campos opcionais de `RoomDef`, reservados para o controle de acesso por organização que ainda não existe no servidor:
+`RoomDef.access`: `org` (padrão; `private` quando `type` é `private`), `team` (só a equipe `accessTeamId`), `invited` (convite) e `private` (convite, e o nome some para quem não tem acesso). Donos/admins da organização e staff admin em serviço sempre entram. A decisão é uma só (`World.canEnter` + `can('room.enter')`) e vale em `join`, portal, reconexão (última sala inválida cai na recepção), token de mídia e na varredura periódica.
 
-- `type`: `'reception' | 'team' | 'meeting' | 'private' | 'focus' | 'lounge' | 'auditorium' | 'office'`.
-- `access`: `'org' | 'team' | 'invite' | 'open'`. Ausente significa `'org'`.
+- Convites: tabela `room_invites` (conta, quem convidou, validade opcional). Convite expirado ou removido **expulsa** quem está dentro (`kicked_room`) e derruba o token de mídia (LiveKit `removeParticipant`).
+- A política por organização fica em `room_settings`; escritório e recepção devem ficar abertos.
+- O navegador de salas recebe `rooms` do servidor: cadeado nas restritas, sem população nem ocupantes das inacessíveis (`population` também é filtrado por pessoa).
+- Mensagens WS: `room_access_get/set`, `room_invite_add/remove`, `meeting_invite` (DM com botão Entrar).
 
-**Hoje nenhum dos dois é aplicado: todas as salas são abertas.** Os valores já preenchidos indicam a intenção (por exemplo, `private` está como `invite`). Quando o servidor de organizações existir, a checagem deve ser feita ao entrar na sala, lendo `def.access`.
+## Editor de salas ("Modo decoração")
 
-`guestAllowed` continua valendo como antes (visitantes só entram em salas que o definem; hoje: recepção, copa e auditório).
+Permissão `room.furnish` (owner/admin) ou staff admin em serviço. Mensagens `furnish_apply` (lote de até 30 operações `add/update/remove` com `base` = versão; versão antiga = `conflict`) e `furnish_reset`. A validação é a mesma no cliente e no servidor (`packages/shared/src/furnish.ts`): dentro do piso, sem sobreposição, objetos de parede só em y=0/x=0, peças por tipo de sala, limite de 250, e prova com `findPath` que a entrada alcança portas, assentos e usáveis e que nenhum piso fica isolado. Avisos (sofá olhando para a parede etc.) vêm de `layoutRules.ts` e não bloqueiam. Aplicação ao vivo: `RoomInstance.applyLayout` reposiciona quem ficou sobre peça bloqueante, levanta quem estava em assento removido e difunde `furniture_changed`. Persistência: `room_furniture` (migração 0005; o layout base nunca é alterado; restaurar grava `furniture = NULL` e a versão continua crescendo). Tudo isolado por organização.
 
 ## Sala de entrada padrão
 
@@ -45,3 +47,8 @@ Dois campos opcionais de `RoomDef`, reservados para o controle de acesso por org
 ## Móveis novos
 
 - `reception_desk` (balcão de recepção, 3x1) e `logo` (placa na parede, 2x1), com construtores em `apps/client/src/game/furniture.ts` e entradas na galeria (`apps/client/src/gallery.ts`).
+- `tv_stand` (TV com suporte, 2x1, bloqueia o caminho, usável): TV de tela plana sobre pedestal com rodinhas, a tela de apresentação das salas de reunião. `dir 0` mostra a tela para +y e `dir 1` para +x (pela regra de `furniFront`); `dir 2/3` mostram a traseira. Existe uma por sala (`KIND_MAX_PER_ROOM`) e só em salas de reunião, equipe, privada, foco, lounge e escritório (`KIND_ROOM_TYPES`). Veja [auditorium.md](auditorium.md#tv-nas-salas-de-reunião).
+
+## TV de apresentação
+
+Reunião 1, Reunião 2 e Sala de Equipe têm um `tv_stand` (ids `tvstand-*`, fixos para não deslocar os ids dos demais móveis) virado para a mesa. A TV decorativa de parede (`tv`) continua só decoração. Uma sala com `tv_stand` (e sem púlpito) é uma **sala com TV**: `presentationOf(def)` em `packages/shared/src/stage.ts` devolve `'tv'` (e `'stage'` para o auditório). A decisão vem sempre da lista de móveis atual da sala, então o editor de salas liga e desliga o modo ao adicionar ou remover a TV.

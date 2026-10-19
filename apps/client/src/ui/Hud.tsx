@@ -12,6 +12,9 @@ import { VideoDock } from './VideoDock';
 import { AnnounceBanner, StaffBadge, StaffBarButton, StaffPanel } from './staff/StaffPanel';
 import { Window } from './Window';
 import { DayModeButton } from './DayModeButton';
+import { FurnishBarButton, FurnishPanel } from './furnish/FurnishPanel';
+import { InviteBanner } from './furnish/InviteBanner';
+import { furnishStore, useFurnish } from './furnish/furnishStore';
 
 interface Props {
   onEditAvatar(): void;
@@ -25,6 +28,9 @@ type Panel = 'rooms' | 'people' | null;
 
 export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onReconnect }: Props) {
   const world = useWorld();
+  const fz = useFurnish();
+  // The browser of rooms comes from the server: padlocks, and no head count for rooms this person cannot enter.
+  const roomList = fz.rooms.length > 0 ? fz.rooms : ROOM_DEFS.map((r) => ({ id: r.id, name: r.name, description: r.description, maxPlayers: r.maxPlayers, access: 'org' as const, locked: false, lockReason: undefined, population: world.population[r.id] ?? 0 }));
   const [status, latency] = useNetStatus();
   const [panel, setPanel] = useState<Panel>(null);
   const [menu, setMenu] = useState<{ id: string; name: string; x: number; y: number } | null>(null);
@@ -106,11 +112,31 @@ export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onRec
       {panel === 'rooms' && (
         <Window id="rooms" className="win panel panel-rooms" title="Navegador de salas" onClose={() => setPanel(null)} role="dialog" aria-label="Navegador de salas">
           <>
-            {ROOM_DEFS.map((r) => (
-              <button key={r.id} className={`room-row ${r.id === world.room?.id ? 'here' : ''}`} onClick={() => enterRoom(r.id)}>
-                <span className="room-name">{r.name}</span>
+            {roomList.map((r) => (
+              <button
+                key={r.id}
+                className={`room-row ${r.id === world.room?.id ? 'here' : ''} ${r.locked ? 'locked' : ''}`}
+                onClick={() => !r.locked && enterRoom(r.id)}
+                disabled={r.locked}
+                aria-disabled={r.locked}
+                title={r.locked ? (r.lockReason === 'team' ? 'Sala restrita a uma equipe' : r.lockReason === 'guest' ? 'Visitantes não entram nesta sala' : 'Sala só para convidados') : undefined}
+                data-testid={`room-row-${r.id}`}
+                data-locked={r.locked}
+              >
+                <span className="room-name">
+                  {r.locked && (
+                    <span className="room-lock" aria-label="Sala restrita">
+                      🔒
+                    </span>
+                  )}
+                  {r.name}
+                </span>
                 <span className="room-desc">{r.description}</span>
-                <span className="room-pop" title="Pessoas na sala">👥 {world.population[r.id] ?? 0}/{r.maxPlayers}</span>
+                {r.locked ? (
+                  <span className="room-pop" title="Acesso restrito">Acesso restrito</span>
+                ) : (
+                  <span className="room-pop" title="Pessoas na sala">👥 {world.population[r.id] ?? r.population ?? 0}/{r.maxPlayers}</span>
+                )}
               </button>
             ))}
           </>
@@ -197,6 +223,18 @@ export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onRec
               Mensagem privada
             </button>
           )}
+          {menu.id !== world.youId && (
+            <button
+              role="menuitem"
+              onClick={() => {
+                furnishStore.inviteToMeeting(menu.name);
+                setMenu(null);
+              }}
+              data-testid="ctx-meeting-invite"
+            >
+              Convidar para reunião
+            </button>
+          )}
           <button role="menuitem" className="muted" onClick={() => setMenu(null)}>
             Fechar
           </button>
@@ -208,6 +246,8 @@ export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onRec
       <AnnounceBanner />
       <VideoDock />
       <StagePanel />
+      <FurnishPanel />
+      <InviteBanner />
 
       <div className="chat-log" data-testid="chat-log" ref={log} aria-live="polite">
         {world.chat.slice(-40).map((l) => (
@@ -235,6 +275,7 @@ export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onRec
           <span className="ico">✉</span> Conversas{unread > 0 && <span className="badge">{unread}</span>}
         </button>
         <StageBarButton />
+        <FurnishBarButton />
         <StaffBarButton />
         <MediaBar />
         <input data-testid="chat-input"

@@ -398,6 +398,10 @@ export interface SleeveSpec {
   it: Resolved;
   len: number;
   cuff: 'plain' | 'shirt' | 'rib';
+  /** Sleeves in another material than the body (contrast sleeves). Default: the garment's own tones. */
+  tones?: Tones;
+  /** Fabric pattern continued down the sleeve. */
+  deco?: PaintOpts['deco'];
 }
 
 /** Makes one arm hold an object (only used in poses where the item has art). */
@@ -413,6 +417,8 @@ const STYLE_OF: Readonly<Record<string, number>> = {
   'shoes.sneakers': 0, 'shoes.runner': 0, 'shoes.hightop': 3, 'shoes.dress': 1, 'shoes.loafer': 1, 'shoes.boots': 2,
   'top.tee': 0, 'top.tank': 0, 'top.striped': 0, 'top.wv': 0, 'top.shirt': 1, 'top.hoodie': 2, 'outer.blazer': 3, 'top.polo': 4, 'top.sweater': 5,
   'hair.short': 0, 'hair.long': 1, 'hair.spiky': 2, 'hair.bun': 3, 'hair.bald': 4, 'hair.afro': 5, 'hair.ponytail': 6, 'hair.bob': 7, 'hair.pompadour': 8,
+  'top.plaid': 1, 'top.turtleneck': 6, 'top.longsleeve': 0, 'top.vneck': 7, 'top.henley': 8, 'top.print_bolt': 0, 'top.print_heart': 0, 'top.baseball': 0, 'top.jersey': 7, 'top.sweatshirt': 9, 'top.rugby': 4, 'top.hoodie_zip': 2,
+  'acc.snapback': 3,
   'acc.glasses': 1, 'acc.glasses_round': 1, 'acc.headset': 2, 'acc.cap': 3, 'acc.sunglasses': 4, 'acc.beanie': 5, 'acc.headphones': 6,
 };
 export const styleOf = (it: Resolved): number => STYLE_OF[it.item.id] ?? 0;
@@ -901,7 +907,12 @@ interface TopSpec {
   sleeve: number; // 0 sleeveless, 0.5 short, 1 long
   hemY: number;
 }
-export const specOf = (it: Resolved): TopSpec => (it.item.id === 'top.tank' ? { sleeve: 0, hemY: -2.4 } : TOP_SPECS[styleOf(it)] ?? TOP_SPECS[0]);
+export const specOf = (it: Resolved): TopSpec => {
+  if (it.item.id === 'top.tank') return { sleeve: 0, hemY: -2.4 };
+  const base = TOP_SPECS[styleOf(it)] ?? TOP_SPECS[0];
+  const v = it.item.params?.variant;
+  return v === 'long' || v === 'raglan' || v === 'rugby' ? { ...base, sleeve: 1 } : base;
+};
 const TOP_SPECS: TopSpec[] = [
   { sleeve: 0.55, hemY: -2.4 }, // camiseta
   { sleeve: 1, hemY: 0.4 }, // social
@@ -909,7 +920,49 @@ const TOP_SPECS: TopSpec[] = [
   { sleeve: 1, hemY: -3.2 }, // blazer
   { sleeve: 0.5, hemY: -2.2 }, // polo
   { sleeve: 1, hemY: -3.0 }, // suéter
+  { sleeve: 1, hemY: -3.0 }, // gola alta
+  { sleeve: 0.55, hemY: -2.4 }, // gola V
+  { sleeve: 1, hemY: -2.4 }, // henley
+  { sleeve: 1, hemY: -3.0 }, // moletom sem capuz
 ];
+
+const pickTone = (t: Tones, tone: 0 | 1 | 2) => (tone === 2 ? t.sh : tone === 0 ? t.lt : t.base);
+
+/** Fabric pattern of a top (the sleeves ask for it too, so the print continues down the arm). */
+export function topDeco(it: Resolved): PaintOpts['deco'] {
+  const col = it.t;
+  const style = styleOf(it);
+  const pattern = it.item.params?.pattern;
+  const variant = it.item.params?.variant;
+  if (style === 5) return (x, y, tone) => (y % 4 === 0 ? (tone === 2 ? col.sh : col.lt) : undefined);
+  if (it.item.id === 'top.striped') {
+    const w = tonesOf('#f4f1ea');
+    return (x, y, tone) => (Math.floor(y / 2) % 2 === 0 ? (tone === 2 ? w.sh : tone === 0 ? w.lt : w.base) : undefined);
+  }
+  if (pattern === 'plaid') {
+    // flannel: a wide dark band and a thin light thread every 8 px, both ways
+    const dk = tonesOf(mix(it.hex, '#14111c', 0.42));
+    const dd = tonesOf(mix(it.hex, '#14111c', 0.6));
+    const lg = tonesOf(mix(it.hex, '#ffffff', 0.34));
+    return (x, y, tone) => {
+      const h = y % 8 < 3;
+      const v = x % 8 < 3;
+      if (h && v) return pickTone(dd, tone);
+      if (h || v) return pickTone(dk, tone);
+      if (y % 8 === 5 || x % 8 === 5) return pickTone(lg, tone);
+      return undefined;
+    };
+  }
+  if (variant === 'rugby') {
+    const w = tonesOf('#f4f1ea');
+    return (x, y, tone) => (Math.floor(y / 4) % 2 === 1 ? pickTone(w, tone) : undefined);
+  }
+  if (variant === 'turtle') {
+    const rib = mix(col.base, col.sh, 0.4);
+    return (x, y, tone) => (tone !== 2 && x % 3 === 0 ? rib : undefined);
+  }
+  return undefined;
+}
 
 export function torsoPart(c: Ctx2, it: Resolved) {
   const style = styleOf(it);
@@ -920,23 +973,15 @@ export function torsoPart(c: Ctx2, it: Resolved) {
   c.paint(MAIN, col, {
     lw: 2,
     sw: 4,
-    deco:
-      style === 5
-        ? (x, y, tone) => (y % 4 === 0 ? (tone === 2 ? col.sh : col.lt) : undefined)
-        : it.item.id === 'top.striped'
-          ? (x, y, tone) => {
-              const w = tonesOf('#f4f1ea');
-              return Math.floor(y / 2) % 2 === 0 ? (tone === 2 ? w.sh : tone === 0 ? w.lt : w.base) : undefined;
-            }
-          : undefined,
+    deco: topDeco(it),
   });
 
   // fold lines
   const fold = mix(col.sh, col.base, 0.35);
   // hem
-  const hemTone = style === 2 || style === 5 ? col.sh : col.sh;
+  const hemTone = col.sh;
   surfLine(c, -1.45, spec.hemY + 0.8, 1.45, spec.hemY + 0.8, hemTone, 0.3);
-  if (style === 2 || style === 5) {
+  if (style === 2 || style === 5 || style === 6 || style === 9) {
     surfLine(c, -1.45, spec.hemY + 2.0, 1.45, spec.hemY + 2.0, mix(col.sh, col.base, 0.5), 0.3);
     surfLine(c, -1.45, spec.hemY + 3.0, 1.45, spec.hemY + 3.0, col.sh, 0.3);
   }
@@ -948,6 +993,7 @@ export function torsoPart(c: Ctx2, it: Resolved) {
   }
 
   neckline(c, it);
+  topExtras(c, it);
   if (it.item.id === 'top.wv' && !c.back) {
     // chest logo: a small gold "W" on the wearer's left (screen right in the front view)
     const p = torsoPoint(c, 0.5, 14.2, 0.4);
@@ -958,6 +1004,87 @@ export function torsoPart(c: Ctx2, it: Resolved) {
   }
   MAIN.clear();
   c.clip = null;
+}
+
+const GLYPHS: Record<string, readonly string[]> = {
+  heart: ['.##.##.', '#######', '#######', '.#####.', '..###..', '...#...'],
+  bolt: ['....##', '...##.', '..##..', '.#####', '...##.', '..##..', '..#...'],
+  '1': ['.#.', '##.', '.#.', '.#.', '###'],
+  '0': ['###', '#.#', '#.#', '#.#', '###'],
+};
+
+/** Paints a small bitmap (rows of '#') centered on a screen point, scaled by whole pixels. */
+function stamp(c: Ctx2, rows: readonly string[], cx: number, cy: number, fill: (x: number, y: number) => string, k = 1) {
+  const w = rows[0].length;
+  for (let y = 0; y < rows.length; y++) {
+    for (let x = 0; x < w; x++) {
+      if (rows[y][x] !== '#') continue;
+      for (let dy = 0; dy < k; dy++) for (let dx = 0; dx < k; dx++) c.px(Math.round(cx - (w * k) / 2) + x * k + dx, Math.round(cy - (rows.length * k) / 2) + y * k + dy, fill(x, y));
+    }
+  }
+}
+
+/** Prints, team details, seams and zips that go on top of the shared garment shapes (read from the item's params). */
+function topExtras(c: Ctx2, it: Resolved) {
+  const col = it.t;
+  const variant = it.item.params?.variant;
+  const print = it.item.params?.print;
+  const front = !c.back;
+  if (print && front) {
+    const p = torsoPoint(c, 0.0, 12.6, 0.5);
+    if (p[2] > 0.4) {
+      if (print === 'heart') {
+        stamp(c, GLYPHS.heart, p[0], p[1], (x, y) => (x + y <= 2 ? '#ff9aa8' : y >= 4 || x >= 5 ? '#b02a45' : '#e8485a'));
+      } else {
+        stamp(c, GLYPHS.bolt, p[0], p[1], (x, y) => (x + y <= 3 ? '#fff1a0' : x - y >= 1 && y >= 4 ? '#c98a12' : '#ffd23a'));
+      }
+    }
+  }
+  if (variant === 'jersey') {
+    const white = '#f4f1ea';
+    const dark = shade(it.hex, -0.35);
+    // side stripes down the torso
+    for (const sg of SIDE) surfLine(c, sg * 1.28, 19.4, sg * 1.22, -1.4, white, 0.35);
+    const num = (cx: number, cy: number, k: number) => {
+      const glyphs = [GLYPHS['1'], GLYPHS['0']];
+      for (let g = 0; g < 2; g++) {
+        const ox = cx + (g === 0 ? -2.2 : 2.2) * k;
+        stamp(c, glyphs[g], ox + k * 0.5, cy + k * 0.5, () => dark, k);
+        stamp(c, glyphs[g], ox, cy, () => white, k);
+      }
+    };
+    if (front) {
+      const p = torsoPoint(c, 0, 9.4, 0.5);
+      if (p[2] > 0.4) num(p[0], p[1], 1);
+    } else {
+      const p = torsoPoint(c, Math.PI, 12.6, 0.5);
+      num(p[0], p[1], 2);
+    }
+  }
+  if (variant === 'raglan' || variant === 'sweat') {
+    // raglan seams from the collar to the underarm
+    for (const sg of SIDE) {
+      surfLine(c, sg * 0.82, 22.4, sg * 1.28, 14.6, col.sh, 0.4);
+      surfLine(c, sg * 0.9, 22.4, sg * 1.34, 14.6, col.lt, 0.4);
+    }
+  }
+  if (it.item.params?.zip && front) {
+    surfLine(c, 0, 20.6, 0, -2.4, '#2a2a34', 0.55);
+    surfLine(c, 0.07, 20.6, 0.07, -2.4, '#c9ccd4', 0.55);
+    const pull = torsoPoint(c, 0.07, 14.2, 0.7);
+    if (pull[2] > 0.3) {
+      c.px(pull[0], pull[1], '#8a8f9a');
+      c.px(pull[0], pull[1] + 1, '#8a8f9a');
+    }
+  }
+  if (variant === 'rugby' && front) {
+    // two-button placket under the white collar
+    surfLine(c, 0, 18.2, 0, 13.4, col.sh, 0.4);
+    for (const yy of [17.2, 14.6]) {
+      const q = torsoPoint(c, 0, yy, 0.45);
+      if (q[2] > 0.3) c.px(q[0], q[1], '#d6d0c2');
+    }
+  }
 }
 
 /** Neck opening and per-style collar/front details. */
@@ -971,7 +1098,7 @@ function neckline(c: Ctx2, it: Resolved) {
   // opening
   const openPts: P2[] = [];
   const wide = it.item.id === 'top.tank';
-  const dip = wide ? 6.4 : style === 1 || style === 4 ? 2.6 : style === 3 ? 4.5 : style === 5 ? 3.0 : 3.4;
+  const dip = wide ? 6.4 : style === 1 || style === 4 || style === 8 ? 2.6 : style === 3 ? 4.5 : style === 5 || style === 9 ? 3.0 : 3.4;
   const widthA = wide ? 7.6 : style === 3 ? 3.7 : 4.3;
   for (let n = 0; n <= 10; n++) {
     const psi = -Math.PI * 0.5 + (n / 10) * Math.PI;
@@ -986,10 +1113,18 @@ function neckline(c: Ctx2, it: Resolved) {
   const a = c.P(-widthA, levelY(c, 26), c.rig.bz);
   const b = c.P(widthA, levelY(c, 26), c.rig.bz);
   AUX.clear();
+  if (style === 7 && front) {
+    // V neck: a triangle down the chest instead of the round opening
+    openPts.length = 0;
+    for (const [x, y, z] of [[-4.6, 22.6, 3.4], [0, 13.6, 6.2], [4.6, 22.6, 3.4]] as const) {
+      const q = c.P(x, levelY(c, y), c.rig.bz + z);
+      openPts.push([q[0], q[1]]);
+    }
+  }
   const poly: P2[] = [...openPts.map((p) => [p[0], p[1]] as P2)];
   poly.push([b[0], b[1] - 4], [top[0], top[1] - 4], [a[0], a[1] - 4]);
   AUX.poly(poly);
-  if (style !== 2) {
+  if (style !== 2 && style !== 6) {
     AUX.and(MAINcopyGuard(MAIN));
     paintNeckHole(c, AUX, skin);
   }
@@ -1009,7 +1144,7 @@ function neckline(c: Ctx2, it: Resolved) {
     }
   } else if (style === 1 || style === 4) {
     // collar flaps + placket + buttons
-    const flap = style === 1 ? white : tonesOf(shade(col.base, 0.08));
+    const flap = style === 1 || it.item.params?.variant === 'rugby' ? white : tonesOf(shade(col.base, 0.08));
     if (front) {
       AUX.clear();
       const l = [
@@ -1139,6 +1274,76 @@ function neckline(c: Ctx2, it: Resolved) {
       surfLine(c, Math.PI, 20, Math.PI, -2.4, col.sh, 0.4);
       surfLine(c, Math.PI - 0.5, 2, Math.PI - 0.45, -2.6, col.sh, 0.4);
     }
+  } else if (style === 6) {
+    // turtleneck: a tall folded cuff around the neck
+    const ring = (yo: number, rx: number, rz: number) => {
+      const out: P2[] = [];
+      for (let n = 0; n < 14; n++) {
+        const psi = (n / 14) * Math.PI * 2;
+        const q = c.P(Math.sin(psi) * rx, levelY(c, yo), c.rig.bz + Math.cos(psi) * rz);
+        out.push([q[0], q[1]]);
+      }
+      return out;
+    };
+    MAIN.clear();
+    MAIN.hull([...ring(20.2, 6.0, 4.6), ...ring(26.4, 4.6, 3.9)]);
+    c.paint(MAIN, col, { lw: 2, sw: 3, deco: topDeco(it) });
+    for (const [yo, hex] of [[23.6, col.sh], [24.7, col.lt]] as const) {
+      for (let k = 0; k < 14; k++) {
+        const psi = (k / 14) * Math.PI * 2;
+        const q = c.P(Math.sin(psi) * 5.2, levelY(c, yo), c.rig.bz + Math.cos(psi) * 4.3);
+        if ((q[2] > 0) === front) c.px(q[0], q[1], hex);
+      }
+    }
+  } else if (style === 7) {
+    // V-neck binding (white on a team jersey)
+    const trim = it.item.id === 'top.jersey' ? '#f4f1ea' : col.sh;
+    if (front && openPts.length === 3) {
+      c.line(openPts[0][0], openPts[0][1], openPts[1][0], openPts[1][1] - 1, trim);
+      c.line(openPts[1][0], openPts[1][1] - 1, openPts[2][0], openPts[2][1], trim);
+    } else if (!front) {
+      surfLine(c, Math.PI - 0.8, 22.2, Math.PI + 0.8, 22.2, trim, 0.3);
+    }
+  } else if (style === 8) {
+    // henley: ribbed round collar and a three-button placket
+    if (front) {
+      for (let n = 0; n <= 10; n++) {
+        const psi = -Math.PI * 0.5 + (n / 10) * Math.PI;
+        const q = c.P((widthA + 0.6) * Math.sin(psi), levelY(c, 22.5 - (dip - 0.9) * Math.cos(psi)), c.rig.bz + 3.8 * Math.cos(psi));
+        if (q[2] > -0.5) c.px(q[0], q[1] + 1, col.sh);
+      }
+      surfLine(c, 0, 19.4, 0, 11.4, col.sh, 0.4);
+      surfLine(c, 0.1, 19.4, 0.1, 11.4, col.lt, 0.4);
+      for (const yy of [18.2, 15.4, 12.6]) {
+        const q = torsoPoint(c, 0, yy, 0.45);
+        if (q[2] > 0.3) {
+          c.px(q[0], q[1], '#ece7da');
+          c.px(q[0] + 1, q[1], col.sh);
+        }
+      }
+    } else {
+      surfLine(c, Math.PI - 0.9, 22.2, Math.PI + 0.9, 22.2, col.sh, 0.3);
+    }
+  } else if (style === 9) {
+    // sweatshirt: rib collar with the V insert at the throat
+    if (front) {
+      for (let n = 0; n <= 10; n++) {
+        const psi = -Math.PI * 0.5 + (n / 10) * Math.PI;
+        const q = c.P(5.0 * Math.sin(psi), levelY(c, 22.2 - 3.0 * Math.cos(psi)), c.rig.bz + 4.2 * Math.cos(psi));
+        c.px(q[0], q[1] - 1, col.lt);
+        c.px(q[0], q[1], col.base);
+        c.px(q[0], q[1] + 1, col.sh);
+      }
+      const v0 = torsoPoint(c, 0, 19.2, 0.5);
+      for (let k = 0; k < 3; k++) {
+        c.px(v0[0], v0[1] + k, col.sh);
+        c.px(v0[0] - 2 + k, v0[1] + 2 - k, col.sh);
+        c.px(v0[0] + 2 - k, v0[1] + 2 - k, col.sh);
+      }
+    } else {
+      surfLine(c, Math.PI - 0.9, 21.6, Math.PI + 0.9, 21.6, col.lt, 0.3);
+      surfLine(c, Math.PI - 0.9, 20.6, Math.PI + 0.9, 20.6, col.sh, 0.3);
+    }
   } else if (style === 5) {
     // chunky knit collar
     if (front) {
@@ -1175,7 +1380,7 @@ export function armPart(c: Ctx2, i: 0 | 1) {
   const sh = c.Pv(rig.shoulder[i]);
   const el = c.Pv(rig.elbow[i]);
   const wr = c.Pv(rig.wrist[i]);
-  const col = sl?.it.t ?? c.hair;
+  const col = sl?.tones ?? sl?.it.t ?? c.hair;
   const shS: P2 = [sh[0], sh[1]];
   const elS: P2 = [el[0], el[1]];
   const wrS: P2 = [wr[0], wr[1]];
@@ -1203,7 +1408,7 @@ export function armPart(c: Ctx2, i: 0 | 1) {
     const fe = lerp2(elS, wrS, 0.86);
     AUX.capsule(elS[0], elS[1], fe[0], fe[1], rU1 + 0.5, rF1 + 0.5);
   }
-  c.paint(AUX, col, { lw: 2, sw: 3 });
+  c.paint(AUX, col, { lw: 2, sw: 3, deco: sl.deco });
   // sleeve hem / cuff
   if (spec.sleeve < 1) {
     const e = lerp2(shS, elS, upperEnd);

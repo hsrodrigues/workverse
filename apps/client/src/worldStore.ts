@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { DEFAULT_TEAM, isStageRoom, type AvatarConfig, type Deck, type OnlineEntry, type PresenceStatus, type RoomAdminEntry, type RoomDef, type ServerMessage, type SlideState, type StaffLevel, type StaffLogEntry, type StaffSelf, type StageView } from '@workverse/shared';
+import { DEFAULT_TEAM, presentationOf, type AvatarConfig, type Deck, type OnlineEntry, type PresenceStatus, type RoomAdminEntry, type RoomDef, type ServerMessage, type SlideState, type StaffLevel, type StaffLogEntry, type StaffSelf, type StageView } from '@workverse/shared';
 import { net } from './net';
 
 export interface RosterEntry {
@@ -112,6 +112,7 @@ const initial = (): WorldState => ({
 /** Error codes of the auditorium: shown in the presentation panel and in the chat log. */
 const STAGE_ERRORS = new Set([
   'not_stage_room',
+  'tv_room',
   'stage_busy',
   'stage_away',
   'not_speaker',
@@ -238,7 +239,7 @@ net.on((msg: ServerMessage) => {
       addLine('system', '', `[${msg.scope === 'private' ? 'MENSAGEM DA EQUIPE' : msg.scope === 'all' ? 'AVISO GERAL' : 'AVISO'}] ${msg.from}: ${msg.text}`);
       break;
     case 'error':
-      if (['rate_limited', 'room_full', 'room_locked', 'muted', 'unmuted', 'kicked_room', 'off_duty'].includes(msg.code)) addLine('system', '', msg.message);
+      if (['rate_limited', 'room_full', 'room_locked', 'room_denied', 'forbidden', 'muted', 'unmuted', 'kicked_room', 'off_duty'].includes(msg.code)) addLine('system', '', msg.message);
       if (msg.code === 'dm_offline' || msg.code === 'dm_self') set({ socialNotice: msg.message });
       if (STAGE_ERRORS.has(msg.code)) {
         set({ stageNotice: msg.message });
@@ -281,8 +282,10 @@ export const worldStore = {
   },
 };
 
-/** True when the current room has a stage (an auditorium). */
-export const isStageRoomDef = (room: RoomDef | null): boolean => !!room && isStageRoom(room);
+/** True when the current room has a presentation target: a stage (auditorium) or a TV on a stand. */
+export const isStageRoomDef = (room: RoomDef | null): boolean => !!room && presentationOf(room) !== null;
+/** True when the presentation target of the room is a TV (not the auditorium stage). */
+export const isTvRoomDef = (room: RoomDef | null): boolean => !!room && presentationOf(room) === 'tv';
 
 export function useWorld(): WorldState {
   return useSyncExternalStore(worldStore.subscribe, worldStore.get);

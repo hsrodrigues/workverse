@@ -112,6 +112,9 @@ export class PgAccountStore extends MemoryAccountStore {
         teams: await q<OrgRows['teams'][number]>('teams'),
         members: await q<OrgRows['members'][number]>('org_members'),
         invites: await q<OrgRows['invites'][number]>('invites'),
+        roomFurniture: await q<NonNullable<OrgRows['roomFurniture']>[number]>('room_furniture'),
+        roomSettings: await q<NonNullable<OrgRows['roomSettings']>[number]>('room_settings'),
+        roomInvites: await q<NonNullable<OrgRows['roomInvites']>[number]>('room_invites'),
       }),
     );
     store.orgs.onOp = (op) => store.enqueue(opToSql(op));

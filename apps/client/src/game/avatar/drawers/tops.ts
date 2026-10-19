@@ -1,14 +1,19 @@
-import { specOf, styleOf, torsoPart } from '../engine';
+import { specOf, styleOf, topDeco, torsoPart } from '../engine';
+import { tonesOf } from '../recolor';
 import { registerDrawer } from '../registry';
 
-const cuffOf = (style: number) => (style === 1 ? 'shirt' : style === 2 || style === 5 ? 'rib' : 'plain');
+const cuffOf = (style: number) => (style === 1 ? 'shirt' : style === 2 || style === 5 || style === 6 || style === 9 ? 'rib' : 'plain');
+
+const OFF_WHITE = tonesOf('#f4f1ea');
 
 for (const key of ['top.tee', 'top.shirt', 'top.polo', 'top.hoodie', 'top.sweater']) {
   registerDrawer(key, {
     draw: (c, it, e) => e.part(0, () => torsoPart(c, it)),
     sleeve: (it) => {
       const len = specOf(it).sleeve;
-      return len > 0 ? { len, cuff: cuffOf(styleOf(it)) } : null;
+      if (len <= 0) return null;
+      // contrast sleeves (raglan) and patterned fabrics (plaid, rugby stripes) carry through to the arms
+      return { len, cuff: cuffOf(styleOf(it)), deco: topDeco(it), ...(it.item.params?.variant === 'raglan' ? { tones: OFF_WHITE } : {}) };
     },
   });
 }

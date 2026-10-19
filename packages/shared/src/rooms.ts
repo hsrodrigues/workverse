@@ -41,7 +41,9 @@ export type FurniKind =
   | 'cable_tray'
   | 'reception_desk'
   | 'logo'
-  | 'coffee_table';
+  | 'coffee_table'
+  | 'tv_stand'
+  | 'light_switch';
 
 export interface FurniKindDef {
   label: string;
@@ -88,6 +90,8 @@ export const FURNI_KINDS: Record<FurniKind, FurniKindDef> = {
   stool: { label: 'Banco alto', w: 1, d: 1, blocks: true, seat: true, usable: false },
   glass_divider: { label: 'Divisória de vidro', w: 2, d: 1, blocks: true, seat: false, usable: false },
   clock: { label: 'Relógio de parede', w: 1, d: 1, blocks: false, seat: false, usable: false, wall: true },
+  /** Interruptor na parede: alterna as luzes artificiais da sala. Estado `true` = luzes APAGADAS (o padrao `false` = acesas). */
+  light_switch: { label: 'Interruptor de luz', w: 1, d: 1, blocks: false, seat: false, usable: true, wall: true },
   auditorium_seat: { label: 'Poltrona', w: 1, d: 1, blocks: true, seat: true, usable: false },
   /** Raised platform, drawn flat: avatars walk on it. */
   stage: { label: 'Palco', w: 8, d: 3, blocks: false, seat: false, usable: false },
@@ -102,12 +106,23 @@ export const FURNI_KINDS: Record<FurniKind, FurniKindDef> = {
   logo: { label: 'Logo na parede', w: 2, d: 1, blocks: false, seat: false, usable: false, wall: true },
   /** Low table in front of a sofa: the focal point of a lounge corner. */
   coffee_table: { label: 'Mesa de centro', w: 2, d: 1, blocks: true, seat: false, usable: false },
+  /** Flat-screen TV on a rolling stand: the presentation screen of a meeting room (see `presentationOf` in stage.ts). */
+  tv_stand: { label: 'TV com suporte', w: 2, d: 1, blocks: true, seat: false, usable: true },
 };
 
-/** What a room is for. Free metadata today; the access rules by type come with organizations. */
+/** What a room is for. The server uses it for the default access policy and the furniture allow-list (furnish.ts). */
 export type RoomType = 'reception' | 'team' | 'meeting' | 'private' | 'focus' | 'lounge' | 'auditorium' | 'office';
-/** Who may enter. Not enforced yet (every room is open): reserved for the organizations feature. */
-export type RoomAccess = 'org' | 'team' | 'invite' | 'open';
+/**
+ * Who may enter (enforced by the server, see docs/rooms.md):
+ *  - `org`: every active member of the organization (guests still need `guestAllowed`);
+ *  - `team`: only the members of the team `accessTeamId`;
+ *  - `invited`: only people with a live invite (the room is listed, with a padlock);
+ *  - `private`: like `invited`, and the name/description are hidden from people without access.
+ * Owners and admins of the organization, and platform staff admins on duty, always get in.
+ */
+export type RoomAccess = 'org' | 'team' | 'invited' | 'private';
+export const ROOM_ACCESS_LIST: readonly RoomAccess[] = ['org', 'team', 'invited', 'private'];
+export const isRoomAccess = (v: unknown): v is RoomAccess => typeof v === 'string' && (ROOM_ACCESS_LIST as readonly string[]).includes(v);
 
 export interface Furniture {
   id: string;
@@ -141,8 +156,31 @@ export interface RoomDef {
   guestAllowed?: boolean;
   /** Purpose of the room (see RoomType). Optional metadata. */
   type?: RoomType;
-  /** Access policy (see RoomAccess); 'org' when absent. Not enforced yet. */
+  /** Access policy (see RoomAccess); when absent it follows the room type (`private` rooms are private, the rest are `org`). */
   access?: RoomAccess;
+  /** Team allowed in when `access` is `team`. Only set at run time (the organization chooses it); never in ROOM_DEFS. */
+  accessTeamId?: string | null;
+}
+
+/** Effective access policy of a room definition. */
+export function roomAccessOf(def: Pick<RoomDef, 'access' | 'type'>): RoomAccess {
+  return def.access ?? (def.type === 'private' ? 'private' : 'org');
+}
+
+/** A room as the person who asks may see it (the browser of rooms). Restricted rooms hide their population. */
+export interface RoomListEntry {
+  id: string;
+  /** Hidden ("Sala privada") from people without access to a `private` room. */
+  name: string;
+  description: string;
+  maxPlayers: number;
+  access: RoomAccess;
+  /** The viewer cannot enter: padlock in the UI. */
+  locked: boolean;
+  /** Why it is locked (for the tooltip): 'team' | 'invite' | 'guest'. */
+  lockReason?: 'team' | 'invite' | 'guest';
+  /** Present only when the viewer may enter; never reveals how many people are in a room one cannot access. */
+  population?: number;
 }
 
 export function footprint(f: Furniture): { w: number; d: number } {
@@ -572,6 +610,8 @@ const TEAM: RoomDef = {
     { id: fid('frame'), kind: 'frame', x: 5, y: 0, dir: 0 },
     { id: fid('tv'), kind: 'tv', x: 7, y: 0, dir: 0 },
     { id: fid('clock'), kind: 'clock', x: 10, y: 0, dir: 0 },
+    // Presentation TV on a rolling stand, screen toward the table (see presentationOf in stage.ts)
+    { id: 'tvstand-team', kind: 'tv_stand', x: 6, y: 1, dir: 0 },
     { id: fid('frame'), kind: 'frame', x: 12, y: 0, dir: 0 },
     { id: fid('frame'), kind: 'frame', x: 0, y: 2, dir: 1 },
     { id: fid('frame'), kind: 'frame', x: 0, y: 7, dir: 1 },
@@ -601,6 +641,7 @@ const MEETING1: RoomDef = {
     { id: fid('bin'), kind: 'bin', x: 10, y: 9, dir: 0 },
     { id: fid('lamp'), kind: 'lamp', x: 10, y: 8, dir: 0 },
     { id: fid('tv'), kind: 'tv', x: 5, y: 0, dir: 0 },
+    { id: 'tvstand-meeting1', kind: 'tv_stand', x: 6, y: 1, dir: 0 },
     { id: fid('board'), kind: 'whiteboard', x: 8, y: 0, dir: 0 },
     { id: fid('clock'), kind: 'clock', x: 10, y: 0, dir: 0 },
     { id: fid('frame'), kind: 'frame', x: 0, y: 2, dir: 1 },
@@ -630,6 +671,7 @@ const MEETING2: RoomDef = {
     { id: fid('lamp'), kind: 'lamp', x: 9, y: 1, dir: 0 },
     { id: fid('board'), kind: 'whiteboard', x: 4, y: 0, dir: 0 },
     { id: fid('tv'), kind: 'tv', x: 7, y: 0, dir: 0 },
+    { id: 'tvstand-meeting2', kind: 'tv_stand', x: 5, y: 1, dir: 0 },
     { id: fid('frame'), kind: 'frame', x: 0, y: 2, dir: 1 },
     { id: fid('clock'), kind: 'clock', x: 0, y: 7, dir: 1 },
   ],
@@ -638,7 +680,7 @@ const MEETING2: RoomDef = {
 const PRIVATE: RoomDef = {
   id: 'private',
   type: 'private',
-  access: 'invite',
+  access: 'private',
   name: 'Sala Privada',
   description: 'Escritório fechado para uma a quatro pessoas: mesa, sofá e conversa reservada.',
   tiles: rect(9, 7),
@@ -707,7 +749,41 @@ const FOCUS: RoomDef = {
   ],
 };
 
-export const ROOM_DEFS: RoomDef[] = [OFFICE, LOUNGE, AUDITORIUM, RECEPTION, TEAM, MEETING1, MEETING2, PRIVATE, FOCUS];
+/**
+ * Coloca um interruptor de luz na parede norte (ou oeste) de cada sala, perto da porta principal, num tile de parede livre
+ * cujo vizinho do piso seja andavel. Assim o interruptor existe em toda sala sem editar cada layout a mao.
+ */
+function withLightSwitch(def: RoomDef): RoomDef {
+  if (def.furniture.some((f) => f.kind === 'light_switch')) return def;
+  const taken = new Set<string>();
+  const solid = new Set<string>();
+  for (const f of def.furniture) {
+    for (const t of footprintTiles(f)) {
+      taken.add(`${t.x},${t.y}`);
+      if (FURNI_KINDS[f.kind].blocks) solid.add(`${t.x},${t.y}`);
+    }
+  }
+  const floor = (x: number, y: number) => def.tiles[y]?.[x] === '.';
+  const portalAt = (x: number, y: number) => def.portals.some((p) => p.x === x && p.y === y);
+  const okNorth = (x: number) => floor(x, 0) && floor(x, 1) && !taken.has(`${x},0`) && !portalAt(x, 0) && !solid.has(`${x},1`);
+  const okWest = (y: number) => floor(0, y) && floor(1, y) && !taken.has(`0,${y}`) && !portalAt(0, y) && !solid.has(`1,${y}`);
+  const width = Math.max(...def.tiles.map((r) => r.length));
+  const height = def.tiles.length;
+  const near: Array<{ x: number; y: number; dir: number }> = [];
+  for (const p of def.portals) {
+    for (const d of [1, -1, 2, -2, 3, -3]) {
+      if (p.y === 0) near.push({ x: p.x + d, y: 0, dir: 0 });
+      else if (p.x === 0) near.push({ x: 0, y: p.y + d, dir: 1 });
+    }
+  }
+  for (let x = 1; x < width; x++) near.push({ x, y: 0, dir: 0 });
+  for (let y = 1; y < height; y++) near.push({ x: 0, y, dir: 1 });
+  const spot = near.find((c) => (c.dir === 0 ? okNorth(c.x) : okWest(c.y)));
+  if (spot) def.furniture.push({ id: `switch-${def.id}`, kind: 'light_switch', x: spot.x, y: spot.y, dir: spot.dir });
+  return def;
+}
+
+export const ROOM_DEFS: RoomDef[] = [OFFICE, LOUNGE, AUDITORIUM, RECEPTION, TEAM, MEETING1, MEETING2, PRIVATE, FOCUS].map(withLightSwitch);
 /**
  * First room of a new account. It stays the office on purpose: existing accounts and the store tests already
  * persist 'office' as `lastRoom`. Switching new accounts to the reception means changing only this constant.

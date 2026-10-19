@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import {
   MAX_STAFF_REASON,
   ROOM_OPS,
+  EVENT_IDS,
+  getEventDef,
   type RoomAdminEntry,
   type RoomOp,
   MUTE_MAX_MINUTES,
@@ -14,6 +16,8 @@ import {
   type AvatarConfig,
   type AvatarV2,
   type OnlineEntry,
+  type EventMode,
+  type EventsView,
   type Point,
   type ServerMessage,
   type StaffAction,
@@ -47,11 +51,12 @@ export const STAFF_MESSAGE_TYPES: ReadonlySet<string> = new Set([
   'staff_dm',
   'staff_rooms',
   'staff_room',
+  'staff_event',
 ]);
 export const isStaffMessage = (t: string): boolean => STAFF_MESSAGE_TYPES.has(t);
 
 /** Comandos de chat reconhecidos (so para staff; para os demais o chat segue como antes). */
-const COMMANDS = new Set(['staff', 'invis', 'online', 'mute', 'silenciar', 'unmute', 'desilenciar', 'kick', 'expulsar', 'kickroom', 'goto', 'bring', 'trazer', 'aviso', 'avisosala', 'dar', 'tirar']);
+const COMMANDS = new Set(['evento', 'staff', 'invis', 'online', 'mute', 'silenciar', 'unmute', 'desilenciar', 'kick', 'expulsar', 'kickroom', 'goto', 'bring', 'trazer', 'aviso', 'avisosala', 'dar', 'tirar']);
 
 const LOG_MAX = 100;
 const MAX_TARGET = 64;
@@ -84,6 +89,8 @@ export interface StaffHost {
   /** Tranca / fecha / esvazia uma sala. `moved` = pessoas mandadas para a sala inicial. */
   roomControl(orgId: string, roomId: string, op: RoomOp): { ok: true; moved: number; name: string } | { ok: false; message: string };
   roomExists(orgId: string, roomId: string): boolean;
+  /** Forca um evento (ligado / desligado / automatico) e avisa todos os online. `changed` = false quando ja estava assim. */
+  setEvent(id: string, mode: EventMode): { changed: boolean; view: EventsView };
 }
 
 /** `email[:nivel],email2[:nivel]` (nivel padrao: admin). Linhas invalidas sao ignoradas. */
@@ -545,6 +552,22 @@ export class StaffService {
         p.send({ t: 'staff_rooms', rooms: this.host.roomsOverview() });
         return true;
       }
+      case 'staff_event': {
+        if (!str(m.id, MAX_TARGET) || (m.mode !== 'on' && m.mode !== 'off' && m.mode !== 'auto')) return this.malformedIfStaff(p);
+        const level = this.gate(p, 'events.control', now);
+        if (!level) return true;
+        const def = getEventDef(m.id as string);
+        if (!def) {
+          this.say(p, 'Evento não encontrado.');
+          return true;
+        }
+        const mode = m.mode as EventMode;
+        const r = this.host.setEvent(def.id, mode);
+        const label = { on: 'forçado LIGADO', off: 'forçado DESLIGADO', auto: 'voltou a seguir a data' }[mode];
+        this.say(p, r.changed ? `Evento ${def.name}: ${label}.` : `Evento ${def.name} já estava assim.`);
+        if (r.changed) this.audit(p, level, `event.${mode}`, { id: def.id, name: def.name }, `${label}; ativos agora: ${r.view.active.join(', ') || 'nenhum'}`);
+        return true;
+      }
       case 'staff_item': {
         if (!str(m.target, MAX_TARGET) || !str(m.key, 80) || typeof m.grant !== 'boolean') return this.malformedIfStaff(p);
         const level = this.gate(p, 'item.grant', now);
@@ -639,6 +662,15 @@ export class StaffService {
         const i = tokens.findIndex((t, k) => k > 0 && /^\d{1,6}$/.test(t));
         if (i < 0) return this.say(p, 'Uso: /mute <nome> <minutos> [motivo]'), true;
         return send({ t: 'staff_mute', target: tokens.slice(0, i).join(' '), minutes: Number(tokens[i]), reason: tokens.slice(i + 1).join(' ') }), true;
+      }
+      case 'evento': {
+        // /evento <id> on|off|auto   (sem argumentos: lista)
+        const tokens = rest.toLowerCase().split(' ').filter(Boolean);
+        if (tokens.length < 2) {
+          this.say(p, `Uso: /evento <id> on|off|auto. Ids: ${EVENT_IDS.join(', ')}.`);
+          return true;
+        }
+        return send({ t: 'staff_event', id: tokens[0]!, mode: tokens[1] as EventMode }), true;
       }
       case 'dar':
       case 'tirar': {

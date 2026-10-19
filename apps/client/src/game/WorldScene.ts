@@ -22,12 +22,15 @@ import {
   type Furniture,
   type PlayerView,
   type Point,
+  type RoomDef,
   type RoomSnapshot,
   type StaffLevel,
   type ServerMessage,
 } from '@workverse/shared';
 import { net } from '../net';
+import { stageUi } from '../stage/stageUi';
 import { emit } from '../bus';
+import { FurnishLayer } from './furnishLayer';
 import { ANCHOR_X, ANCHOR_Y, FH, FRAMES_DRINK, FRAMES_IDLE, FRAMES_SIT, FRAMES_TYPE, FRAMES_WALK, FRAMES_WAVE, FRAME_COUNT, FW, SIT_LIFT, VIEWS, buildAvatarSheet, type View } from './avatarRenderer';
 import { renderFurniture } from './furniture';
 import { WORK_BALLOON_KEYS, ensureActivityTextures } from './activityArt';
@@ -36,6 +39,7 @@ import { MediaBadges } from './mediaBadges';
 import { StageScreen } from './stageScreen';
 import { DoorSigns } from './doorSigns';
 import { DayLighting } from './dayLighting';
+import { EventDecor } from './eventDecor';
 
 import { NAME_PX, STAFF_PX, TEXT_FONT as FONT, buildBubble, crisp, snap, texelOf } from './text';
 /** Which sprite view (and mirroring) represents each of the eight facing directions. */
@@ -68,6 +72,13 @@ interface Box3 {
 interface Sortable {
   box(): Box3;
   setDepth(d: number): void;
+}
+
+/** Short signature of a layout, to version the textures that depend on it. */
+function layoutSig(list: readonly Furniture[]): string {
+  let h = 5381;
+  for (const f of list) for (const ch of `${f.id}${f.kind}${f.x},${f.y},${f.dir};`) h = ((h << 5) + h + ch.charCodeAt(0)) | 0;
+  return (h >>> 0).toString(36);
 }
 
 const separated = (a: Box3, b: Box3) => a.x1 <= b.x0 + 1e-6 || a.y1 <= b.y0 + 1e-6 || a.z1 <= b.z0 + 1e-6;
@@ -464,6 +475,14 @@ export class WorldScene extends Phaser.Scene {
   /** Placas com o nome da sala sobre cada porta. */
   private doorSigns: DoorSigns | null = null;
   private dayLight!: DayLighting;
+  /** Decoracao de eventos (Halloween, Natal...): so visual, ver eventDecor.ts. */
+  private eventDecor!: EventDecor;
+  /** Room editor (ghost, selection, pointer capture); idle unless the UI turns the decorate mode on. */
+  private furn!: FurnishLayer;
+  /** Lit/unlit state of the furniture of the current room (the layout can be rebuilt without a new snapshot). */
+  private furniOn: Record<string, boolean> = {};
+  /** Textures of the walls/floor of the current layout, dropped when the layout changes. */
+  private artKeys: string[] = [];
 
   constructor() {
     super('world');
@@ -475,14 +494,24 @@ export class WorldScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#1b1830');
     this.badges = new MediaBadges(this);
     this.dayLight = new DayLighting(this);
+    this.eventDecor = new EventDecor(this);
+    this.furn = new FurnishLayer(this);
     ensureActivityTextures(this);
 
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       this.downAt = { x: p.x, y: p.y };
       this.dragged = false;
+      if (this.furn.active && p.button === 0) this.furn.pointer('down', this.tileAt(p), p);
     });
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.onMove(p));
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
+      if (this.furn.active) {
+        // decorating: the click belongs to the editor (place / drop), never to walking or sitting
+        if (p.button === 0) this.furn.pointer('up', this.tileAt(p), p, this.dragged);
+        this.furn.grabbed = false;
+        this.downAt = null;
+        return;
+      }
       if (!this.dragged && p.button === 0) this.onClick(p);
       this.downAt = null;
     });
@@ -500,6 +529,9 @@ export class WorldScene extends Phaser.Scene {
     if (import.meta.env?.DEV) {
       // Dev-only helper for browser tests: canvas position of a tile centre.
       (window as unknown as { __wv: unknown }).__wv = {
+        // Dev-only: the Phaser game and scene, for leak measurements (textures, display list) in browser tests.
+        game: this.game,
+        scene: this,
         tileToCanvas: (x: number, y: number) => {
           const c = this.cameras.main;
           const p = tileToScreen(x + 0.5, y + 0.5);
@@ -582,6 +614,9 @@ export class WorldScene extends Phaser.Scene {
       case 'furni':
         this.setFurniState(m.id, m.on);
         break;
+      case 'furniture_changed':
+        this.applyFurniture(m.furniture);
+        break;
     }
   }
 
@@ -606,30 +641,44 @@ export class WorldScene extends Phaser.Scene {
   private loadRoom(snap: RoomSnapshot) {
     for (const a of this.actors.values()) a.destroy();
     this.actors.clear();
+    this.badges.clear();
+    this.doorSigns ??= new DoorSigns(this);
+    this.doorSigns.build(snap.def, this.cameras?.main?.zoom ?? 1);
+    this.youId = snap.youId;
+    this.furniOn = { ...snap.furniState };
+    this.buildStatic(snap.def, this.furniOn);
+
+    for (const p of snap.players) this.addActor(p);
+    this.userMoved = false;
+    this.fitCamera();
+  }
+
+  /** Floor, walls, furniture and lighting of a room definition. People, camera and media badges are not touched. */
+  private buildStatic(def: RoomDef, furniState: Record<string, boolean>) {
     this.roomObjects.forEach((o) => o.destroy());
     this.roomObjects = [];
     this.furni = [];
     this.screens.forEach((s) => s.destroy());
     this.screens = [];
-    this.badges.clear();
-    this.doorSigns ??= new DoorSigns(this);
-    this.doorSigns.build(snap.def, this.cameras?.main?.zoom ?? 1);
-    this.youId = snap.youId;
-
-    const built = buildRoom(snap.def);
+    const built = buildRoom(def);
     this.built = built;
-    const theme = THEMES[snap.def.id] ?? THEMES.office;
-    const key = `room:${snap.def.id}`;
+    const theme = THEMES[def.id] ?? THEMES.office;
+    const key = `room:${def.id}`;
 
+    // the walls are cut by the wall pieces: a texture per layout (the previous ones are dropped once the new ones stand)
+    const sig = layoutSig(def.furniture);
     const floor = renderFloor(built, theme);
     const walls = renderWalls(built, theme);
+    const oldArt = this.artKeys;
+    this.artKeys = [`${key}:floor:${sig}`, `${key}:walls:${sig}`];
     this.roomObjects.push(
-      this.add.image(-floor.ox, -floor.oy, this.canvasTexture(`${key}:floor`, floor.canvas)).setOrigin(0, 0).setDepth(0),
-      this.add.image(-walls.ox, -walls.oy, this.canvasTexture(`${key}:walls`, walls.canvas)).setOrigin(0, 0).setDepth(1),
+      this.add.image(-floor.ox, -floor.oy, this.canvasTexture(this.artKeys[0], floor.canvas)).setOrigin(0, 0).setDepth(0),
+      this.add.image(-walls.ox, -walls.oy, this.canvasTexture(this.artKeys[1], walls.canvas)).setOrigin(0, 0).setDepth(1),
     );
+    for (const k of oldArt) if (!this.artKeys.includes(k) && this.textures.exists(k)) this.textures.remove(k);
 
-    for (const f of snap.def.furniture) {
-      const on = snap.furniState[f.id] === true;
+    for (const f of def.furniture) {
+      const on = furniState[f.id] === true;
       const s = renderFurniture(f, on);
       const tkey = this.canvasTexture(s.key, s.canvas);
       const o = tileToScreen(f.x, f.y);
@@ -660,14 +709,18 @@ export class WorldScene extends Phaser.Scene {
       }
       const fa = new FurniActor(f, img, box, overlay, overlayBox);
       this.furni.push(fa);
-      if (f.kind === 'screen') this.screens.push(new StageScreen(this, f, () => img.depth + 1));
+      if (f.kind === 'screen' || f.kind === 'tv_stand') this.screens.push(new StageScreen(this, f, () => img.depth + 1));
     }
     this.rebuildSortables();
-    this.dayLight.load(built, theme, snap.def.furniture, snap.furniState, floor, walls, key);
+    this.dayLight.load(built, theme, def.furniture, furniState, floor, walls, key);
+    this.eventDecor.load(built, def.furniture, this.furniOn);
+  }
 
-    for (const p of snap.players) this.addActor(p);
-    this.userMoved = false;
-    this.fitCamera();
+  /** The layout of the current room changed (someone decorated it): rebuild the static scenery, keep everybody where they are. */
+  private applyFurniture(furniture: Furniture[]) {
+    if (!this.built) return;
+    this.buildStatic({ ...this.built.def, furniture }, this.furniOn);
+    this.furn.refresh();
   }
 
   private rebuildSortables() {
@@ -680,6 +733,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private setFurniState(id: string, on: boolean) {
+    this.furniOn[id] = on;
     const fa = this.furni.find((x) => x.f.id === id);
     if (!fa) return;
     const s = renderFurniture(fa.f, on);
@@ -717,6 +771,11 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private onMove(p: Phaser.Input.Pointer) {
+    if (this.furn.active && (this.furn.grabbed || !p.isDown)) {
+      this.hover.clear();
+      this.furn.pointer('move', this.tileAt(p), p);
+      return;
+    }
     if (p.isDown && this.downAt) {
       if (this.dragged || Math.hypot(p.x - this.downAt.x, p.y - this.downAt.y) > 6) {
         this.dragged = true;
@@ -763,9 +822,18 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
     emit('closeMenus');
+    // the TV is tall: a click on its screen lands on a floor tile behind it, so test the drawn sprite first
+    const tv = this.tvUnder(p);
+    if (tv) {
+      net.send({ t: 'interact', furniId: tv.id, x: tv.x, y: tv.y });
+      stageUi.set('open');
+      this.markerAt = { x: tv.x, y: tv.y, born: performance.now() };
+      return;
+    }
     const t = this.tileAt(p);
     const f = interactiveAt(built, t.x, t.y);
     if (f) {
+      if (f.kind === 'tv_stand') stageUi.set('open');
       net.send({ t: 'interact', furniId: f.id, x: t.x, y: t.y });
       this.markerAt = { x: t.x, y: t.y, born: performance.now() };
       return;
@@ -774,6 +842,18 @@ export class WorldScene extends Phaser.Scene {
       net.send({ t: 'move', x: t.x, y: t.y });
       this.markerAt = { x: t.x, y: t.y, born: performance.now() };
     }
+  }
+
+  /** The presentation TV whose drawn pixels are under the pointer, if any. */
+  private tvUnder(p: Phaser.Input.Pointer) {
+    for (const fa of this.furni) {
+      if (fa.f.kind !== 'tv_stand') continue;
+      const b = fa.sprite.getBounds();
+      if (!b.contains(p.worldX, p.worldY)) continue;
+      const alpha = this.textures.getPixelAlpha(Math.floor(p.worldX - b.x), Math.floor(p.worldY - b.y), fa.sprite.texture.key);
+      if (alpha && alpha > 0) return fa.f;
+    }
+    return undefined;
   }
 
   /** Logical tile of any avatar in the room, including your own (proximity audio reads it ~5 times a second). */
@@ -820,11 +900,12 @@ export class WorldScene extends Phaser.Scene {
     const dt = Math.min(delta, 100);
     for (const a of this.actors.values()) a.update(dt);
     if (this.sortables.length || this.actors.size) {
-      assignDepths([...this.sortables, ...this.actors.values()]);
+      assignDepths([...this.sortables, ...this.eventDecor.sortables, ...this.actors.values()]);
     }
     this.badges.update(this.actors.values(), performance.now());
     for (const s of this.screens) s.tick(performance.now());
     this.dayLight.tick(performance.now());
+    this.eventDecor.tick(performance.now());
     this.marker.clear();
     if (this.markerAt) {
       const age = performance.now() - this.markerAt.born;

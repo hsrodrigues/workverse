@@ -50,12 +50,16 @@ export const SECTIONS: Record<Exclude<TabId, 'wardrobe'>, SectionDef[]> = {
     { id: 'eyewear', title: 'Óculos', slot: 'eyewear', items: items('accessories', 'eyewear'), removable: true },
     { id: 'head', title: 'Bonés e chapéus', slot: 'head', items: items('accessories', 'head'), removable: true },
     { id: 'ears', title: 'Fones e headsets', slot: 'ears', items: items('accessories', 'ears'), removable: true },
-    { id: 'back', title: 'Mochila', slot: 'back', items: items('accessories', 'back'), removable: true },
+    { id: 'back', title: 'Mochilas e bolsas', slot: 'back', items: items('accessories', 'back'), removable: true },
+    { id: 'neck', title: 'Cachecóis, gravatas e colares', slot: 'neck', items: items('accessories', 'neck'), removable: true },
     { id: 'wrist', title: 'Relógios e tech', slot: 'wrist', items: items('accessories', 'wrist'), removable: true },
   ],
   special: [
     { id: 'hand', title: 'Para levar na mão', slot: 'hand', items: items('special', 'hand'), removable: true, noneLabel: 'Mãos livres' },
     { id: 'badge', title: 'Crachá', slot: 'badge', items: items('special', 'badge'), removable: true, noneLabel: 'Sem crachá' },
-    { id: 'partyhead', title: 'Eventos e comemorações', slot: 'head', items: items('special', 'head'), removable: true, noneLabel: 'Nenhum' },
+    { id: 'partyhead', title: 'Para a cabeça e eventos', slot: 'head', items: items('special', 'head'), removable: true, noneLabel: 'Nenhum' },
+    { id: 'specialears', title: 'Headsets especiais', slot: 'ears', items: items('special', 'ears'), removable: true, noneLabel: 'Nenhum' },
+    { id: 'specialback', title: 'Asas, capas e caudas', slot: 'back', items: items('special', 'back'), removable: true, noneLabel: 'Nenhum' },
+    { id: 'aura', title: 'Aura', slot: 'aura', items: items('special', 'aura'), removable: true, noneLabel: 'Sem aura' },
   ],
 };

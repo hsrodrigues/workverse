@@ -1,4 +1,5 @@
-import { ROOM_DEFS } from '@workverse/shared';
+import { ROOM_DEFS, type RoomDef } from '@workverse/shared';
+import type { ResolvedRoom } from './roomConfig';
 import { Player, RoomInstance } from './room';
 import { StageManager, type PermissionSync } from './stage';
 
@@ -9,6 +10,8 @@ export interface OrgWorldHooks {
   clock?: () => number;
   /** Pushes publish-permission changes to LiveKit (see media.ts); the org id travels as the 4th argument. */
   permissionSync?: PermissionSync;
+  /** The room as this organization has it (customized layout, access policy). Absent = the base definition. */
+  resolveRoom?: (base: RoomDef) => ResolvedRoom;
 }
 
 /**
@@ -18,6 +21,8 @@ export interface OrgWorldHooks {
  */
 export class OrgWorld {
   readonly rooms = new Map<string, RoomInstance>();
+  /** The untouched definitions: spawn, portals and the layout that "restore" goes back to. */
+  readonly baseDefs = new Map<string, RoomDef>();
   readonly stage: StageManager;
   populationDirty = false;
 
@@ -25,17 +30,19 @@ export class OrgWorld {
     readonly id: string,
     hooks: OrgWorldHooks,
   ) {
-    for (const def of ROOM_DEFS) {
-      this.rooms.set(
-        def.id,
-        new RoomInstance(def, {
-          onPortal: (player, portal) => hooks.onPortal(player, portal.toRoom, portal.toX, portal.toY),
-          onChange: () => {
-            this.populationDirty = true;
-          },
-          onPodium: (player) => this.stage.takeStage(player),
-        }),
-      );
+    for (const base of ROOM_DEFS) {
+      this.baseDefs.set(base.id, base);
+      const resolved = hooks.resolveRoom?.(base) ?? { def: base, version: 0, customized: false };
+      const room = new RoomInstance(resolved.def, {
+        onPortal: (player, portal) => hooks.onPortal(player, portal.toRoom, portal.toX, portal.toY),
+        onChange: () => {
+          this.populationDirty = true;
+        },
+        onPodium: (player) => this.stage.takeStage(player),
+      });
+      room.version = resolved.version;
+      room.customized = resolved.customized;
+      this.rooms.set(base.id, room);
     }
     const sync = hooks.permissionSync;
     this.stage = new StageManager({

@@ -39,7 +39,13 @@ const dbName = (p: string) => `${p}_${++dbCounter}`;
 
 afterAll(async () => {
   await h?.stop();
-  for (const d of tmpDirs) rmSync(d, { recursive: true, force: true });
+  for (const d of tmpDirs) {
+    try {
+      rmSync(d, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    } catch {
+      /* limpeza best-effort (arquivo preso no Windows) */
+    }
+  }
 }, 60_000);
 
 const openStore = (pool: Pool, retryBaseMs = 10) => PgAccountStore.open(pool, { retryBaseMs, log: quiet });
