@@ -1,6 +1,7 @@
 import {
   FURNI_KINDS,
   FURNI_HOLDS,
+  WORKSTATION_KINDS,
   HELD_CHAT,
   HOLD_MS,
   heldOf,
@@ -520,11 +521,12 @@ export class RoomInstance {
     if (!seat) return undefined;
     const [dx, dy] = [[1, 0], [0, 1], [-1, 0], [0, -1]][seat.dir % 4];
     if (!inBounds(g, x + dx, y + dy)) return undefined;
-    return (this.built.furniAt.get(idx(g, x + dx, y + dy)) ?? []).find((f) => f.kind === 'computer');
+    return (this.built.furniAt.get(idx(g, x + dx, y + dy)) ?? []).find((f) => WORKSTATION_KINDS.includes(f.kind));
   }
 
   private startWork(p: Player, pc: Furniture) {
-    if (this.isWorkedAt(pc.id)) return;
+    // a PC has one user; the command desk and the bench have several seats
+    if (pc.kind === 'computer' && this.isWorkedAt(pc.id)) return;
     p.workingAt = pc.id;
     this.setFurni(pc.id, true);
     this.setActivity(p, 'working');

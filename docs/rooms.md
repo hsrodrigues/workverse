@@ -13,10 +13,11 @@ As salas são definidas como dados em `packages/shared/src/rooms.ts` (`ROOM_DEFS
 | `meeting2` | Sala de Reunião 2 | `meeting` | 8 | versão menor |
 | `private` | Sala Privada | `private` | 4 | escritório fechado, mesa e sofá |
 | `focus` | Espaço de Concentração | `focus` | 8 | baias individuais, "silêncio" |
+| `ti` | Sala da TI | `it` | 16 | centro de comando: videowall, mesa de comando em ferradura, corredor de racks, bancada de hardware, café premium |
 
 ## Portais
 
-A **Recepção Central** é o hub: tem uma porta para cada uma das outras oito salas, e todas elas têm uma porta de volta para a recepção (os testes em `packages/shared/test/shared.test.ts` garantem portais bidirecionais, tiles de chegada livres e alcançáveis). Escritório, Copa e Auditório mantêm também as portas que já tinham entre si.
+A **Recepção Central** é o hub: tem uma porta para cada uma das outras nove salas, e todas elas têm uma porta de volta para a recepção (os testes em `packages/shared/test/shared.test.ts` garantem portais bidirecionais, tiles de chegada livres e alcançáveis). Escritório, Copa e Auditório mantêm também as portas que já tinham entre si.
 
 Portas só existem nas paredes norte (`y = 0`) e oeste (`x = 0`). O tile de chegada (`toX`, `toY`) é o tile ao lado da porta de retorno da sala de destino.
 
@@ -52,3 +53,12 @@ Permissão `room.furnish` (owner/admin) ou staff admin em serviço. Mensagens `f
 ## TV de apresentação
 
 Reunião 1, Reunião 2 e Sala de Equipe têm um `tv_stand` (ids `tvstand-*`, fixos para não deslocar os ids dos demais móveis) virado para a mesa. A TV decorativa de parede (`tv`) continua só decoração. Uma sala com `tv_stand` (e sem púlpito) é uma **sala com TV**: `presentationOf(def)` em `packages/shared/src/stage.ts` devolve `'tv'` (e `'stage'` para o auditório). A decisão vem sempre da lista de móveis atual da sala, então o editor de salas liga e desliga o modo ao adicionar ou remover a TV.
+
+## Sala da TI (`ti`)
+
+Porta na parede oeste da recepção (placa **TI**), volta para `(1,5)` da recepção. Aberta à organização por padrão (`access: 'org'`, sem visitantes) e compatível com todo o controle de acesso (equipe/convite/privada). Visual: piso escuro com faixas de LED, paredes de painéis metálicos com friso ciano (`theme.paper: 'tech'`, `fx: 'tech'` em `roomArt.ts`), brilhos ciano do videowall e dos racks (`dayLighting.ts`).
+
+Móveis novos (`furniture.ts` + `furnitureTech.ts`): `server_rack` (LEDs que piscam: a cena troca 2 sprites, ver `blinkers` em `WorldScene.ts`), `command_desk` (3 segmentos formam a ferradura, monitores com telas vivas), `ergo_chair`, `videowall` (5x1 na parede), `arch_board`, `hardware_bench` e `espresso` (entrega café como a cafeteira, `FURNI_HOLDS`). O tipo de sala `it` entra em `RoomType`. Testes: `packages/shared/test/ti.test.ts` e os de layout/interruptor/editor, que varrem todas as salas.
+
+### Equipes que passam mesmo com a sala trancada
+Cada sala pode ter "equipes que passam" (`room_settings.pass_team_ids`, migração `0007_room_pass_teams.sql`; também no JSON e na memória; `RoomSetting.passTeamIds`). Sem escolha vale o padrão da sala: a Sala da TI deixa passar a equipe/setor cujo nome normalizado (sem acento/caixa) é `ti` ou `tecnologia da informacao` (`DEFAULT_PASS_TEAM_NAMES` em `roomConfig.ts`); `[]` = ninguém. Regras (todas no servidor, uma decisão só em `World.canEnter`): vale para acesso restrito (`team`/`invited`/`private`), para a sala trancada pela staff (`lock`; sala `close`/fechada não deixa ninguém) e para token de mídia (`forbidden_room`) e navegador de salas (cadeado). Só equipes da própria organização contam (id de outra org é recusado com `bad_team`). Visitantes continuam barrados em salas que não os admitem; staff admin em serviço e donos/admins passam como antes. Ao trancar com gente de fora dentro, os de fora vão para a sala inicial e a TI fica (na tranca da staff isso só acontece em salas que têm equipes que passam). Edição: aba **Acesso** do painel de decoração (caixas "Entram mesmo com a sala trancada"), mensagem `room_access_set { passTeamIds }`. Testes: `apps/server/test/roomsPass.test.ts`.

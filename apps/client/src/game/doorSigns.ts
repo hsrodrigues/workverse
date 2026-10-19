@@ -21,6 +21,7 @@ const SHORT: Record<string, string> = {
   meeting2: 'REUNIÃO 2',
   private: 'PRIVADA',
   focus: 'CONCENTRAÇÃO',
+  ti: 'TI',
 };
 
 export const doorLabel = (p: Pick<Portal, 'toRoom' | 'label'>): string => SHORT[p.toRoom] ?? p.label.toUpperCase().slice(0, 14);

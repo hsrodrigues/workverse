@@ -23,7 +23,7 @@ export interface OrgRows {
   }>;
   /** Migracao 0005; ausentes em bancos antigos (lista vazia). */
   roomFurniture?: Array<{ org_id: string; room_id: string; version: number; furniture: Furniture[] | null; updated_by: string | null; updated_at: Date }>;
-  roomSettings?: Array<{ org_id: string; room_id: string; access: string; team_id: string | null; updated_by: string | null; updated_at: Date }>;
+  roomSettings?: Array<{ org_id: string; room_id: string; access: string; team_id: string | null; pass_team_ids?: unknown; updated_by: string | null; updated_at: Date }>;
   roomInvites?: Array<{ org_id: string; room_id: string; account_id: string; invited_by: string | null; created_at: Date; expires_at: Date | null }>;
 }
 
@@ -62,7 +62,7 @@ export function orgDataFromRows(r: OrgRows): OrgData {
       (l): RoomLayout => ({ orgId: l.org_id, roomId: l.room_id, version: l.version, furniture: l.furniture, updatedBy: l.updated_by ?? '', updatedAt: l.updated_at.getTime() }),
     ),
     roomSettings: (r.roomSettings ?? []).map(
-      (l): RoomSetting => ({ orgId: l.org_id, roomId: l.room_id, access: l.access as RoomAccess, teamId: l.team_id, updatedBy: l.updated_by ?? '', updatedAt: l.updated_at.getTime() }),
+      (l): RoomSetting => ({ orgId: l.org_id, roomId: l.room_id, access: l.access as RoomAccess, teamId: l.team_id, passTeamIds: Array.isArray(l.pass_team_ids) ? (l.pass_team_ids as unknown[]).filter((x): x is string => typeof x === 'string') : null, updatedBy: l.updated_by ?? '', updatedAt: l.updated_at.getTime() }),
     ),
     roomInvites: (r.roomInvites ?? []).map(
       (l): RoomInviteRow => ({
@@ -95,8 +95,8 @@ export const UPSERT_INVITE_SQL = `INSERT INTO invites (id, org_id, email, role, 
 export const UPSERT_ROOM_FURNITURE_SQL = `INSERT INTO room_furniture (org_id, room_id, version, furniture, updated_by, updated_at) VALUES ($1, $2, $3, $4::jsonb, $5, $6)
   ON CONFLICT (org_id, room_id) DO UPDATE SET version = EXCLUDED.version, furniture = EXCLUDED.furniture, updated_by = EXCLUDED.updated_by, updated_at = EXCLUDED.updated_at`;
 
-export const UPSERT_ROOM_SETTING_SQL = `INSERT INTO room_settings (org_id, room_id, access, team_id, updated_by, updated_at) VALUES ($1, $2, $3, $4, $5, $6)
-  ON CONFLICT (org_id, room_id) DO UPDATE SET access = EXCLUDED.access, team_id = EXCLUDED.team_id, updated_by = EXCLUDED.updated_by, updated_at = EXCLUDED.updated_at`;
+export const UPSERT_ROOM_SETTING_SQL = `INSERT INTO room_settings (org_id, room_id, access, team_id, pass_team_ids, updated_by, updated_at) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)
+  ON CONFLICT (org_id, room_id) DO UPDATE SET access = EXCLUDED.access, team_id = EXCLUDED.team_id, pass_team_ids = EXCLUDED.pass_team_ids, updated_by = EXCLUDED.updated_by, updated_at = EXCLUDED.updated_at`;
 
 export const UPSERT_ROOM_INVITE_SQL = `INSERT INTO room_invites (org_id, room_id, account_id, invited_by, created_at, expires_at) VALUES ($1, $2, $3, $4, $5, $6)
   ON CONFLICT (org_id, room_id, account_id) DO UPDATE SET invited_by = EXCLUDED.invited_by, created_at = EXCLUDED.created_at, expires_at = EXCLUDED.expires_at`;
@@ -152,7 +152,7 @@ export function opToSql(op: OrgOp): { sql: string; params: unknown[]; key?: stri
     }
     case 'room_setting': {
       const l = op.row;
-      return { sql: UPSERT_ROOM_SETTING_SQL, params: [l.orgId, l.roomId, l.access, l.teamId, l.updatedBy || null, new Date(l.updatedAt)], key: `room_setting:${l.orgId}:${l.roomId}` };
+      return { sql: UPSERT_ROOM_SETTING_SQL, params: [l.orgId, l.roomId, l.access, l.teamId, l.passTeamIds ? JSON.stringify(l.passTeamIds) : null, l.updatedBy || null, new Date(l.updatedAt)], key: `room_setting:${l.orgId}:${l.roomId}` };
     }
     // Sem chave de fusao: convidar, remover e convidar de novo precisa manter a ordem.
     case 'room_invite': {

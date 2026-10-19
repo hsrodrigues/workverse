@@ -14,6 +14,7 @@ Tabela e regras de data em `packages/shared/src/events.ts` (puro, testado): `act
 | Dia das Criancas (`criancas`) | 12/10 | 09 a 13/10 |
 | Dia do Trabalho (`trabalho`) | 01/05 | 30/04 e 01/05 |
 | Aniversario da empresa (`aniversario`) | `WORKVERSE_COMPANY_DATE` (`DD/MM`) | 3 dias antes e depois |
+| Dia do Profissional de TI (`diati`) | 19/10 | 18 a 20/10 |
 | Black Friday (`blackfriday`, opcional) | sexta apos a 4a quinta de novembro | 3 dias antes e depois; so com `WORKVERSE_OPTIONAL_EVENTS=blackfriday` ou forcado |
 
 ## Ativacao
@@ -26,3 +27,6 @@ Tabela e regras de data em `packages/shared/src/events.ts` (puro, testado): `act
 
 ## Itens de avatar
 `packages/shared/src/items/eventItems.ts` (desenhos em `drawers/events.ts`): chapeu de bruxa e fantasia de abobora (Halloween), mascara de Carnaval, oculos de Ano Novo, orelhas de coelho (Pascoa), chifres de rena (Natal); o gorro de Natal (`sp.santa_hat`) foi liberado. Enquanto o evento esta ativo o servidor concede `event:<id>` a todos (`wardrobe.ts`); quem esta vestindo o item o mantem depois do evento.
+
+## Dia do Profissional de TI (`diati`)
+Ativo sozinho de 18 a 20/10 (prioridade 66; tema neon azul/ciano/verde-matriz); a staff liga/desliga no painel Eventos ou com `?event=diati`. Decoração (`eventDecor.ts` + `eventArt.ts`, pixel art original): faixa "FELIZ DIA DO PROFISSIONAL DE TI", cabos de rede/fibra no alto da parede, nebulosa e estrelas nas janelas, quadro DON'T PANIC, cartaz "Já tentou desligar e ligar de novo?", placa 42, painel de ponte, toalha no gancho, plaquinha "Funciona na minha máquina", e no chão holograma, robozinhos, cupcake com bandeirinha SUDO, xícara de chá com estrelas, placa 42 e balões. A Sala da TI é a principal (`recipe.rich`: até 8 objetos de chão e 6 de parede). Itens de avatar `event:diati`: `ev.tee_answer` (camiseta 42), `ev.towel`, `ev.bridge_headset`, `ev.hacker_shades`, `ev.comm_badge`, `ev.alien_antennae`.

@@ -28,10 +28,10 @@ export interface Theme {
   wains: string;
   /** Moldings (chair rail, crown, window frames). */
   trim: string;
-  paper: 'stripe' | 'diamond' | 'plain' | 'acoustic';
+  paper: 'stripe' | 'diamond' | 'plain' | 'acoustic' | 'tech';
   door: string;
   /** Extra floor treatment: lit aisle, spot pools and entrance mat (auditorium). */
-  fx?: 'hall';
+  fx?: 'hall' | 'tech';
   /** `false` = no windows (windowless hall). */
   windows?: boolean;
 }
@@ -124,6 +124,18 @@ export const THEMES: Record<string, Theme> = {
     paper: 'stripe',
     door: '#3e2f4a',
   },
+  // IT room: dark carpet with LED strips, graphite metal panels with a cyan cove
+  ti: {
+    floorStyle: 'carpet',
+    floor: ['#252d44', '#202840', '#161c30'],
+    wallA: '#2a3350',
+    wallB: '#232b46',
+    wains: '#141a2c',
+    trim: '#9fb1d6',
+    paper: 'tech',
+    door: '#1d3b52',
+    fx: 'tech',
+  },
   // Focus space: deep blue carpet, soft cool walls
   focus: {
     floorStyle: 'carpet',
@@ -164,7 +176,7 @@ export function windowSpots(room: BuiltRoom, theme?: Theme): WindowSpot[] {
   const busyW = new Set<number>();
   for (const f of room.def.furniture) {
     // wall hangings, and tall pieces leaning on the wall (shelf, rack, fridge), would hide the window
-    const tall = f.kind === 'bookshelf' || f.kind === 'rack' || f.kind === 'fridge';
+    const tall = f.kind === 'bookshelf' || f.kind === 'rack' || f.kind === 'fridge' || f.kind === 'server_rack';
     if (!FURNI_KINDS[f.kind].wall && !tall) continue;
     // hangings: dir 0 = north wall, 1 = west wall. Floor pieces: furniFront 1 (+y) leans on the north wall, 0 (+x) on the west
     const north = FURNI_KINDS[f.kind].wall ? f.dir % 2 === 0 : furniFront(f) === 1;
@@ -278,6 +290,7 @@ export function renderFloor(room: BuiltRoom, theme: Theme): Layer {
       if (tx === 0) amt -= quant((1 - u / 0.5) * 0.13, px, py);
       let out = shadeRgb(c, amt);
       if (theme.fx === 'hall') out = hallFx(out, X, Y, px, py, W, H);
+      else if (theme.fx === 'tech') out = techFx(out, X, Y, px, py);
       // window light pools
       let beam = 0;
       for (const s of spots) {
@@ -417,6 +430,64 @@ function acousticPixel(side: 'n' | 'w', a: number, z: number): RGB {
   return shadeRgb(c, dk);
 }
 
+/** LED strips of the IT room floor: a path from the door, a loop around the command desk and the edges of the server aisle. */
+const LED_STRIPS: ReadonlyArray<readonly [number, number, number, number]> = [
+  [0.2, 5.5, 3.6, 5.5],
+  [3.6, 3.6, 9.4, 3.6],
+  [9.4, 3.6, 9.4, 7.6],
+  [9.4, 7.6, 3.6, 7.6],
+  [3.6, 7.6, 3.6, 3.6],
+  [9.4, 5.6, 17.6, 5.6],
+  [10.3, 1.12, 17.6, 1.12],
+  [10.3, 2.88, 17.6, 2.88],
+  [10.3, 1.12, 10.3, 2.88],
+];
+
+function techFx(c: RGB, X: number, Y: number, px: number, py: number): RGB {
+  let out = c;
+  let best = 9;
+  for (const [x0, y0, x1, y1] of LED_STRIPS) {
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const t = Math.max(0, Math.min(1, ((X - x0) * dx + (Y - y0) * dy) / (dx * dx + dy * dy)));
+    const d = Math.hypot(X - (x0 + dx * t), Y - (y0 + dy * t));
+    if (d < best) best = d;
+  }
+  if (best < 0.035) out = mixRgb(out, [170, 245, 255], 0.95);
+  else if (best < 0.07) out = mixRgb(out, [53, 216, 255], 0.7);
+  else if (best < 0.12) out = mixRgb(out, [40, 170, 230], 0.4);
+  else if (best < 0.2) out = mixRgb(out, [40, 170, 230], 0.16);
+  return out;
+}
+
+/** IT room wall: graphite metal panels, a cyan LED cove under the crown and a faint cable light near the floor panelling. */
+function techPixel(side: 'n' | 'w', a: number, z: number): RGB {
+  const H = WALL_H;
+  const dk = side === 'w' ? -0.1 : 0;
+  const cove: Record<number, RGB> = {
+    [H - 8]: [20, 26, 48],
+    [H - 9]: [60, 200, 245],
+    [H - 10]: [190, 245, 255],
+    [H - 11]: [60, 200, 245],
+    [H - 12]: [34, 80, 130],
+    [H - 13]: [26, 34, 62],
+  };
+  const cv = cove[z];
+  if (cv) return shadeRgb(cv, dk);
+  const mod = Math.floor(a / 32);
+  const pa = ((a % 32) + 32) % 32;
+  let c: RGB = mod % 2 === 0 ? [44, 54, 86] : [38, 47, 78];
+  if (pa === 0) c = shadeRgb(c, 0.16);
+  else if (pa === 31) c = shadeRgb(c, -0.3);
+  else if (pa === 16 && z % 8 < 4) c = shadeRgb(c, 0.06);
+  if (z === 39) c = shadeRgb(c, -0.3);
+  if (z === 40) c = [53, 216, 255];
+  else if (z === 41) c = mixRgb(c, [53, 216, 255], 0.3);
+  if (z < H - 13 && z > H - 28) c = mixRgb(c, [90, 200, 245], 0.14 * (1 - (H - 13 - z) / 15));
+  if (hash2(a, z, 6) < 0.05) c = shadeRgb(c, -0.05);
+  return shadeRgb(c, dk);
+}
+
 /** One pixel of the textured wall face: `a` px along the wall, `z` px above the floor. */
 function wallPixel(t: WallColors, side: 'n' | 'w', a: number, z: number): RGB {
   const H = WALL_H;
@@ -427,6 +498,7 @@ function wallPixel(t: WallColors, side: 'n' | 'w', a: number, z: number): RGB {
     amt += [0.32, 0.14, 0, -0.1, -0.2, -0.32][H - 1 - z];
   } else if (z >= 37) {
     if (t.style === 'acoustic') return acousticPixel(side, a, z);
+    if (t.style === 'tech') return techPixel(side, a, z);
     c = t.paperA;
     const ap = ((a % 16) + 16) % 16;
     const zp = z - 37;

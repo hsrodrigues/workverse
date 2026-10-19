@@ -146,6 +146,7 @@ registerDrawer('acc.ar', (c, it, e) =>
 
 registerDrawer('acc.backpack', (c, it, e) => {
   const col = it.t;
+  const tiBag = it.item.params?.accent === 'ti' ? '#27d9ff' : null;
   const body = () => {
     const { rig } = c;
     const bz = rig.bz;
@@ -183,10 +184,10 @@ registerDrawer('acc.backpack', (c, it, e) => {
       c.line(d[0], d[1], f[0], f[1], col.sh);
       const top = pt(-6, 14.4, -11.6);
       const top2 = pt(6, 14.4, -11.6);
-      c.line(top[0], top[1], top2[0], top2[1], col.sh);
+      c.line(top[0], top[1], top2[0], top2[1], tiBag ?? col.sh);
       const hb = pt(0, 14.4, -11.8);
-      c.px(hb[0], hb[1] + 1, '#d9c36a');
-      c.px(hb[0] + 1, hb[1] + 1, '#d9c36a');
+      c.px(hb[0], hb[1] + 1, tiBag ?? '#d9c36a');
+      c.px(hb[0] + 1, hb[1] + 1, tiBag ?? '#d9c36a');
       c.px(hb[0] - 1, hb[1] - 1, col.sh);
       c.px(hb[0] + 2, hb[1] - 1, col.sh);
       c.px(hb[0] - 4, hb[1] + 9, col.lt);

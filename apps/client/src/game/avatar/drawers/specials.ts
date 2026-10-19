@@ -189,6 +189,7 @@ registerDrawer('sp.cup', {
 
 registerDrawer('sp.badge', (c, it, e) => {
   const staff = it.item.params?.staff === true;
+  const tiCard = it.item.params?.ti === true;
   const strap = staff ? tonesOf('#d9a62e') : it.t;
   e.part(0.1, () => {
     if (c.back) {
@@ -200,7 +201,7 @@ registerDrawer('sp.badge', (c, it, e) => {
       return;
     }
     const card = torsoPoint(c, 0.0, 10.6, 0.9);
-    const w = Math.max(4, Math.round(7 * c.cs));
+    const w = tiCard ? Math.max(6, Math.round(9 * c.cs)) : Math.max(4, Math.round(7 * c.cs));
     const x0 = Math.round(card[0] - w / 2);
     const y0 = Math.round(card[1] - 4);
     // lanyard
@@ -215,6 +216,41 @@ registerDrawer('sp.badge', (c, it, e) => {
     // card: ink border, white body, color header, photo and text lines
     // the stripe takes the color of the person's sector (set by the scene); the staff badge keeps its gold
     const head = staff ? '#e0b030' : (renderExtras.stripe ?? it.hex);
+    if (tiCard) {
+      // IT badge: dark navy card with a neon cyan frame, circuit chip in the header, mini portrait and the letters TI
+      const H = 11;
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < w; x++) {
+          const edge = y === 0 || y === H - 1 || x === 0 || x === w - 1;
+          const corner = (y === 0 || y === H - 1) && (x === 0 || x === w - 1);
+          if (corner) continue;
+          c.px(x0 + x, y0 + y, edge ? '#27d9ff' : y < 3 ? head : '#0e1a33');
+        }
+      }
+      const mid2 = x0 + (w >> 1);
+      // chip: a tiny square with legs
+      for (const [dx, dy] of [[-1, 1], [0, 1], [1, 1], [-1, 2], [1, 2]] as const) c.px(mid2 + dx, y0 + dy, '#0b2a44');
+      c.px(mid2, y0 + 2, '#7aeaff');
+      // portrait
+      const pw2 = w >= 8 ? 3 : 2;
+      const px2 = mid2 - (pw2 >> 1);
+      for (let i = 0; i < pw2; i++) {
+        c.px(px2 + i, y0 + 3, c.hair.base);
+        c.px(px2 + i, y0 + 4, c.skinHex);
+        c.px(px2 + i, y0 + 5, c.skinHex);
+      }
+      c.px(px2, y0 + 4, '#2a2230');
+      if (pw2 === 3) c.px(px2 + 2, y0 + 4, '#2a2230');
+      // T and I, three pixels each
+      const tx = mid2 - 3;
+      for (const dx of [0, 1, 2]) c.px(tx + dx, y0 + 7, '#7aeaff');
+      c.px(tx + 1, y0 + 8, '#27d9ff');
+      c.px(tx + 1, y0 + 9, '#27d9ff');
+      for (const dx of [0, 1, 2]) c.px(tx + 4 + dx, y0 + 7, '#7aeaff');
+      c.px(tx + 5, y0 + 8, '#27d9ff');
+      for (const dx of [0, 1, 2]) c.px(tx + 4 + dx, y0 + 9, '#27d9ff');
+      return;
+    }
     for (let y = 0; y < 9; y++) {
       for (let x = 0; x < w; x++) {
         const edge = y === 0 || y === 8 || x === 0 || x === w - 1;

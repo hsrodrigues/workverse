@@ -77,6 +77,13 @@ interface Sortable {
 }
 
 /** Short signature of a layout, to version the textures that depend on it. */
+/** Stable 0..1 value from a string (blink offsets). */
+function hashStr(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return ((h >>> 0) % 1000) / 1000;
+}
+
 function layoutSig(list: readonly Furniture[]): string {
   let h = 5381;
   for (const f of list) for (const ch of `${f.id}${f.kind}${f.x},${f.y},${f.dir};`) h = ((h << 5) + h + ch.charCodeAt(0)) | 0;
@@ -606,6 +613,8 @@ export class WorldScene extends Phaser.Scene {
   private dayLight!: DayLighting;
   /** Decoracao de eventos (Halloween, Natal...): so visual, ver eventDecor.ts. */
   private eventDecor!: EventDecor;
+  /** Pieces with LEDs and live screens (IT room): two sprites each, swapped every few hundred ms (`on` = phase). */
+  private blinkers: Array<{ fa: FurniActor; period: number; offset: number; last: number }> = [];
   /** Room editor (ghost, selection, pointer capture); idle unless the UI turns the decorate mode on. */
   private furn!: FurnishLayer;
   /** Lit/unlit state of the furniture of the current room (the layout can be rebuilt without a new snapshot). */
@@ -848,6 +857,10 @@ export class WorldScene extends Phaser.Scene {
       this.furni.push(fa);
       if (f.kind === 'screen' || f.kind === 'tv_stand') this.screens.push(new StageScreen(this, f, () => img.depth + 1));
     }
+    const BLINK: Partial<Record<Furniture['kind'], number>> = { server_rack: 520, videowall: 1500, command_desk: 1100 };
+    this.blinkers = this.furni
+      .filter((fa) => BLINK[fa.f.kind])
+      .map((fa) => ({ fa, period: BLINK[fa.f.kind]!, offset: Math.floor(hashStr(fa.f.id) * 1000), last: 0 }));
     this.rebuildSortables();
     this.dayLight.load(built, theme, def.furniture, furniState, floor, walls, key);
     this.eventDecor.load(built, def.furniture, this.furniOn);
@@ -858,6 +871,16 @@ export class WorldScene extends Phaser.Scene {
     if (!this.built) return;
     this.buildStatic({ ...this.built.def, furniture }, this.furniOn);
     this.furn.refresh();
+  }
+
+  private blinkTick(now: number) {
+    for (const b of this.blinkers) {
+      const phase = Math.floor((now + b.offset) / b.period) % 2;
+      if (phase === b.last) continue;
+      b.last = phase;
+      const s = renderFurniture(b.fa.f, phase === 1);
+      b.fa.sprite.setTexture(this.canvasTexture(s.key, s.canvas));
+    }
   }
 
   private rebuildSortables() {
@@ -1053,6 +1076,7 @@ export class WorldScene extends Phaser.Scene {
     for (const s of this.screens) s.tick(performance.now());
     this.dayLight.tick(performance.now());
     this.eventDecor.tick(performance.now());
+    this.blinkTick(performance.now());
     this.marker.clear();
     if (this.markerAt) {
       const age = performance.now() - this.markerAt.born;

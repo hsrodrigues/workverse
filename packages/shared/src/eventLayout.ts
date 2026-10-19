@@ -87,7 +87,7 @@ function wallBusy(room: BuiltRoom): { n: Set<number>; w: Set<number> } {
   const n = new Set<number>();
   const w = new Set<number>();
   for (const f of room.def.furniture) {
-    const tall = f.kind === 'bookshelf' || f.kind === 'rack' || f.kind === 'fridge';
+    const tall = f.kind === 'bookshelf' || f.kind === 'rack' || f.kind === 'fridge' || f.kind === 'server_rack';
     const hangs = !!FURNI_KINDS[f.kind].wall;
     if (!hangs && !tall) continue;
     const north = hangs ? f.dir % 2 === 0 : furniFront(f) === 1;
@@ -99,7 +99,7 @@ function wallBusy(room: BuiltRoom): { n: Set<number>; w: Set<number> } {
   return { n, w };
 }
 
-export function planEventDecor(def: RoomDef, windows: readonly WallSlot[] = [], seed = 0): EventDecorPlan {
+export function planEventDecor(def: RoomDef, windows: readonly WallSlot[] = [], seed = 0, maxProps?: number): EventDecorPlan {
   const room = buildRoom(def);
   const { width, height, floor } = room.grid;
   const isFloor = (x: number, y: number) => x >= 0 && y >= 0 && x < width && y < height && floor[y * width + x];
@@ -145,7 +145,7 @@ export function planEventDecor(def: RoomDef, windows: readonly WallSlot[] = [], 
       .filter((s) => s.size > 0);
 
     const picked = new Set<number>();
-    const limit = maxDecorProps(base.size);
+    const limit = maxProps ?? maxDecorProps(base.size);
     for (const c of cands) {
       if (props.length >= limit) break;
       if (props.some((p) => Math.abs(p.x - c.x) < 2 && Math.abs(p.y - c.y) < 2)) continue;

@@ -53,7 +53,7 @@ function missingPoses(item: ItemDef): string[] {
 /** How to get a locked item: the origin from the catalog, and who to ask when it is handed out by the team. */
 function lockedText(item: ItemDef): string {
   const how = describeUnlock(item.unlock);
-  const ask = item.unlock === 'staff' || item.unlock.startsWith('event:') ? ' Peça a um administrador.' : '';
+  const ask = item.unlock === 'staff' || item.unlock.startsWith('event:') ? ' Peça a um administrador.' : item.unlock.startsWith('dept:') ? ' Libera para quem faz parte do setor.' : '';
   return `"${item.name}" está bloqueado. Como desbloquear: ${how}.${ask}`;
 }
 

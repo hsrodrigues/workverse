@@ -108,6 +108,13 @@ const CATEGORY_TABLE: Readonly<Partial<Record<FurniKind, FurniCategory>>> = {
   router: 'network',
   rack: 'network',
   cable_tray: 'network',
+  server_rack: 'network',
+  hardware_bench: 'network',
+  videowall: 'wall',
+  arch_board: 'wall',
+  command_desk: 'work',
+  ergo_chair: 'work',
+  espresso: 'kitchen',
   auditorium_seat: 'auditorium',
   stage: 'auditorium',
   podium: 'auditorium',
@@ -325,7 +332,7 @@ function friendly(raw: string): string {
 }
 
 function typeLabel(t: RoomType): string {
-  return ({ reception: 'recepção', team: 'sala de equipe', meeting: 'sala de reunião', private: 'sala privada', focus: 'sala de foco', lounge: 'lounge', auditorium: 'auditório', office: 'escritório' } as const)[t];
+  return ({ reception: 'recepção', team: 'sala de equipe', meeting: 'sala de reunião', private: 'sala privada', focus: 'sala de foco', lounge: 'lounge', auditorium: 'auditório', office: 'escritório', it: 'sala da TI' } as const)[t];
 }
 
 function walkChecks(base: RoomDef, pieces: Furniture[], f: { width: number; height: number; floor: boolean[] }, arrivals: Point[], errors: FurnishIssue[]) {

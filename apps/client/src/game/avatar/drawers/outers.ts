@@ -149,6 +149,7 @@ registerDrawer('outer.vest', {
   draw: (c, it, e) =>
     e.part(0.05, () => {
       const col = it.t;
+      const tiVest = it.item.params?.variant === 'ti';
       const hem = -1.6;
       MAIN.clear();
       torsoHull(c, MAIN, hem, 21.6, 0.5, 0.6);
@@ -162,8 +163,8 @@ registerDrawer('outer.vest', {
       surfLine(c, -1.45, hem + 0.8, 1.45, hem + 0.8, col.sh, 0.7);
       if (!c.back) {
         // V edge (piping), buttons and welt pockets
-        surfLine(c, -0.04, 8.2, -0.5, 22, col.lt, 1.2);
-        surfLine(c, 0.04, 8.2, 0.5, 22, col.lt, 1.2);
+        surfLine(c, -0.04, 8.2, -0.5, 22, tiVest ? '#27d9ff' : col.lt, 1.2);
+        surfLine(c, 0.04, 8.2, 0.5, 22, tiVest ? '#27d9ff' : col.lt, 1.2);
         surfLine(c, 0, 8.2, 0, hem + 0.8, col.sh, 0.9);
         for (const yy of [6.4, 3.4, 0.6]) {
           const p = torsoPoint(c, 0, yy, 0.9);
@@ -176,12 +177,21 @@ registerDrawer('outer.vest', {
         // tiny company pin on the chest
         const pin = torsoPoint(c, 0.62, 13.4, 1.0);
         if (pin[2] > 0.4) {
-          c.px(pin[0], pin[1], '#ffe27a');
-          c.px(pin[0] + 1, pin[1], '#c99a2e');
+          c.px(pin[0], pin[1], tiVest ? '#7aeaff' : '#ffe27a');
+          c.px(pin[0] + 1, pin[1], tiVest ? '#27d9ff' : '#c99a2e');
+          if (tiVest) {
+            c.px(pin[0], pin[1] - 1, '#27d9ff');
+            c.px(pin[0] + 1, pin[1] + 1, '#27d9ff');
+          }
         }
       } else {
         // back panel with adjuster strap and buckle
         surfLine(c, Math.PI - 0.8, 4.4, Math.PI + 0.8, 4.4, shade(col.base, -0.3), 0.7);
+        if (tiVest) {
+          // reflective cyan band across the back
+          surfLine(c, Math.PI - 1.2, 13.4, Math.PI + 1.2, 13.4, '#27d9ff', 0.7);
+          surfLine(c, Math.PI - 1.2, 12.4, Math.PI + 1.2, 12.4, '#c9f6ff', 0.7);
+        }
         const b = torsoPoint(c, Math.PI, 4.4, 0.7);
         if (b[2] > -0.2) c.px(b[0], b[1], '#c9ccd4');
       }

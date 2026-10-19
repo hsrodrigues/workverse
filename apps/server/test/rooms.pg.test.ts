@@ -14,7 +14,7 @@ afterAll(async () => {
 }, 60_000);
 
 let n = 0;
-roomsStoreContract('PgAccountStore (PostgreSQL real, migracoes 0005 e 0006)', async () => {
+roomsStoreContract('PgAccountStore (PostgreSQL real, migracoes 0005 a 0007)', async () => {
   if (!h) {
     // sem Postgres o contrato roda contra a memoria so para a suite nao quebrar; a prova real e o PG (ver skipIf abaixo)
     const store = new MemoryAccountStore();

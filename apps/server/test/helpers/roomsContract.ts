@@ -30,6 +30,8 @@ export function roomsStoreContract(label: string, make: () => Promise<RoomsHandl
       h.store.orgs.putRoomLayout({ orgId: 'orgA', roomId: 'lounge', version: 3, furniture, updatedBy: boss.id, updatedAt: 1000 });
       h.store.orgs.putRoomLayout({ orgId: 'orgA', roomId: 'office', version: 5, furniture: null, updatedBy: boss.id, updatedAt: 2000 });
       h.store.orgs.putRoomSetting({ orgId: 'orgA', roomId: 'meeting1', access: 'team', teamId: 'orgA-t', updatedBy: boss.id, updatedAt: 3000 });
+      h.store.orgs.putRoomSetting({ orgId: 'orgA', roomId: 'ti', access: 'invited', teamId: null, passTeamIds: ['orgA-t', 'orgA-u'], updatedBy: boss.id, updatedAt: 3100 });
+      h.store.orgs.putRoomSetting({ orgId: 'orgA', roomId: 'meeting2', access: 'invited', teamId: null, passTeamIds: [], updatedBy: boss.id, updatedAt: 3200 });
       h.store.orgs.putRoomInvite({ orgId: 'orgA', roomId: 'private', accountId: ana.id, invitedBy: boss.id, createdAt: 4000, expiresAt: 9000 });
       h.store.orgs.putRoomInvite({ orgId: 'orgA', roomId: 'meeting2', accountId: ana.id, invitedBy: boss.id, createdAt: 4000, expiresAt: null });
       await h.settle();
@@ -38,6 +40,10 @@ export function roomsStoreContract(label: string, make: () => Promise<RoomsHandl
       expect(again.orgs.getRoomLayout('orgA', 'lounge')).toEqual({ orgId: 'orgA', roomId: 'lounge', version: 3, furniture, updatedBy: boss.id, updatedAt: 1000 });
       expect(again.orgs.getRoomLayout('orgA', 'office')).toMatchObject({ version: 5, furniture: null });
       expect(again.orgs.getRoomSetting('orgA', 'meeting1')).toMatchObject({ access: 'team', teamId: 'orgA-t' });
+      // equipes que passam com a sala trancada: ausente = padrao da sala, [] = ninguem, lista = essas
+      expect(again.orgs.getRoomSetting('orgA', 'meeting1')?.passTeamIds ?? null).toBeNull();
+      expect(again.orgs.getRoomSetting('orgA', 'ti')?.passTeamIds).toEqual(['orgA-t', 'orgA-u']);
+      expect(again.orgs.getRoomSetting('orgA', 'meeting2')?.passTeamIds).toEqual([]);
       expect(again.orgs.getRoomInvite('orgA', 'private', ana.id)).toMatchObject({ invitedBy: boss.id, createdAt: 4000, expiresAt: 9000 });
       expect(again.orgs.getRoomInvite('orgA', 'meeting2', ana.id)?.expiresAt).toBeNull();
       // nothing leaks into the other organization

@@ -127,6 +127,16 @@ const modernos: Furniture[] = [
   { id: 'tvs0', kind: 'tv_stand', x: 0, y: 0, dir: 0 },
   { id: 'tvs1', kind: 'tv_stand', x: 0, y: 0, dir: 1 },
   { id: 'tvs2', kind: 'tv_stand', x: 0, y: 0, dir: 2 },
+  { id: 'ti1', kind: 'server_rack', x: 0, y: 0, dir: 1 },
+  { id: 'ti2', kind: 'server_rack', x: 1, y: 0, dir: 1 },
+  { id: 'ti3', kind: 'command_desk', x: 0, y: 0, dir: 0 },
+  { id: 'ti4', kind: 'command_desk', x: 0, y: 0, dir: 1 },
+  { id: 'ti5', kind: 'command_desk', x: 0, y: 0, dir: 3 },
+  { id: 'ti6', kind: 'ergo_chair', x: 0, y: 0, dir: 1 },
+  { id: 'ti7', kind: 'videowall', x: 0, y: 0, dir: 0 },
+  { id: 'ti8', kind: 'arch_board', x: 0, y: 0, dir: 0 },
+  { id: 'ti9', kind: 'hardware_bench', x: 0, y: 0, dir: 0 },
+  { id: 'ti10', kind: 'espresso', x: 0, y: 0, dir: 0 },
 ];
 for (const f of modernos) show(trimmed(renderFurniture(f).canvas), 3, `fu-${f.id}`);
 

@@ -418,7 +418,7 @@ const STYLE_OF: Readonly<Record<string, number>> = {
   'shoes.sneakers': 0, 'shoes.runner': 0, 'shoes.hightop': 3, 'shoes.dress': 1, 'shoes.loafer': 1, 'shoes.boots': 2,
   'top.tee': 0, 'top.tank': 0, 'top.striped': 0, 'top.wv': 0, 'top.shirt': 1, 'top.hoodie': 2, 'outer.blazer': 3, 'top.polo': 4, 'top.sweater': 5,
   'hair.short': 0, 'hair.long': 1, 'hair.spiky': 2, 'hair.bun': 3, 'hair.bald': 4, 'hair.afro': 5, 'hair.ponytail': 6, 'hair.bob': 7, 'hair.pompadour': 8,
-  'top.plaid': 1, 'top.turtleneck': 6, 'top.longsleeve': 0, 'top.vneck': 7, 'top.henley': 8, 'top.print_bolt': 0, 'top.print_heart': 0, 'top.baseball': 0, 'top.jersey': 7, 'top.sweatshirt': 9, 'top.rugby': 4, 'top.hoodie_zip': 2, 'staff.shirt': 1, 'staff.shoes': 1,
+  'top.plaid': 1, 'top.turtleneck': 6, 'top.longsleeve': 0, 'top.vneck': 7, 'top.henley': 8, 'top.print_bolt': 0, 'top.print_heart': 0, 'top.baseball': 0, 'top.jersey': 7, 'ev.tee_answer': 0, 'ti.polo': 4, 'ti.tee': 0, 'ti.cargo': 4, 'top.sweatshirt': 9, 'top.rugby': 4, 'top.hoodie_zip': 2, 'staff.shirt': 1, 'staff.shoes': 1,
   'acc.snapback': 3,
   'acc.glasses': 1, 'acc.glasses_round': 1, 'acc.headset': 2, 'acc.cap': 3, 'acc.sunglasses': 4, 'acc.beanie': 5, 'acc.headphones': 6,
 };
@@ -685,7 +685,7 @@ export function drawLegPart(c: Ctx2, i: 0 | 1, bt: Resolved) {
       // outer seam
       const s0 = limbPt(hipS, knS, 0.12, sideO * 0.78, rT0);
       const s1 = limbPt(hipS, knS, 0.96, sideO * 0.7, rT1);
-      c.line(s0[0], s0[1], s1[0], s1[1], bt.item.id === 'bottom.jeans' ? mix(col.base, '#e0b060', 0.7) : col.lt);
+      c.line(s0[0], s0[1], s1[0], s1[1], bt.item.params?.accent === 'ti' ? '#27d9ff' : bt.item.id === 'bottom.jeans' ? mix(col.base, '#e0b060', 0.7) : col.lt);
       // knee creases
       const k0 = limbPt(hipS, knS, 1.02, -0.7, rT1);
       const k1 = limbPt(hipS, knS, 1.02, 0.5, rT1);
@@ -693,7 +693,7 @@ export function drawLegPart(c: Ctx2, i: 0 | 1, bt: Resolved) {
       // cuff
       const c0 = limbPt(knS, anS, 0.8, -0.95, rS1);
       const c1 = limbPt(knS, anS, 0.8, 0.95, rS1);
-      c.line(c0[0], c0[1], c1[0], c1[1], style === 3 || bt.item.id === 'bottom.jeans' ? col.lt : col.sh);
+      c.line(c0[0], c0[1], c1[0], c1[1], bt.item.params?.accent === 'ti' ? '#27d9ff' : style === 3 || bt.item.id === 'bottom.jeans' ? col.lt : col.sh);
       if (style === 3) {
         // pressed crease down the front
         const f0 = limbPt(hipS, knS, 0.15, 0.05, rT0);
@@ -711,8 +711,8 @@ export function drawLegPart(c: Ctx2, i: 0 | 1, bt: Resolved) {
         c.line(p0[0], p0[1], p2[0], p2[1], col.sh);
         c.line(p1[0], p1[1], p3[0], p3[1], col.sh);
         c.line(p2[0], p2[1], p3[0], p3[1], col.sh);
-        c.px(p0[0] + 1, p0[1] + 1, col.lt);
-        c.px(p1[0] - 1, p1[1] + 1, col.lt);
+        c.px(p0[0] + 1, p0[1] + 1, bt.item.params?.accent === 'ti' ? '#27d9ff' : col.lt);
+        c.px(p1[0] - 1, p1[1] + 1, bt.item.params?.accent === 'ti' ? '#27d9ff' : col.lt);
       }
     }
     if (style === 1) {
@@ -747,7 +747,8 @@ export function drawShoe(c: Ctx2, i: 0 | 1, st: Resolved) {
   const heel = c.Pv(rot(-2.4, -2.6));
   const toe = c.Pv(rot(5.4, -2.8));
   const ankleTop = c.Pv(rot(-0.6, 1.8));
-  const sole = style === 1 ? '#171520' : style === 2 ? '#241a18' : '#f2efe8';
+  const tiShoe = st.item.params?.accent === 'ti';
+  const sole = tiShoe ? '#27d9ff' : style === 1 ? '#171520' : style === 2 ? '#241a18' : '#f2efe8';
   const upper = style === 1 ? tonesOf(shade(st.hex, -0.12)) : st.t;
   const soleT = tonesOf(sole);
 
@@ -814,9 +815,9 @@ export function drawShoe(c: Ctx2, i: 0 | 1, st: Resolved) {
       c.line(t[0] - 2, t[1] - 1, t[0] + 2, t[1] - 1, lt);
     }
   }
-  if (st.item.id === 'shoes.runner') {
+  if (st.item.id === 'shoes.runner' || tiShoe) {
     // contrast swoosh along the side and a coloured heel tab
-    const sw = tonesOf('#f6f3ec');
+    const sw = tonesOf(tiShoe ? '#27d9ff' : '#f6f3ec');
     for (const t of [0.3, 0.42, 0.54, 0.66]) {
       const p = along(t, 0.5 - t * 1.2);
       c.px(p[0], p[1] - 1, sw.base);
@@ -1012,6 +1013,9 @@ const GLYPHS: Record<string, readonly string[]> = {
   bolt: ['....##', '...##.', '..##..', '.#####', '...##.', '..##..', '..#...'],
   '1': ['.#.', '##.', '.#.', '.#.', '###'],
   '0': ['###', '#.#', '#.#', '#.#', '###'],
+  '4': ['#.#', '#.#', '###', '..#', '..#'],
+  chip: ['.#.#.', '#####', '##.##', '#####', '.#.#.'],
+  '2': ['##.', '..#', '.#.', '#..', '###'],
 };
 
 /** Paints a small bitmap (rows of '#') centered on a screen point, scaled by whole pixels. */
@@ -1036,6 +1040,12 @@ function topExtras(c: Ctx2, it: Resolved) {
     if (p[2] > 0.4) {
       if (print === 'heart') {
         stamp(c, GLYPHS.heart, p[0], p[1], (x, y) => (x + y <= 2 ? '#ff9aa8' : y >= 4 || x >= 5 ? '#b02a45' : '#e8485a'));
+      } else if (print === 'n42') {
+        // the 42 of the IT day: cyan digits with a dark shadow
+        for (const [g, dx] of [['4', -2.2], ['2', 2.2]] as const) {
+          stamp(c, GLYPHS[g], p[0] + dx + 0.5, p[1] + 0.5, () => '#0b2a44');
+          stamp(c, GLYPHS[g], p[0] + dx, p[1], (x, y) => (x + y <= 1 ? '#c9f6ff' : '#27d9ff'));
+        }
       } else {
         stamp(c, GLYPHS.bolt, p[0], p[1], (x, y) => (x + y <= 3 ? '#fff1a0' : x - y >= 1 && y >= 4 ? '#c98a12' : '#ffd23a'));
       }
@@ -1090,6 +1100,16 @@ function topExtras(c: Ctx2, it: Resolved) {
       }
     }
     surfLine(c, -1.45, -1.4, 1.45, -1.4, '#d9b24a', 0.35);
+  }
+  if (variant === 'ti') {
+    // IT sector: cyan stripes down the sides, a small circuit-chip logo on the chest and a cyan yoke line on the back
+    for (const sg of SIDE) surfLine(c, sg * 1.28, 19.4, sg * 1.22, -1.4, '#27d9ff', 0.35);
+    if (front) {
+      const q = torsoPoint(c, 0.62, 14.4, 0.7);
+      if (q[2] > 0.3) stamp(c, GLYPHS.chip, q[0], q[1], (x, y) => (x === 2 && y === 2 ? '#0b2a44' : y === 0 || y === 4 || x === 0 || x === 4 ? '#27d9ff' : '#7aeaff'));
+    } else {
+      surfLine(c, Math.PI - 1.1, 19.6, Math.PI + 1.1, 19.6, '#27d9ff', 0.4);
+    }
   }
   if (variant === 'rugby' && front) {
     // two-button placket under the white collar

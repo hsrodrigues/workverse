@@ -17,7 +17,8 @@ export type EventId =
   | 'criancas'
   | 'trabalho'
   | 'aniversario'
-  | 'blackfriday';
+  | 'blackfriday'
+  | 'diati';
 
 /** Como o dia "ancora" do evento e calculado em um ano. */
 export type DateRule =
@@ -158,6 +159,16 @@ export const EVENT_DEFS: readonly EventDef[] = [
     after: 3,
     priority: 55,
     theme: { primary: '#7a5af0', secondary: '#ffc83d', accent: '#ff6fa8', tint: [250, 244, 255], glow: [255, 220, 120] },
+  },
+  {
+    id: 'diati',
+    name: 'Dia do Profissional de TI',
+    blurb: "Ponte de comando, hologramas, robozinhos, DON'T PANIC, o número 42 e neon azul, ciano e verde-matriz (a Sala da TI vira o palco).",
+    rule: { kind: 'fixed', month: 10, day: 19 },
+    before: 1,
+    after: 1,
+    priority: 66,
+    theme: { primary: '#27d9ff', secondary: '#2a6bff', accent: '#39ff88', tint: [226, 240, 255], glow: [60, 210, 255] },
   },
   {
     id: 'blackfriday',

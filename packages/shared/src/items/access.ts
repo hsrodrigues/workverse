@@ -26,6 +26,25 @@ export function accessOf(item: ItemDef, ctx: AccessContext): Access {
   return 'locked';
 }
 
+/** Nome de setor sem acento, caixa e espacos repetidos (comparacao do setor "TI" e do desbloqueio `dept:`). */
+export const normDeptName = (s: string): string =>
+  s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+
+/** Setores com desbloqueio proprio (`dept:<id>`): nomes normalizados que valem como esse setor. */
+export const DEPT_UNLOCK_NAMES: Readonly<Record<string, readonly string[]>> = { ti: ['ti', 'tecnologia da informacao'] };
+
+/** Chave de desbloqueio (`dept:ti`) do setor com esse nome, ou null quando o setor nao tem itens exclusivos. */
+export function deptUnlockKeyOf(teamName: string): string | null {
+  const n = normDeptName(teamName);
+  for (const [id, names] of Object.entries(DEPT_UNLOCK_NAMES)) if (names.includes(n)) return `dept:${id}`;
+  return null;
+}
+
 export const UNLOCK_LABELS: Readonly<Record<string, string>> = {
   free: 'Gratuito',
   staff: 'Equipe WorkVerse',
@@ -36,12 +55,15 @@ export const UNLOCK_LABELS: Readonly<Record<string, string>> = {
   'achievement:top-collaborator': 'Conquista: Colaborador destaque',
   'event:aniversario': 'Evento: Aniversário do WorkVerse',
   'event:natal': 'Evento: Natal',
+  'event:diati': 'Evento: Dia do Profissional de TI',
+  'dept:ti': 'Exclusivo do setor TI',
 };
 
 export function describeUnlock(unlock: Unlock): string {
   if (UNLOCK_LABELS[unlock]) return UNLOCK_LABELS[unlock];
   if (unlock.startsWith('achievement:')) return `Conquista: ${unlock.slice(12)}`;
   if (unlock.startsWith('event:')) return `Evento: ${unlock.slice(6)}`;
+  if (unlock.startsWith('dept:')) return `Exclusivo do setor ${unlock.slice(5).toUpperCase()}`;
   return unlock;
 }
 

@@ -187,6 +187,7 @@ const LANYARD: PaletteColor[] = [
   c('purple', 'Roxo', '#6a55c8', 'cor'),
   c('black', 'Preto', '#2b2f3a', 'escuro'),
   c('gold', 'Dourado', '#e0b43c', 'metal'),
+  c('cyan', 'Ciano', '#27d9ff', 'cor'),
 ];
 
 const DEVICE: PaletteColor[] = [

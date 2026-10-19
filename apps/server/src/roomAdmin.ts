@@ -204,7 +204,7 @@ export class RoomAdmin {
       const by = this.host.store.getById(r.invitedBy);
       return { accountId: r.accountId, name: acc?.displayName ?? '?', ...(acc ? { email: acc.email } : {}), invitedBy: by?.displayName ?? '—', createdAt: r.createdAt, expiresAt: r.expiresAt };
     });
-    return { t: 'room_access', roomId: room.id, access: roomAccessOf(def), teamId: def.accessTeamId ?? null, invites, teams: this.teamsOf(orgId) };
+    return { t: 'room_access', roomId: room.id, access: roomAccessOf(def), teamId: def.accessTeamId ?? null, invites, teams: this.teamsOf(orgId), passTeamIds: this.host.roomConfig.passTeamIds(orgId, room.id), passIsDefault: this.host.roomConfig.passIsDefault(orgId, room.id) };
   }
 
   private accessGet(p: Player, roomId: string, now: number) {
@@ -227,6 +227,7 @@ export class RoomAdmin {
   private accessSet(p: Player, msg: Extract<ClientMessage, { t: 'room_access_set' }>, now: number): boolean {
     if (!isInt(msg.rid) || !isStr(msg.roomId) || !isRoomAccess(msg.access)) return false;
     if (msg.teamId !== undefined && msg.teamId !== null && !isStr(msg.teamId, 80)) return false;
+    if (msg.passTeamIds !== undefined && (!Array.isArray(msg.passTeamIds) || msg.passTeamIds.length > 20 || !msg.passTeamIds.every((x) => isStr(x, 80)))) return false;
     if (!this.gate(p, msg.rid, now)) return true;
     const room = this.roomOf(p, msg.roomId);
     if (!room) return this.accessFail(p, msg.rid, 'no_room', 'Sala não encontrada.'), true;
@@ -240,16 +241,24 @@ export class RoomAdmin {
       if (!team || team.orgId !== p.orgId) return this.accessFail(p, msg.rid, 'bad_team', 'Escolha uma equipe da organização.'), true;
       teamId = team.id;
     }
-    this.applyAccess(p.orgId, room, msg.access, teamId, p.accountId, now);
-    this.audit(p, 'room.access', room.id, room.built.def.name, `${msg.access}${teamId ? `; equipe ${teamId}` : ''}`);
+    // teams that pass through the lock: only teams of THIS organization (anything else is simply "not found")
+    let passTeamIds: string[] | undefined;
+    if (msg.passTeamIds !== undefined) {
+      const mine = new Set(this.host.store.orgs.teamsOf(p.orgId).filter((t) => t.orgId === p.orgId).map((t) => t.id));
+      if (!msg.passTeamIds.every((id) => mine.has(id))) return this.accessFail(p, msg.rid, 'bad_team', 'Escolha equipes da organização.'), true;
+      passTeamIds = [...new Set(msg.passTeamIds)];
+    }
+    this.applyAccess(p.orgId, room, msg.access, teamId, p.accountId, now, passTeamIds);
+    this.audit(p, 'room.access', room.id, room.built.def.name, `${msg.access}${teamId ? `; equipe ${teamId}` : ''}${passTeamIds ? `; passam trancada: ${passTeamIds.join(',') || 'ninguém'}` : ''}`);
     p.send({ t: 'room_access_result', rid: msg.rid, ok: true });
     p.send(this.accessView(p.orgId, room, now));
     return true;
   }
 
   /** Stores and applies a policy, then removes whoever no longer qualifies and refreshes everybody's list of rooms. */
-  applyAccess(orgId: string, room: RoomInstance, access: RoomAccess, teamId: string | null, by: string, now: number) {
-    this.host.store.orgs.putRoomSetting({ orgId, roomId: room.id, access, teamId, updatedBy: by, updatedAt: now });
+  applyAccess(orgId: string, room: RoomInstance, access: RoomAccess, teamId: string | null, by: string, now: number, passTeamIds?: string[]) {
+    const prev = this.host.store.orgs.getRoomSetting(orgId, room.id);
+    this.host.store.orgs.putRoomSetting({ orgId, roomId: room.id, access, teamId, passTeamIds: passTeamIds ?? prev?.passTeamIds ?? null, updatedBy: by, updatedAt: now });
     room.built = { ...room.built, def: { ...room.built.def, access, accessTeamId: teamId } };
     this.enforceRoom(orgId, room);
     for (const q of this.host.players(orgId)) this.host.sendRooms(q);

@@ -54,7 +54,7 @@ corporativas ficam integradas a ele.
 
 **Mundo isométrico**
 - Cargo e setor por pessoa (pílula do setor sobre o avatar, ficha/crachá ao clicar) e uma atendente na recepção que encontra colegas por setor e nome ([docs/directory.md](docs/directory.md)).
-- 9 salas (recepção, escritório, copa, auditório, equipe, duas de reunião, privada e concentração) ligadas por portas com placas.
+- 10 salas (recepção, escritório, copa, auditório, equipe, duas de reunião, privada, concentração e Sala da TI) ligadas por portas com placas.
 - Clique no chão para andar: caminho por A\* validado no servidor, animação por direção e profundidade correta (avatares passam na frente e atrás dos móveis).
 - Sentar em cadeiras e sofás; **sentar num computador mostra "trabalhando"**; pegar café ou água e ver a caneca na mão.
 - **Ciclo de dia real**: a iluminação e o céu das janelas seguem o horário do seu computador.

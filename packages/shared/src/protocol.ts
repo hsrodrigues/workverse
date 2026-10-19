@@ -134,7 +134,7 @@ export type ClientMessage =
   /** Back to the original layout of the room. */
   | { t: 'furnish_reset'; rid: number; base: number }
   | { t: 'room_access_get'; roomId: string }
-  | { t: 'room_access_set'; rid: number; roomId: string; access: RoomAccess; teamId?: string | null }
+  | { t: 'room_access_set'; rid: number; roomId: string; access: RoomAccess; teamId?: string | null; /** Equipes que passam mesmo com a sala trancada; ausente = nao muda. */ passTeamIds?: string[] }
   /** `who` is a display name or an e-mail of a member of the organization; `hours` 0 = no expiry (default 72). */
   | { t: 'room_invite_add'; rid: number; roomId: string; who: string; hours?: number }
   | { t: 'room_invite_remove'; rid: number; roomId: string; accountId: string }
@@ -198,7 +198,7 @@ export type ServerMessage =
   /** The rooms the person may see in the browser (padlock on restricted ones); resent when access changes. */
   | { t: 'rooms'; rooms: RoomListEntry[] }
   /** Access policy of a room and its invitations (answer of `room_access_get`, and pushed to admins when it changes). */
-  | { t: 'room_access'; roomId: string; access: RoomAccess; teamId: string | null; invites: RoomInviteView[]; teams: Array<{ id: string; name: string }> }
+  | { t: 'room_access'; roomId: string; access: RoomAccess; teamId: string | null; invites: RoomInviteView[]; teams: Array<{ id: string; name: string }>; /** Equipes que passam mesmo trancada (ids) e se vem do padrao da sala. */ passTeamIds?: string[]; passIsDefault?: boolean }
   | { t: 'room_access_result'; rid: number; ok: boolean; code?: string; message?: string }
   /** Events (Halloween, Natal...) active now for everybody, plus the staff's manual overrides. Sent on login and on every change. */
   | ({ t: 'events' } & EventsView)

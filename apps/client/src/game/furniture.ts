@@ -15,6 +15,7 @@ import {
   type Ctx,
   type Pt,
 } from './pixel';
+import { TECH_BUILDERS } from './furnitureTech';
 
 /**
  * Procedural furniture. Each kind returns boxes in footprint tile-space; the
@@ -42,7 +43,7 @@ export interface FurniSprite {
 
 type Painter = (ctx: Ctx, ox: number, oy: number) => void;
 
-interface Parts {
+export interface Parts {
   boxes: Box[];
   front?: Box[];
   /** Painted on the floor before the shadow and boxes (rugs, light pools). */
@@ -60,7 +61,7 @@ interface Parts {
 const METAL = '#2b2f3a';
 const LEAF: readonly [string, string, string, string] = ['#97e583', '#58bc60', '#3b9150', '#2a6a3e'];
 
-type Builder = (fw: number, fd: number, f: Furniture, on: boolean) => Parts;
+export type Builder = (fw: number, fd: number, f: Furniture, on: boolean) => Parts;
 
 /** Stable per-position variation (colours, dual monitors) so neighbours differ but a reload looks the same. */
 const seatVariant = (f: Furniture) => Math.floor(hash2(f.x, f.y, 31) * 3);
@@ -1607,6 +1608,61 @@ const BUILDERS: Record<FurniKind, Builder> = {
   },
 
   tv_stand: (fw, fd, f, on) => tvStand(fw, fd, f, on),
+
+  // ---- IT room (Sala da TI): the rest lives in furnitureTech.ts
+  ...TECH_BUILDERS,
+  ergo_chair: (_fw, _fd, f) => chairParts(f, '#2c4a78', '#1d2f52', 9),
+  espresso: (fw, fd, f, on) => {
+    const alongX = fw >= fd;
+    const side: 'n' | 'w' = alongX ? 'n' : 'w';
+    const cab = cabinet(fw, fd, false, side, isBack(f));
+    const L = alongX ? fw : fd;
+    const mk = (l0: number, l1: number, s0: number, s1: number, z: number, h: number, top: string, left?: string, right?: string, extra: Partial<Box> = {}): Box =>
+      alongX ? { x: l0, y: s0, w: l1 - l0, d: s1 - s0, z, h, top, left, right, ...extra } : { x: s0, y: l0, w: s1 - s0, d: l1 - l0, z, h, top, left, right, ...extra };
+    const body = withDetail(mk(0.12, 1.02, 0.2, 0.8, CT, 22, '#d9dde6', '#aab0be', '#6f7686'), isBack(f) ? rearPanel(side, '#9aa0ae') : (ctx, ox, oy, b) => {
+      const p = boxPlane(ctx, ox, oy, b, side);
+      const W = Math.round((alongX ? b.w : b.d) * 32);
+      const t = (c: string) => tone(side, c);
+      // chrome shell, dark control strip, two group heads with drip tray and a pressure gauge
+      p.rect(0, W, 0, 22, t('#c4c9d4'));
+      p.rect(0, 2, 0, 22, t('#eef1f6'));
+      p.rect(W - 2, W, 0, 22, t('#7c8394'));
+      p.rect(2, W - 2, 15, 20, t('#12151d'));
+      p.rect(4, 9, 16, 19, t('#2a3c58'));
+      p.rect(5, 8, 17, 18, '#35d8ff');
+      p.rect(W - 9, W - 4, 16, 19, t('#242a38'));
+      p.px(W - 7, 17, on ? '#58e08a' : '#e04848');
+      for (const a of [6, W - 11]) {
+        p.rect(a, a + 5, 8, 14, t('#2b2f3a'));
+        p.rect(a + 1, a + 4, 5, 8, t('#8f94a0'));
+        if (on) p.rect(a + 2, a + 3, 1, 5, '#6b4423');
+      }
+      p.rect(2, W - 2, 1, 4, t('#3a3f4c'));
+      for (let a = 3; a < W - 3; a += 2) p.px(a, 2, t('#14161d'));
+    });
+    const grinder = withDetail(mk(1.18, 1.52, 0.28, 0.72, CT, 16, '#2a2f3c', '#1c212c', '#12151d'), (ctx, ox, oy, b) => {
+      const p = boxPlane(ctx, ox, oy, b, side);
+      const W = Math.round((alongX ? b.w : b.d) * 32);
+      p.rect(2, W - 2, 3, 6, tone(side, '#8f94a0'));
+      p.rect(3, W - 3, 8, 11, tone(side, '#14161d'));
+      p.px(W - 4, 9, '#ffb347');
+    });
+    const hopper = mk(1.22, 1.48, 0.34, 0.66, CT + 16, 9, '#8a5a2c', '#6b4423', '#4a2f17', { noOutline: true });
+    const cups = mk(0.2, 0.4, 0.34, 0.56, CT + 22, 4, '#ffffff', '#e8e8e8', '#b8bcc6');
+    const rail = mk(0.1, 1.04, 0.2, 0.8, CT + 22, 2, '#8f94a0', '#aeb4c0', '#59606e', { noOutline: true });
+    return {
+      z1: CT + 26,
+      shadow: cab.shadow,
+      boxes: [...cab.boxes, body, grinder, hopper, rail, cups],
+      post: (ctx, ox, oy) => {
+        if (!on) return;
+        const [cx, cy] = project(ox, oy, alongX ? 0.5 : 0.5 + 0.3, alongX ? 0.5 + 0.3 : 0.5, CT + 12);
+        ctx.fillStyle = 'rgba(255,255,255,0.55)';
+        for (const [dx, dy] of [[0, 0], [1, -2], [-1, -4], [0, -6]]) ctx.fillRect(cx + dx, cy + dy, 1, 2);
+        void L;
+      },
+    };
+  },
 };
 
 const cache = new Map<string, FurniSprite>();

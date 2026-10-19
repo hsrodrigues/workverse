@@ -35,6 +35,8 @@ export interface Resource {
   roomTeamId?: string | null;
   /** The actor holds a live invitation to the room (`invited` / `private` rooms). */
   invited?: boolean;
+  /** The actor's team is one the room lets through even when it is locked (see roomConfig.passTeamIds). */
+  passTeam?: boolean;
   // dm.send
   sameRoom?: boolean;
   sameTeam?: boolean;
@@ -108,6 +110,8 @@ function roomAccessDecision(actor: Actor, resource: Resource): Decision {
   const access = resource.roomAccess ?? 'org';
   if (access === 'org') return ALLOW;
   if (actor.role === 'owner' || actor.role === 'admin') return ALLOW;
+  // a team the room always lets through (e.g. IT into the IT room); guests were already refused for rooms closed to guests
+  if (resource.passTeam === true) return ALLOW;
   if (access === 'team') return actor.teamId && actor.teamId === resource.roomTeamId ? ALLOW : deny('room_team');
   return resource.invited === true ? ALLOW : deny('room_invite');
 }

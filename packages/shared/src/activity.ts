@@ -19,9 +19,13 @@ export const heldOf = (a: Activity): HeldItem | null => (a.startsWith('holding:'
 /** How long a cup stays in the hand if nobody drops it. */
 export const HOLD_MS = 25_000;
 
+/** Pieces a seat can face to count as a workstation (the avatar types): PCs, the IT command desk and the hardware bench. */
+export const WORKSTATION_KINDS: readonly FurniKind[] = ['computer', 'command_desk', 'hardware_bench'];
+
 /** Furniture that hands out an item when used (the kind must also be `usable`). */
 export const FURNI_HOLDS: Partial<Record<FurniKind, HeldItem>> = {
   coffee: 'coffee',
+  espresso: 'coffee',
   cooler: 'water',
   fridge: 'water',
 };

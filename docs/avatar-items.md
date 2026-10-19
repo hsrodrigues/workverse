@@ -62,3 +62,6 @@ Detalhes da solução, arquivos e pendências nas seções seguintes (preenchida
 ## 6. Pernas
 
 Em pé as pernas são retas e paralelas (pés logo abaixo dos quadris, pontas para a frente do corpo, joelho quase sem dobra).
+
+## Uniforme exclusivo da TI (`ti.*`) e desbloqueio por setor
+Novo tipo de desbloqueio `dept:<setor>` (hoje `dept:ti`). O servidor calcula a chave a partir do vínculo ATUAL da conta: membro ativo (não visitante) de uma equipe/setor cujo nome normalizado é "TI" em qualquer organização dela (`setDeptKeysProvider` em `wardrobe.ts`); não se concede por `unlocks` manual (a staff concede item a item com `item:<id>`). Os itens aparecem no editor para todos, bloqueados ("Exclusivo do setor TI") para os demais. Quem sai do setor perde a liberação para novas trocas, mas quem já VESTE o item o mantém (mesma regra dos itens de evento). Set: `ti.polo`, `ti.tee`, `ti.vest`, `ti.cargo`, `ti.sneakers`, `ti.backpack`, `ti.headset` e o crachá `ti.badge` (slot `badge`, mini-retrato e faixa do setor). Limite: quem administra a própria organização pode nomear uma equipe "TI".

@@ -1,5 +1,6 @@
 import { PALETTES } from './palettes';
 import { EVENT_ITEMS } from './eventItems';
+import { TI_ITEMS } from './tiItems';
 import type { ItemCategory, ItemDef, ItemSlot, PaletteId, Pose, PoseMode, ThumbFocus } from './types';
 
 /**
@@ -419,6 +420,7 @@ export const ITEMS: readonly ItemDef[] = [
     thumb: 'feet',
   }),
   ...EVENT_ITEMS,
+  ...TI_ITEMS,
 
   // ---- WorkVerse staff set (black and gold; every piece is `staff`-locked and legendary) ----------------------------------------
   top('staff.shirt', 'Camisa da equipe', 'Camisa preta de gola dourada e botões de ouro, do uniforme da equipe WorkVerse.', 'top.shirt', ['staff', 'corporate', 'uniform', 'desbloqueável'], {

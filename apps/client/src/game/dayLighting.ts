@@ -131,7 +131,7 @@ function glowCanvas(w: number, h: number, color: RGB, power = 1.7, banded = fals
   return canvas;
 }
 
-type GlowKind = 'ceilPool' | 'ceilPoolL' | 'lampPool' | 'lampHead' | 'screen' | 'tvPool' | 'spotRed' | 'spotBlue' | 'spotGold';
+type GlowKind = 'ceilPool' | 'ceilPoolL' | 'lampPool' | 'lampHead' | 'screen' | 'tvPool' | 'cyanPool' | 'cyanSpot' | 'spotRed' | 'spotBlue' | 'spotGold';
 const GLOWS: Record<GlowKind, { w: number; h: number; color: RGB; power?: number; banded?: boolean }> = {
   // luz de teto (luminarias embutidas): ampla, branco-quente, fica ligada tambem de dia
   ceilPool: { w: 200, h: 100, color: [255, 214, 140], power: 1.9, banded: true },
@@ -140,6 +140,8 @@ const GLOWS: Record<GlowKind, { w: number; h: number; color: RGB; power?: number
   lampHead: { w: 34, h: 34, color: [255, 214, 130], power: 1.2 },
   screen: { w: 52, h: 30, color: [110, 180, 255], power: 1.3 },
   tvPool: { w: 150, h: 76, color: [150, 130, 255], power: 1.6 },
+  cyanPool: { w: 190, h: 96, color: [60, 190, 255], power: 1.6 },
+  cyanSpot: { w: 64, h: 40, color: [60, 210, 255], power: 1.4 },
   spotRed: { w: 150, h: 76, color: [255, 150, 205], power: 1.6 },
   spotBlue: { w: 150, h: 76, color: [130, 205, 255], power: 1.6 },
   spotGold: { w: 150, h: 76, color: [255, 215, 140], power: 1.6 },
@@ -278,6 +280,16 @@ export class DayLighting {
           const fl = dir === 0 ? tileToScreen(f.x + fp.w / 2, f.y + 1.9) : tileToScreen(f.x + 1.9, f.y + fp.d / 2);
           this.addGlow('tvPool', fl.x, fl.y, 0.4, { furniId: f.id, needsOn: true });
         }
+      } else if (f.kind === 'videowall') {
+        // big wall of screens: a cyan wash on the floor in front of it that stays on even when the room lights are off
+        const north = f.dir % 2 === 0;
+        const c = north ? tileToScreen(f.x + fp.w / 2, f.y + 0.1) : tileToScreen(f.x + 0.1, f.y + fp.d / 2);
+        this.addGlow('cyanSpot', c.x, c.y - 56, 0.35);
+        const fl = north ? tileToScreen(f.x + fp.w / 2, f.y + 1.8) : tileToScreen(f.x + 1.8, f.y + fp.d / 2);
+        this.addGlow('cyanPool', fl.x, fl.y, 0.34);
+      } else if (f.kind === 'server_rack') {
+        const c = tileToScreen(f.x + 0.5, f.y + 0.5);
+        this.addGlow('cyanSpot', c.x, c.y - 30, 0.22);
       } else if (f.kind === 'tv') {
         const north = f.dir % 2 === 0;
         const c = north ? tileToScreen(f.x + fp.w / 2, f.y + 0.1) : tileToScreen(f.x + 0.1, f.y + fp.d / 2);

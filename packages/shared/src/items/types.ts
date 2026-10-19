@@ -51,7 +51,7 @@ export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 export const RARITIES: readonly Rarity[] = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 
 /** Where an item comes from. `free` is open to everybody; the other origins check the account's unlock table. */
-export type Unlock = 'free' | `achievement:${string}` | `event:${string}` | 'staff';
+export type Unlock = 'free' | `achievement:${string}` | `event:${string}` | `dept:${string}` | 'staff';
 
 /**
  * - `available`: can be equipped (when unlocked).

@@ -119,6 +119,29 @@ export function AccessTab() {
         </label>
       )}
 
+      {!locked && (
+        <div className="fz-guests" data-testid="access-pass">
+          <div className="fz-sub">Entram mesmo com a sala trancada{view?.passIsDefault && (view?.passTeamIds.length ?? 0) > 0 ? ' (padrão da sala)' : ''}</div>
+          {(view?.teams ?? []).map((t) => (
+            <label key={t.id} className="fz-radio" title="Essa equipe sempre entra, mesmo com a sala restrita ou trancada pela equipe da plataforma.">
+              <input
+                type="checkbox"
+                checked={view?.passTeamIds.includes(t.id) ?? false}
+                onChange={(e) => {
+                  const cur = view?.passTeamIds ?? [];
+                  const next = e.target.checked ? [...cur, t.id] : cur.filter((x) => x !== t.id);
+                  furnishStore.setAccess(roomId, access, access === 'team' ? (view?.teamId ?? teamId) : null, next);
+                }}
+                data-testid={`access-pass-${t.name}`}
+              />
+              <span>
+                <b>{t.name}</b>
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
+
       {restricted && (
         <div className="fz-guests" data-testid="access-guests">
           <div className="fz-sub">Convidados ({view?.invites.length ?? 0})</div>

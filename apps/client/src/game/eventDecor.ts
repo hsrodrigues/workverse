@@ -42,6 +42,12 @@ interface Recipe {
   fireworks?: boolean;
   clock?: boolean;
   bats?: boolean;
+  /** Cabos de rede/fibra pendurados no alto da parede (por baixo da faixa). */
+  fiber?: boolean;
+  /** Nebulosa e estrelas no vidro das janelas. */
+  space?: boolean;
+  /** Salas principais do evento: decoração mais rica (mais objetos de chão e de parede). */
+  rich?: Record<string, { maxProps: number; itemMax: number }>;
 }
 
 const BALLOONS = (cols: string[], seed: number): PropSpec => ({ id: `balloons:${cols.join('')}`, frames: [() => A.balloonsProp(cols, seed)] });
@@ -145,6 +151,35 @@ const recipes = (def: EventDef): Recipe | null => {
         itemMax: 3,
         confetti: ['#7a5af0', '#ffc83d', '#ff6fa8'],
       };
+    case 'diati': {
+      const NEON = ['#27d9ff', '#39ff88', '#2a6bff', '#ff5fb0'];
+      return {
+        props: [
+          { id: 'holo', frames: [() => A.hologramProp(0), () => A.hologramProp(1)], every: 420, glow: { rgb: [60, 210, 255], size: 110, dy: -26, base: 0.75, flicker: 0.2 } },
+          { id: 'robot0', frames: [() => A.robotProp(0, 0), () => A.robotProp(1, 0)], every: 700, glow: { rgb: [60, 220, 255], size: 50, dy: -26, base: 0.5, flicker: 0.1 } },
+          { id: 'cake', frames: [() => A.cakeProp()], glow: { rgb: [255, 200, 120], size: 56, dy: -50, base: 0.55, flicker: 0.3 } },
+          BALLOONS(NEON, 11),
+          { id: 'tea', frames: [() => A.teaProp(0), () => A.teaProp(1)], every: 600 },
+          { id: 'sign42', frames: [() => A.sign42Prop()], glow: { rgb: [57, 255, 136], size: 70, dy: -34, base: 0.55, flicker: 0.12 } },
+          { id: 'robot1', frames: [() => A.robotProp(1, 1), () => A.robotProp(0, 1)], every: 800 },
+          BALLOONS(['#39ff88', '#27d9ff', '#ffffff'], 5),
+        ],
+        banner: ['FELIZ DIA DO PROFISSIONAL DE TI', 'DIA DO PROFISSIONAL DE TI', 'FELIZ DIA DA TI', 'DIA DA TI'],
+        fiber: true,
+        space: true,
+        items: [
+          (p, a, z) => A.dontPanic(p, a, z),
+          (p, a, z) => A.poster(p, a, z),
+          (p, a, z) => A.plaque42(p, a, z),
+          (p, a, z) => A.bridgePanel(p, a, z),
+          (p, a, z) => A.towelHook(p, a, z),
+          (p, a, z) => A.worksOnMine(p, a, z),
+        ],
+        itemMax: 5,
+        rich: { ti: { maxProps: 8, itemMax: 6 } },
+        confetti: ['#27d9ff', '#39ff88', '#2a6bff'],
+      };
+    }
     case 'blackfriday':
       return {
         props: [BALLOONS(['#1c1c24', '#f0b429', '#ffffff'], 4), { id: 'gifts-bf', frames: [() => A.giftsProp('#1c1c24', '#f0b429', '#3a3a48')] }],
@@ -242,7 +277,8 @@ export class EventDecor {
     if (!def || !recipe) return;
     const theme = THEMES[built.def.id] ?? THEMES.office;
     const spots = windowSpots(built, theme);
-    const plan = planEventDecor(built.def, spots, strHash(built.def.id));
+    const rich = recipe.rich?.[built.def.id];
+    const plan = planEventDecor(built.def, spots, strHash(built.def.id), rich?.maxProps);
     const rand = A.rng(strHash(`${built.def.id}:${def.id}`));
     const sc = this.scene;
 
@@ -261,6 +297,10 @@ export class EventDecor {
     const key = (s: WallSlot) => `${s.side}${s.t}`;
 
     const runs = slotRuns(plan.wallTop).sort((a, b) => b.length - a.length);
+    if (recipe.fiber) {
+      for (const run of runs) A.fiberCables(P(run[0]!.side), run[0]!.t * 32 + 3, (run[run.length - 1]!.t + 1) * 32 - 3, 94, rand);
+    }
+    if (recipe.space) for (const s of spots) A.spaceWindow(P(s.side), s.t * 32 + 4, theme.trim);
     if (recipe.banner && runs.length) {
       const run = runs.find((r) => r.length >= 2 && r[0]!.side === 'n') ?? runs.find((r) => r.length >= 2);
       if (run) {
@@ -306,7 +346,7 @@ export class EventDecor {
       }
       const chosen: WallSlot[] = [];
       for (const s of slots) {
-        if (chosen.length >= recipe.itemMax) break;
+        if (chosen.length >= (rich?.itemMax ?? recipe.itemMax)) break;
         if (chosen.some((c) => c.side === s.side && Math.abs(c.t - s.t) < 2)) continue;
         chosen.push(s);
       }
@@ -466,6 +506,8 @@ function bannerBg(def: EventDef): string {
       return '#1c2a52';
     case 'blackfriday':
       return '#15151c';
+    case 'diati':
+      return '#0b1d4a';
     case 'trabalho':
       return '#2f6fd0';
     default:

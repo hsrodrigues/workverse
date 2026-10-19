@@ -43,14 +43,25 @@ export function setActiveEventsProvider(fn: () => readonly string[]): void {
   activeEventIds = fn;
 }
 
+/**
+ * Chaves `dept:<setor>` da conta, derivadas do vinculo ATUAL com o setor (equipe) em qualquer organizacao dela: membro ativo
+ * (nao visitante) de uma equipe cujo nome normalizado e o do setor (ex.: "TI"). O World registra a fonte; nunca vem de dado
+ * que a pessoa edite (so quem administra a organizacao define equipes e vinculos).
+ */
+let deptKeysOf: (accountId: string) => readonly string[] = () => [];
+export function setDeptKeysProvider(fn: (accountId: string) => readonly string[]): void {
+  deptKeysOf = fn;
+}
+
 const unlockSet = (account: Account): Set<string> => {
   const keys = new Set((account.unlocks ?? []).filter((k) => !STAFF_ONLY_KEYS.has(k)));
   if (account.staff) for (const k of STAFF_ONLY_KEYS) keys.add(k);
   for (const id of activeEventIds()) keys.add(`event:${id}`);
-  // quem ja veste um item de evento o mantem depois que o evento acaba
+  for (const k of deptKeysOf(account.id)) keys.add(k);
+  // quem ja veste um item de evento (ou do setor) o mantem depois que o evento acaba / a pessoa sai do setor
   for (const id of wornIds(account.avatar)) {
     const item = getItem(id);
-    if (item && item.unlock.startsWith('event:') && item.availability === 'available') keys.add(`item:${id}`);
+    if (item && (item.unlock.startsWith('event:') || item.unlock.startsWith('dept:')) && item.availability === 'available') keys.add(`item:${id}`);
   }
   return keys;
 };

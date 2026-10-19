@@ -1,4 +1,4 @@
-import { ROOM_DEFS, roomAccessOf, validateLayout, type RoomDef } from '@workverse/shared';
+import { ROOM_DEFS, normDeptName, roomAccessOf, validateLayout, type RoomDef } from '@workverse/shared';
 import type { OrgStore, RoomInviteRow } from './orgStore';
 
 /**
@@ -9,6 +9,14 @@ import type { OrgStore, RoomInviteRow } from './orgStore';
 
 /** Rooms that must stay open to the whole organization: they are where people land and how everyone moves around. */
 export const OPEN_ROOMS: readonly string[] = ['office', 'reception'];
+
+/**
+ * Equipes que passam mesmo com a sala TRANCADA (acesso restrito ou trancada pela staff) quando a organizacao nao escolheu outras:
+ * nomes de equipe (setor) comparados sem acento nem caixa. So a Sala da TI traz padrao.
+ */
+export const DEFAULT_PASS_TEAM_NAMES: Readonly<Record<string, readonly string[]>> = { ti: ['ti', 'tecnologia da informacao'] };
+
+export const normTeamName = normDeptName;
 
 export interface ResolvedRoom {
   def: RoomDef;
@@ -45,6 +53,28 @@ export class RoomConfig {
     const access = setting?.access ?? roomAccessOf(base);
     const def: RoomDef = { ...base, furniture, access, accessTeamId: access === 'team' ? (setting?.teamId ?? null) : null };
     return { def, version: layout?.version ?? 0, customized };
+  }
+
+  /**
+   * Equipes DESTA organizacao que passam por essa sala mesmo trancada. A escolha da org (`room_settings.pass_team_ids`) vale; sem
+   * escolha, vale o padrao da sala (DEFAULT_PASS_TEAM_NAMES) casado pelo nome. Ids de outra organizacao nunca contam.
+   */
+  passTeamIds(orgId: string, roomId: string): string[] {
+    const teams = this.orgs.teamsOf(orgId).filter((t) => t.orgId === orgId);
+    const chosen = this.orgs.getRoomSetting(orgId, roomId)?.passTeamIds;
+    if (chosen) return teams.filter((t) => chosen.includes(t.id)).map((t) => t.id);
+    const names = DEFAULT_PASS_TEAM_NAMES[roomId];
+    if (!names) return [];
+    return teams.filter((t) => names.includes(normTeamName(t.name))).map((t) => t.id);
+  }
+
+  /** `true` quando a lista vem do padrao da sala (a org ainda nao escolheu). */
+  passIsDefault(orgId: string, roomId: string): boolean {
+    return !this.orgs.getRoomSetting(orgId, roomId)?.passTeamIds;
+  }
+
+  passes(orgId: string, roomId: string, teamId: string | null | undefined): boolean {
+    return !!teamId && this.passTeamIds(orgId, roomId).includes(teamId);
   }
 
   /** Live invitation of an account to a room: exists and has not expired. */

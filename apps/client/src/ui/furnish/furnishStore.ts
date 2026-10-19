@@ -41,6 +41,9 @@ export interface AccessView {
   teamId: string | null;
   invites: RoomInviteView[];
   teams: Array<{ id: string; name: string }>;
+  /** Equipes que entram mesmo com a sala trancada, e se é o padrão da sala. */
+  passTeamIds: string[];
+  passIsDefault: boolean;
 }
 
 export interface MeetingInvite {
@@ -299,7 +302,7 @@ net.on((m: ServerMessage) => {
       onResult(m);
       break;
     case 'room_access':
-      set({ access: { ...state.access, [m.roomId]: { access: m.access, teamId: m.teamId, invites: m.invites, teams: m.teams } } });
+      set({ access: { ...state.access, [m.roomId]: { access: m.access, teamId: m.teamId, invites: m.invites, teams: m.teams, passTeamIds: m.passTeamIds ?? [], passIsDefault: m.passIsDefault ?? true } } });
       break;
     case 'room_access_result':
       set({ accessNotice: m.ok ? { kind: 'ok', text: 'Acesso atualizado.' } : { kind: 'error', text: m.message ?? 'Não foi possível atualizar o acesso.' } });
@@ -465,9 +468,9 @@ export const furnishStore = {
   loadAccess(roomId: string) {
     net.send({ t: 'room_access_get', roomId });
   },
-  setAccess(roomId: string, access: RoomAccess, teamId?: string | null) {
+  setAccess(roomId: string, access: RoomAccess, teamId?: string | null, passTeamIds?: string[]) {
     set({ accessNotice: null });
-    net.send({ t: 'room_access_set', rid: ++rid, roomId, access, ...(access === 'team' ? { teamId: teamId ?? null } : {}) });
+    net.send({ t: 'room_access_set', rid: ++rid, roomId, access, ...(access === 'team' ? { teamId: teamId ?? null } : {}), ...(passTeamIds ? { passTeamIds } : {}) });
   },
   invite(roomId: string, who: string, hours: number) {
     set({ accessNotice: null });

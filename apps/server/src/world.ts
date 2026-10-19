@@ -32,7 +32,7 @@ import { DEV_UNLOCK_ALL, handleWardrobeMessage, parseUnlockKey, setUnlock } from
 import { Player, RoomInstance, cleanChat } from './room';
 import { StageManager, isStageMessage, type PermissionSync } from './stage';
 import type { Account, AccountStore } from './store';
-import { DEFAULT_ORG_ID, permissionsOf, type Role } from '@workverse/shared';
+import { DEFAULT_ORG_ID, deptUnlockKeyOf, permissionsOf, type Role } from '@workverse/shared';
 import { MESSAGE_POLICY, can, type Actor, type Decision, type Resource } from './authz';
 import { RoomConfig } from './roomConfig';
 import { RoomAdmin, isRoomAdminMessage } from './roomAdmin';
@@ -40,7 +40,7 @@ import { OrgService } from './org';
 import { OrgWorld } from './orgWorld';
 import { StaffService, applyBootstrapStaff, isStaffMessage, parseStaffEmails } from './staff';
 import { EventsService, parseCompanyDate, parseOptionalEvents, type EventsConfig } from './eventsService';
-import { setActiveEventsProvider } from './wardrobe';
+import { setActiveEventsProvider, setDeptKeysProvider } from './wardrobe';
 import { accessBlock, isBanned, isDisabled } from './accountState';
 import { roomAccessOf, type RoomAdminEntry, type RoomListEntry, type RoomOp } from '@workverse/shared';
 
@@ -156,6 +156,16 @@ export class World {
     this.events = new EventsService(this.clock, opts.events ?? { companyDate: parseCompanyDate(process.env.WORKVERSE_COMPANY_DATE), optional: parseOptionalEvents(process.env.WORKVERSE_OPTIONAL_EVENTS) });
     // itens de avatar `event:<id>` ficam liberados enquanto o evento estiver ativo (wardrobe.ts)
     setActiveEventsProvider(() => this.events.activeIds());
+    setDeptKeysProvider((accountId) => {
+      const out = new Set<string>();
+      for (const m of this.store.orgs.membershipsOf(accountId)) {
+        if (m.status !== 'active' || m.role === 'guest' || !m.teamId) continue;
+        const team = this.store.orgs.getTeam(m.teamId);
+        const key = team && team.orgId === m.orgId ? deptUnlockKeyOf(team.name) : null;
+        if (key) out.add(key);
+      }
+      return [...out];
+    });
     this.org(DEFAULT_ORG_ID);
     const staffEmails = parseStaffEmails(opts.bootstrapStaffEmails ?? process.env.BOOTSTRAP_STAFF_EMAILS);
     applyBootstrapStaff(this.store, staffEmails, this.log);
@@ -260,6 +270,7 @@ export class World {
       roomAccess: roomAccessOf(def),
       roomTeamId: def.accessTeamId ?? null,
       invited: !!this.roomConfig.liveInvite(player.orgId, roomId, player.accountId, this.clock()),
+      passTeam: roomAccessOf(def) !== 'org' && this.roomConfig.passes(player.orgId, roomId, player.teamId),
     });
   }
 
@@ -353,6 +364,15 @@ export class World {
     else if (op === 'close') this.roomLocks.set(key, 'closed');
     else if (op === 'unlock' || op === 'open') this.roomLocks.delete(key);
     let moved = 0;
+    // a room with teams that pass through the lock (IT room): locking it sends everybody else out; those teams stay
+    if (op === 'lock' && this.roomConfig.passTeamIds(orgId, roomId).length > 0) {
+      for (const p of [...room.players.values()]) {
+        if ((p.staff && p.onDuty) || this.roomConfig.passes(orgId, roomId, p.teamId) || p.role === 'owner' || p.role === 'admin') continue;
+        p.send({ t: 'error', code: 'kicked_room', message: `A equipe trancou a sala ${name}.` });
+        this.enterRoom(p, this.landingRoom(p));
+        if (p.roomId !== roomId) moved++;
+      }
+    }
     if (op === 'close' || op === 'empty') {
       for (const p of [...room.players.values()]) {
         // Staff em servico fica (e quem age); as demais pessoas vao para a sala inicial.
@@ -958,7 +978,9 @@ export class World {
       }
       return;
     }
-    if (player.roomId !== roomId && this.roomState(player.orgId, roomId) !== 'open' && !(player.staff && player.onDuty)) {
+    // the staff lock lets through the teams the room always admits (IT into the IT room); a closed room admits nobody
+    const passes = this.roomState(player.orgId, roomId) === 'locked' && this.roomConfig.passes(player.orgId, roomId, player.teamId);
+    if (player.roomId !== roomId && this.roomState(player.orgId, roomId) !== 'open' && !passes && !(player.staff && player.onDuty)) {
       const closed = this.roomState(player.orgId, roomId) === 'closed';
       player.send({ t: 'error', code: 'room_locked', message: `A sala está ${closed ? 'fechada' : 'trancada'} pela equipe.` });
       // Primeira entrada (ex.: reconexao na sala em que estava): cai na sala inicial em vez de ficar sem sala.
