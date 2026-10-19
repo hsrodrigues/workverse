@@ -33,6 +33,7 @@ import { emit } from '../bus';
 import { FurnishLayer } from './furnishLayer';
 import { ANCHOR_X, ANCHOR_Y, FH, FRAMES_DRINK, FRAMES_IDLE, FRAMES_SIT, FRAMES_TYPE, FRAMES_WALK, FRAMES_WAVE, FRAME_COUNT, FW, SIT_LIFT, VIEWS, buildAvatarSheet, type View } from './avatarRenderer';
 import { renderFurniture } from './furniture';
+import { wearsBadge } from './avatar';
 import { WORK_BALLOON_KEYS, ensureActivityTextures } from './activityArt';
 import { THEMES, WALL_H, renderFloor, renderWalls } from './roomArt';
 import { MediaBadges } from './mediaBadges';
@@ -41,7 +42,8 @@ import { DoorSigns } from './doorSigns';
 import { DayLighting } from './dayLighting';
 import { EventDecor } from './eventDecor';
 
-import { NAME_PX, STAFF_PX, TEXT_FONT as FONT, buildBubble, crisp, snap, texelOf } from './text';
+import { DEPT_PX, NAME_PX, STAFF_PX, TEXT_FONT as FONT, buildBubble, buildTag, crisp, snap, texelOf } from './text';
+import { RECEPTIONIST, badgeTextColor, deptShort, safeDeptColor, type ProfileTag } from '@workverse/shared';
 /** Which sprite view (and mirroring) represents each of the eight facing directions. */
 const VIEW_FOR_DIR: ReadonlyArray<{ view: View; flip: boolean }> = [
   { view: 'front34', flip: false }, // 0  +x   south-east
@@ -134,6 +136,9 @@ class Actor implements Sortable {
   readonly label: Phaser.GameObjects.Text;
   /** Selo dourado 'STAFF' ao lado do nome: so existe quando o servidor marcou o jogador como staff em servico. */
   private staffTag: Phaser.GameObjects.Text | null = null;
+  /** Pilula minuscula com o SETOR (cor do setor) ao lado do nome. O cargo so aparece na ficha ao clicar na pessoa. */
+  private roleTag: Phaser.GameObjects.Text | null = null;
+  private profile: ProfileTag = {};
   private bubbles: { c: Phaser.GameObjects.Container; born: number; h: number; text: string }[] = [];
   /** Zoom da camera com o qual os textos foram rasterizados (ver text.ts). */
   private zoom = 1;
@@ -198,9 +203,33 @@ class Actor implements Sortable {
     this.place();
   }
 
+  setProfile(p: ProfileTag) {
+    this.profile = p;
+    // the badge item on the sprite follows the sector color
+    this.texKey = this.scene.avatarTexture(this.avatarCfg, heldOf(this.activity), p.dept ? p.deptColor : undefined);
+    this.refreshTag();
+    this.place();
+  }
+
+  private refreshTag() {
+    const text = deptShort(this.profile.dept);
+    if (!text) {
+      this.roleTag?.destroy();
+      this.roleTag = null;
+      return;
+    }
+    const bg = safeDeptColor(this.profile.deptColor);
+    if (!this.roleTag) {
+      this.roleTag = crisp(
+        this.scene.add.text(0, 0, text, { fontFamily: FONT, fontSize: `${DEPT_PX}px`, fontStyle: '600', color: badgeTextColor(bg), backgroundColor: bg, padding: { x: 3, y: 0 } }).setOrigin(0, 1).setDepth(UI_DEPTH),
+        this.zoom,
+      );
+    } else this.roleTag.setText(text).setColor(badgeTextColor(bg)).setBackgroundColor(bg);
+  }
+
   setAvatar(avatar: AvatarConfig) {
     this.avatarCfg = avatar;
-    this.texKey = this.scene.avatarTexture(avatar, heldOf(this.activity));
+    this.texKey = this.scene.avatarTexture(avatar, heldOf(this.activity), this.profile.dept ? this.profile.deptColor : undefined);
   }
 
   setActivity(activity: Activity) {
@@ -211,7 +240,7 @@ class Actor implements Sortable {
     this.activity = activity;
     this.drinkAt = 0;
     // the cup lives in the sprite sheet (the cup is part of the hand), so the sheet follows what is held
-    this.texKey = this.scene.avatarTexture(this.avatarCfg, heldOf(activity));
+    this.texKey = this.scene.avatarTexture(this.avatarCfg, heldOf(activity), this.profile.dept ? this.profile.deptColor : undefined);
   }
 
   private holding(): HeldItem | null {
@@ -235,8 +264,14 @@ class Actor implements Sortable {
     const z = this.zoom;
     const lw = Math.round(this.label.width);
     const lx = snap(p.x, z) - Math.round(lw / 2) / z;
-    this.label.setPosition(lx, snap(p.y - lift - (this.sitting ? 66 : 94), z));
+    const base = p.y - lift - (this.sitting ? 66 : 94);
+    this.label.setPosition(lx, snap(base, z));
     this.staffTag?.setPosition(lx + (lw + 2) / z, snap(this.label.y - 1 / z, z));
+    // the sector pill sits right after the name (and after the STAFF seal, when there is one), without growing the name box
+    if (this.roleTag) {
+      const after = this.staffTag ? lx + (lw + 2 + Math.round(this.staffTag.width) + 2) / z : lx + (lw + 2) / z;
+      this.roleTag.setPosition(after, snap(this.label.y - 2 / z, z));
+    }
   }
 
   /** O zoom da camera mudou: re-rasteriza os textos na resolucao nova e reconstroi os baloes. */
@@ -244,6 +279,7 @@ class Actor implements Sortable {
     this.zoom = z;
     crisp(this.label, z);
     if (this.staffTag) crisp(this.staffTag, z);
+    if (this.roleTag) crisp(this.roleTag, z);
     for (const b of this.bubbles) {
       b.h = (buildBubble(this.scene, b.c, b.text, z) + 8) / z;
       b.c.setScale(1 / z);
@@ -424,8 +460,92 @@ class Actor implements Sortable {
     this.shadow.destroy();
     this.label.destroy();
     this.staffTag?.destroy();
+    this.roleTag?.destroy();
     this.workBalloon?.destroy();
     this.bubbles.forEach((b) => b.c.destroy());
+  }
+}
+
+/**
+ * A atendente NPC sentada atras do balcao da recepcao (ver shared/receptionist.ts). So existe aqui no cliente: nao e jogador,
+ * nao entra em populacao, presenca nem listas. Clicar nela abre o painel "Atendimento"; de tempos em tempos aparece um "?".
+ */
+class Receptionist implements Sortable {
+  private readonly sprite: Phaser.GameObjects.Image;
+  private readonly shadow: Phaser.GameObjects.Ellipse;
+  private tag: { c: Phaser.GameObjects.Container; h: number } | null = null;
+  private ask: { c: Phaser.GameObjects.Container; h: number } | null = null;
+  private zoom = 0;
+  private clock = 0;
+
+  constructor(private readonly scene: WorldScene) {
+    const key = scene.avatarTexture(RECEPTIONIST.avatar);
+    this.sprite = scene.add.image(0, 0, key, 'front0').setOrigin(ANCHOR_X / FW, ANCHOR_Y / FH);
+    this.shadow = scene.add.ellipse(0, 0, 26, 11, 0x000000, 0.2).setVisible(false);
+    const p = this.pos();
+    this.sprite.setPosition(p.x, p.y - SIT_LIFT);
+  }
+
+  private pos() {
+    return tileToScreen(RECEPTIONIST.x + 0.5, RECEPTIONIST.y + 0.5);
+  }
+
+  /** Same box as a seated avatar, so the desk in front of her sorts correctly. */
+  box(): Box3 {
+    const cx = RECEPTIONIST.x + 0.5;
+    const cy = RECEPTIONIST.y + 0.5;
+    return { x0: cx - 0.2, y0: cy - 0.2, x1: cx + 0.2, y1: cy + 0.2, z0: 20, z1: 80 };
+  }
+
+  setDepth(d: number) {
+    this.sprite.setDepth(d);
+    this.shadow.setDepth(d - 1);
+  }
+
+  hit(wx: number, wy: number): boolean {
+    return Math.abs(wx - this.sprite.x) <= 16 && wy >= this.sprite.y - 62 && wy <= this.sprite.y + 14;
+  }
+
+  atTile(x: number, y: number): boolean {
+    return x === RECEPTIONIST.x && y === RECEPTIONIST.y;
+  }
+
+  private rebuild(z: number) {
+    this.zoom = z;
+    this.tag?.c.destroy();
+    this.ask?.c.destroy();
+    const c = this.scene.add.container(0, 0).setDepth(UI_DEPTH).setScale(1 / z);
+    this.tag = { c, h: buildTag(this.scene, c, RECEPTIONIST.name, '#6c8cff', badgeTextColor('#6c8cff'), z).h };
+    const a = this.scene.add.container(0, 0).setDepth(UI_DEPTH + 1).setScale(1 / z).setVisible(false);
+    this.ask = { c: a, h: buildBubble(this.scene, a, '?', z) };
+  }
+
+  update(dt: number) {
+    const z = this.scene.cameras.main.zoom;
+    if (z !== this.zoom) this.rebuild(z);
+    this.clock += dt;
+    // breathing, like a seated avatar
+    const breath = Math.floor(this.clock / 1100) % 2;
+    this.sprite.setTexture(this.scene.avatarTexture(RECEPTIONIST.avatar), `front${FRAMES_SIT.start + breath}`);
+    const p = this.pos();
+    this.sprite.setPosition(p.x, p.y - SIT_LIFT);
+    const top = p.y - SIT_LIFT - 66;
+    const cx = snap(p.x, z);
+    if (this.tag) this.tag.c.setPosition(cx, snap(top - this.tag.h / 2 / z, z));
+    if (this.ask) {
+      // "?" for 2.4 s every 7 s, floating a little
+      const phase = this.clock % 7000;
+      const on = phase > 4600;
+      this.ask.c.setVisible(on);
+      if (on) this.ask.c.setPosition(cx, snap(top - this.tag!.h / z - 4 / z - this.ask.h / 2 / z - Math.round(Math.sin(this.clock / 220) * 2) / z, z));
+    }
+  }
+
+  destroy() {
+    this.sprite.destroy();
+    this.shadow.destroy();
+    this.tag?.c.destroy();
+    this.ask?.c.destroy();
   }
 }
 
@@ -457,6 +577,8 @@ class FurniActor implements Sortable {
 export class WorldScene extends Phaser.Scene {
   private built: BuiltRoom | null = null;
   private actors = new Map<string, Actor>();
+  /** Atendente NPC (so na recepcao). */
+  private receptionist: Receptionist | null = null;
   private furni: FurniActor[] = [];
   private roomObjects: Phaser.GameObjects.GameObject[] = [];
   private sortables: Sortable[] = [];
@@ -556,10 +678,12 @@ export class WorldScene extends Phaser.Scene {
 
   // ---- textures ---------------------------------------------------------
 
-  avatarTexture(cfg: AvatarConfig, held: HeldItem | null = null): string {
-    const key = `av:${avatarKey(cfg)}${held ? `~${held}` : ''}`;
+  avatarTexture(cfg: AvatarConfig, held: HeldItem | null = null, stripe?: string): string {
+    // the sector color only matters to the sprite when it wears the corporate badge
+    const s = stripe && wearsBadge(cfg) ? safeDeptColor(stripe) : null;
+    const key = `av:${avatarKey(cfg)}${held ? `~${held}` : ''}${s ? `#${s.slice(1)}` : ''}`;
     if (this.textures.exists(key)) return key;
-    const tex = this.textures.addCanvas(key, buildAvatarSheet(cfg, held));
+    const tex = this.textures.addCanvas(key, buildAvatarSheet(cfg, held, s));
     if (tex) {
       VIEWS.forEach((view, row) => {
         for (let f = 0; f < FRAME_COUNT; f++) tex.add(`${view}${f}`, 0, f * FW, row * FH, FW, FH);
@@ -605,6 +729,9 @@ export class WorldScene extends Phaser.Scene {
       case 'staff_flag':
         this.actors.get(m.id)?.setStaff(m.staff);
         break;
+      case 'profile':
+        this.actors.get(m.id)?.setProfile({ title: m.title, dept: m.dept, deptColor: m.deptColor });
+        break;
       case 'activity':
         this.actors.get(m.id)?.setActivity(m.activity);
         break;
@@ -626,6 +753,7 @@ export class WorldScene extends Phaser.Scene {
     actor.dir = p.dir;
     actor.setActivity(p.activity ?? 'idle');
     actor.setStaff(p.staff ?? null);
+    actor.setProfile({ title: p.title, dept: p.dept, deptColor: p.deptColor });
     if (p.sitting) actor.sit(p.x, p.y, p.dir);
     else if (p.path.length) actor.setPath({ x: p.x, y: p.y }, p.path);
     this.actors.set(p.id, actor);
@@ -648,6 +776,8 @@ export class WorldScene extends Phaser.Scene {
     this.furniOn = { ...snap.furniState };
     this.buildStatic(snap.def, this.furniOn);
 
+    this.receptionist?.destroy();
+    this.receptionist = snap.def.id === RECEPTIONIST.roomId ? new Receptionist(this) : null;
     for (const p of snap.players) this.addActor(p);
     this.userMoved = false;
     this.fitCamera();
@@ -791,9 +921,12 @@ export class WorldScene extends Phaser.Scene {
     if (!built) return;
     const t = this.tileAt(p);
     const overActor = this.pickActor(p);
-    const furni = interactiveAt(built, t.x, t.y);
-    this.input.setDefaultCursor(overActor || furni ? 'pointer' : 'default');
-    if (furni) {
+    const npc = !overActor && this.receptionist && (this.receptionist.hit(p.worldX, p.worldY) || this.receptionist.atTile(t.x, t.y));
+    const furni = npc ? undefined : interactiveAt(built, t.x, t.y);
+    this.input.setDefaultCursor(overActor || furni || npc ? 'pointer' : 'default');
+    if (npc) {
+      this.drawDiamond(this.hover, RECEPTIONIST.x, RECEPTIONIST.y, 0xffe27a, 0.9);
+    } else if (furni) {
       this.drawDiamond(this.hover, t.x, t.y, 0xffe27a, 0.9);
     } else if (isWalkable(built.grid, t.x, t.y)) {
       this.drawDiamond(this.hover, t.x, t.y, 0xffffff, 0.8);
@@ -822,6 +955,12 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
     emit('closeMenus');
+    const tile0 = this.tileAt(p);
+    if (this.receptionist && (this.receptionist.hit(p.worldX, p.worldY) || this.receptionist.atTile(tile0.x, tile0.y))) {
+      emit('receptionistClick');
+      this.markerAt = { x: RECEPTIONIST.x, y: RECEPTIONIST.y, born: performance.now() };
+      return;
+    }
     // the TV is tall: a click on its screen lands on a floor tile behind it, so test the drawn sprite first
     const tv = this.tvUnder(p);
     if (tv) {
@@ -899,8 +1038,9 @@ export class WorldScene extends Phaser.Scene {
     this.doorSigns?.setZoom(this.cameras.main.zoom);
     const dt = Math.min(delta, 100);
     for (const a of this.actors.values()) a.update(dt);
-    if (this.sortables.length || this.actors.size) {
-      assignDepths([...this.sortables, ...this.eventDecor.sortables, ...this.actors.values()]);
+    this.receptionist?.update(dt);
+    if (this.sortables.length || this.actors.size || this.receptionist) {
+      assignDepths([...this.sortables, ...this.eventDecor.sortables, ...this.actors.values(), ...(this.receptionist ? [this.receptionist] : [])]);
     }
     this.badges.update(this.actors.values(), performance.now());
     for (const s of this.screens) s.tick(performance.now());

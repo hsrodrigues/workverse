@@ -342,6 +342,7 @@ export function Sheet({ d, onClose, embedded = false }: { d: StaffAccountDetail;
             <div key={m.orgId}>
               {m.orgName} · {m.role}
               {m.team ? ` · ${m.team}` : ''}
+              {m.title ? ` · ${m.title}` : ''}
               {m.status !== 'active' ? ` (${m.status})` : ''}
             </div>
           ))}

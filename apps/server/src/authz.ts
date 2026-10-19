@@ -165,6 +165,7 @@ export const MESSAGE_POLICY: Readonly<Record<string, Permission | null>> = {
   room_invite_add: 'room.access.set',
   room_invite_remove: 'room.access.set',
   meeting_invite: 'dm.send',
+  dir_search: 'dir.search',
 
   // staff da plataforma: a checagem real (nível, serviço, alvo, taxa) fica em staff.ts; sem sessão nada chega até lá
   staff_duty: null,

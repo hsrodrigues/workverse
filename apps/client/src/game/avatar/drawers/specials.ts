@@ -18,7 +18,7 @@ import {
   type V3,
 } from '../engine';
 import { tonesOf, type Tones } from '../recolor';
-import { registerDrawer } from '../registry';
+import { registerDrawer, renderExtras } from '../registry';
 
 /**
  * Special items: held devices (notebook, tablet, mug), the corporate badge and festive hats.
@@ -213,7 +213,8 @@ registerDrawer('sp.badge', (c, it, e) => {
     c.px(x0 + w / 2 - 1, y0 - 1, '#c9ccd4');
     c.px(x0 + w / 2, y0 - 1, '#8a8f9a');
     // card: ink border, white body, color header, photo and text lines
-    const head = staff ? '#e0b030' : it.hex;
+    // the stripe takes the color of the person's sector (set by the scene); the staff badge keeps its gold
+    const head = staff ? '#e0b030' : (renderExtras.stripe ?? it.hex);
     for (let y = 0; y < 9; y++) {
       for (let x = 0; x < w; x++) {
         const edge = y === 0 || y === 8 || x === 0 || x === w - 1;
@@ -224,10 +225,16 @@ registerDrawer('sp.badge', (c, it, e) => {
     }
     c.px(x0 + 1, y0 + 1, mix(head, '#ffffff', 0.4));
     const mid = x0 + (w >> 1);
-    c.px(mid - 1, y0 + 4, '#b8b2a2');
-    c.px(mid, y0 + 4, '#b8b2a2');
-    c.px(mid - 1, y0 + 5, '#8a8472');
-    c.px(mid, y0 + 5, '#8a8472');
+    // mini portrait (3x3) with the wearer's own hair and skin; narrower in the 3/4 views
+    const pw = w >= 6 ? 3 : 2;
+    const px0 = mid - (pw >> 1);
+    for (let i = 0; i < pw; i++) {
+      c.px(px0 + i, y0 + 3, c.hair.base);
+      c.px(px0 + i, y0 + 4, c.skinHex);
+      c.px(px0 + i, y0 + 5, c.skinHex);
+    }
+    c.px(px0, y0 + 4, '#2a2230');
+    if (pw === 3) c.px(px0 + 2, y0 + 4, '#2a2230');
     for (let x = 1; x < w - 1; x++) c.px(x0 + x, y0 + 7, '#9a93a2');
     if (staff) {
       c.px(mid, y0 + 1, '#ffffff');

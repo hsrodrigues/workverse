@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { BAN_MAX_MINUTES, CREATE_ROLE_MAX, MAX_STAFF_REASON, ROLES, ROLE_RANK, STAFF_RANK, type StaffAccountDetail, type StaffAccountRow } from '@workverse/shared';
+import { BAN_MAX_MINUTES, CREATE_ROLE_MAX, MAX_STAFF_REASON, MAX_TITLE_LENGTH, ROLES, ROLE_RANK, STAFF_RANK, type StaffAccountDetail, type StaffAccountRow } from '@workverse/shared';
 import { Chip, Field, SecretBox, fmtDateTime, usePanel } from './staffUi';
 import { Sheet } from './OnlineTab';
 import { staffApi, type OrgChoice } from './staffApi';
@@ -125,6 +125,7 @@ function CreateForm({ onCreated }: { onCreated(account: StaffAccountRow, passwor
   const [orgId, setOrgId] = useState('default');
   const [teamId, setTeamId] = useState('');
   const [role, setRole] = useState('member');
+  const [title, setTitle] = useState('');
   const [custom, setCustom] = useState(false);
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -143,7 +144,7 @@ function CreateForm({ onCreated }: { onCreated(account: StaffAccountRow, passwor
 
   const submit = async () => {
     setBusy(true);
-    const r = await run(() => staffApi.create({ email: email.trim(), displayName: name.trim(), ...(custom && password ? { password } : {}), orgId, ...(teamId ? { teamId } : {}), role }));
+    const r = await run(() => staffApi.create({ email: email.trim(), displayName: name.trim(), ...(custom && password ? { password } : {}), orgId, ...(teamId ? { teamId } : {}), role, ...(title.trim() ? { title: title.trim() } : {}) }));
     setBusy(false);
     if (r) onCreated(r.account, r.provisionalPassword);
   };
@@ -174,15 +175,18 @@ function CreateForm({ onCreated }: { onCreated(account: StaffAccountRow, passwor
             ))}
           </select>
         </Field>
-        <Field label="Equipe">
+        <Field label="Setor">
           <select className="sf-input sf-select" value={teamId} onChange={(e) => setTeamId(e.target.value)} data-testid="staff-create-team">
             {org?.teams.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}
               </option>
             ))}
-            {!org?.teams.length && <option value="">(sem equipe)</option>}
+            {!org?.teams.length && <option value="">(sem setor)</option>}
           </select>
+        </Field>
+        <Field label="Cargo" hint={`Opcional, até ${MAX_TITLE_LENGTH} caracteres (ex.: Desenvolvedora Sênior)`}>
+          <input className="sf-input" value={title} maxLength={MAX_TITLE_LENGTH} onChange={(e) => setTitle(e.target.value)} autoComplete="off" data-testid="staff-create-title" />
         </Field>
         <Field label="Papel na organização" hint={p.level === 'admin' ? undefined : 'Seu nível atribui até “Membro”.'}>
           <select className="sf-input sf-select" value={role} onChange={(e) => setRole(e.target.value)} data-testid="staff-create-role">
@@ -285,6 +289,7 @@ function AccountDetail({ id, onChanged, onSecret }: { id: string; onChanged(): v
   return (
     <div className="sf-card" data-testid="staff-account-detail">
       <Sheet d={d} onClose={() => undefined} embedded />
+      <ProfileEditor d={d} canEdit={p.can('accounts.profile')} onSaved={done} />
       <div className="sf-group" role="group" aria-label="Ações sobre a conta">
         <button type="button" className="mini" disabled={!p.can('accounts.reset') || blocked || d.dev} onClick={() => void reset()} data-testid="staff-account-reset">
           Redefinir senha
@@ -322,6 +327,67 @@ function AccountDetail({ id, onChanged, onSecret }: { id: string; onChanged(): v
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Cargo e setor da pessoa em cada organização (quem administra define; a pessoa não muda o próprio). */
+function ProfileEditor({ d, canEdit, onSaved }: { d: StaffAccountDetail; canEdit: boolean; onSaved(): void }) {
+  const p = usePanel();
+  const active = d.memberships.filter((m) => m.status === 'active');
+  const [orgId, setOrgId] = useState(active[0]?.orgId ?? '');
+  const [orgs, setOrgs] = useState<OrgChoice[]>([]);
+  const m = active.find((x) => x.orgId === orgId);
+  const [title, setTitle] = useState(m?.title ?? '');
+  const [teamId, setTeamId] = useState(m?.teamId ?? '');
+  const { run } = p;
+  useEffect(() => {
+    void run(() => staffApi.orgs()).then((o) => o && setOrgs(o));
+  }, [run]);
+  useEffect(() => {
+    setTitle(m?.title ?? '');
+    setTeamId(m?.teamId ?? '');
+  }, [m?.orgId, m?.title, m?.teamId]);
+  if (!m) return null;
+  const teams = orgs.find((o) => o.id === orgId)?.teams ?? [];
+  const dirty = title.trim() !== (m.title ?? '') || (teamId !== '' && teamId !== (m.teamId ?? ''));
+  const save = async () => {
+    const body: { orgId: string; teamId?: string; title?: string | null } = { orgId };
+    if (teamId && teamId !== m.teamId) body.teamId = teamId;
+    if (title.trim() !== (m.title ?? '')) body.title = title.trim() === '' ? null : title.trim();
+    if (await run(() => staffApi.setProfile(d.id, body), 'Cargo e setor atualizados. Quem está online já vê.')) onSaved();
+  };
+  return (
+    <div className="sf-sub" data-testid="staff-profile-editor">
+      <h4 className="sf-card-title">Cargo e setor</h4>
+      {active.length > 1 && (
+        <Field label="Organização">
+          <select className="sf-input sf-select" value={orgId} onChange={(e) => setOrgId(e.target.value)}>
+            {active.map((x) => (
+              <option key={x.orgId} value={x.orgId}>
+                {x.orgName}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+      <div className="sf-grid2">
+        <Field label="Setor">
+          <select className="sf-input sf-select" value={teamId} onChange={(e) => setTeamId(e.target.value)} disabled={!canEdit} data-testid="staff-profile-dept">
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Cargo" hint={`até ${MAX_TITLE_LENGTH} caracteres`}>
+          <input className="sf-input" value={title} maxLength={MAX_TITLE_LENGTH} onChange={(e) => setTitle(e.target.value)} disabled={!canEdit} data-testid="staff-profile-title" />
+        </Field>
+      </div>
+      <button type="button" className="mini gold" disabled={!canEdit || !dirty} onClick={() => void save()} data-testid="staff-profile-save">
+        Salvar cargo e setor
+      </button>
     </div>
   );
 }

@@ -4,7 +4,12 @@ import {
   DEFAULT_ORG_NAME,
   DEFAULT_TEAM,
   DEFAULT_TEAM_ID,
+  cleanDeptName,
+  cleanTitle,
+  isDeptColor,
+  isGeneralDept,
   isRole,
+  type ProfileTag,
   permissionsOf,
   type InvitePreview,
   type OrgSummary,
@@ -29,7 +34,6 @@ export const INVITE_LIMITS = { minTtlHours: 1, maxTtlHours: 24 * 30, defaultTtlH
 /** Organizations one account may own at the same time. */
 export const MAX_OWNED_ORGS = 5;
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/;
-const COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
 export interface OrgServiceOptions {
   clock?: () => number;
@@ -204,22 +208,56 @@ export class OrgService {
   createTeam(actor: Actor, nameRaw: unknown, colorRaw?: unknown): Result<Team> {
     const d = can(actor, 'team.manage', { orgId: actor.orgId });
     if (!d.allow) return err(403, 'forbidden', 'Você não tem permissão para gerenciar equipes.');
-    const name = typeof nameRaw === 'string' ? nameRaw.normalize('NFKC').replace(/\s+/g, ' ').trim() : '';
-    if (name.length < 2 || name.length > 40) return err(400, 'bad_name', 'O nome da equipe deve ter de 2 a 40 caracteres.');
+    const name = cleanDeptName(nameRaw);
+    if (!name) return err(400, 'bad_name', 'O nome do setor deve ter de 2 a 24 caracteres (letras, números e espaço).');
     if (this.store.teamsOf(actor.orgId).some((t) => t.name.toLowerCase() === name.toLowerCase())) {
-      return err(409, 'team_exists', 'Já existe uma equipe com esse nome.');
+      return err(409, 'team_exists', 'Já existe um setor com esse nome.');
     }
-    const color = typeof colorRaw === 'string' && COLOR_PATTERN.test(colorRaw) ? colorRaw : DEFAULT_TEAM_COLOR;
+    if (colorRaw !== undefined && colorRaw !== null && !isDeptColor(colorRaw)) return err(400, 'bad_color', 'Escolha uma das cores da paleta.');
+    const color = typeof colorRaw === 'string' ? colorRaw.toLowerCase() : DEFAULT_TEAM_COLOR;
     const team: Team = { id: randomUUID(), orgId: actor.orgId, name, color };
     this.store.putTeam(team);
     this.log('team.create', { org: actor.orgId, team: team.id, by: actor.accountId });
     return ok(team);
   }
 
+  /** Renomeia e/ou recolore um setor (cor so da paleta). Quem esta online ve a mudanca na hora (ver World.refreshTeam). */
+  updateTeam(actor: Actor, teamId: string, patch: { name?: unknown; color?: unknown }): Result<Team> {
+    const d = can(actor, 'team.manage', { orgId: actor.orgId });
+    if (!d.allow) return err(403, 'forbidden', 'Você não tem permissão para gerenciar setores.');
+    const team = this.store.getTeam(teamId);
+    if (!team || team.orgId !== actor.orgId) return err(404, 'not_found', 'Setor não encontrado.');
+    let next = team;
+    if (patch.name !== undefined) {
+      const name = cleanDeptName(patch.name);
+      if (!name) return err(400, 'bad_name', 'O nome do setor deve ter de 2 a 24 caracteres (letras, números e espaço).');
+      if (this.store.teamsOf(actor.orgId).some((t) => t.id !== team.id && t.name.toLowerCase() === name.toLowerCase())) return err(409, 'team_exists', 'Já existe um setor com esse nome.');
+      next = { ...next, name };
+    }
+    if (patch.color !== undefined) {
+      if (!isDeptColor(patch.color)) return err(400, 'bad_color', 'Escolha uma das cores da paleta.');
+      next = { ...next, color: patch.color.toLowerCase() };
+    }
+    if (next !== team) {
+      this.store.putTeam(next);
+      this.log('team.update', { org: actor.orgId, team: team.id, by: actor.accountId });
+    }
+    return ok(next);
+  }
+
+  /** Cargo e setor como aparecem no mundo. O setor "Geral" (padrao de todo mundo) conta como "sem setor". */
+  profileOf(orgId: string, accountId: string): ProfileTag {
+    const m = this.store.getMember(orgId, accountId);
+    if (!m) return {};
+    const team = m.teamId ? this.store.getTeam(m.teamId) : undefined;
+    const dept = team && team.orgId === orgId && !isGeneralDept(team) ? team : undefined;
+    return { ...(m.title ? { title: m.title } : {}), ...(dept ? { dept: dept.name, deptColor: dept.color } : {}) };
+  }
+
   // ---- members ----------------------------------------------------------------------------------
 
   /** Changes role and/or team of a member of the actor's org. */
-  updateMember(actor: Actor, targetId: string, patch: { role?: unknown; teamId?: unknown }): Result<OrgMember> {
+  updateMember(actor: Actor, targetId: string, patch: { role?: unknown; teamId?: unknown; title?: unknown }): Result<OrgMember> {
     const target = this.store.getMember(actor.orgId, targetId);
     if (!target) return err(404, 'not_found', 'Pessoa não encontrada.');
     let next = target;
@@ -244,9 +282,18 @@ export class OrgService {
       }
       next = { ...next, teamId: patch.teamId as string | null };
     }
+    if (patch.title !== undefined) {
+      const d = can(actor, 'team.manage', { orgId: target.orgId });
+      if (!d.allow) return err(403, d.reason, reasonText(d.reason));
+      const title = patch.title === null ? '' : cleanTitle(patch.title);
+      if (title === null) return err(400, 'bad_title', 'O cargo deve ter até 32 caracteres (letras, números, espaço e . , - / & ( )).');
+      next = { ...next };
+      if (title) next.title = title;
+      else delete next.title;
+    }
     if (next !== target) {
       this.store.putMember(next);
-      this.log('org.member_update', { org: actor.orgId, account: targetId, by: actor.accountId, role: next.role, team: next.teamId });
+      this.log('org.member_update', { org: actor.orgId, account: targetId, by: actor.accountId, role: next.role, team: next.teamId, title: next.title ?? null });
     }
     return ok(next);
   }

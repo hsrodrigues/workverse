@@ -10,20 +10,23 @@ export {
 export { renderFrame, poseOfFrame } from './compose';
 export { registerDrawer, getDrawer, drawerKeys } from './registry';
 
+/** True when the look wears a corporate badge (`sp.badge*`): only then the sector stripe changes the sprite. */
+export const wearsBadge = (cfg: { special?: ReadonlyArray<{ id: string }> }): boolean => (cfg.special ?? []).some((s) => s.id.startsWith('sp.badge'));
+
 /** Draws one frame of the avatar into ctx at (ox, oy). Accepts v2 or a legacy config (migrated). */
-export function drawAvatarFrame(ctx: CanvasRenderingContext2D, ox: number, oy: number, cfg: AvatarV2 | unknown, view: View, frame: number, held: HeldItem | null = null) {
-  const buf = renderFrame(sanitizeAvatar(cfg), view, frame, held);
+export function drawAvatarFrame(ctx: CanvasRenderingContext2D, ox: number, oy: number, cfg: AvatarV2 | unknown, view: View, frame: number, held: HeldItem | null = null, stripe: string | null = null) {
+  const buf = renderFrame(sanitizeAvatar(cfg), view, frame, held, stripe);
   const img = new ImageData(FW, FH);
   new Uint32Array(img.data.buffer).set(buf);
   ctx.putImageData(img, ox, oy);
 }
 
 /** One canvas holding every frame: one row per view (see VIEWS). */
-export function buildAvatarSheet(cfg: AvatarV2 | unknown, held: HeldItem | null = null): HTMLCanvasElement {
+export function buildAvatarSheet(cfg: AvatarV2 | unknown, held: HeldItem | null = null, stripe: string | null = null): HTMLCanvasElement {
   const av = sanitizeAvatar(cfg);
   const { canvas, ctx } = createCanvas(FW * FRAME_COUNT, FH * VIEWS.length);
   VIEWS.forEach((view, row) => {
-    for (let f = 0; f < FRAME_COUNT; f++) drawAvatarFrame(ctx, f * FW, row * FH, av, view, f, held);
+    for (let f = 0; f < FRAME_COUNT; f++) drawAvatarFrame(ctx, f * FW, row * FH, av, view, f, held, stripe);
   });
   return canvas;
 }

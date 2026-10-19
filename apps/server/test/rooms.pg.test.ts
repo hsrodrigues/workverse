@@ -14,7 +14,7 @@ afterAll(async () => {
 }, 60_000);
 
 let n = 0;
-roomsStoreContract('PgAccountStore (PostgreSQL real, migracao 0005)', async () => {
+roomsStoreContract('PgAccountStore (PostgreSQL real, migracoes 0005 e 0006)', async () => {
   if (!h) {
     // sem Postgres o contrato roda contra a memoria so para a suite nao quebrar; a prova real e o PG (ver skipIf abaixo)
     const store = new MemoryAccountStore();
@@ -39,6 +39,21 @@ describe.skipIf(!h)('PostgreSQL real: salas', () => {
     const { pool } = await h!.migratedPool('rooms_tables');
     const tables = (await pool.query("SELECT tablename FROM pg_tables WHERE schemaname='public'")).rows.map((r) => r.tablename);
     for (const t of ['room_furniture', 'room_settings', 'room_invites']) expect(tables).toContain(t);
+  });
+
+  it('a migracao 0006 cria org_members.title (texto de ate 32 caracteres) e rejeita titulo vazio ou longo', async () => {
+    const { pool } = await h!.migratedPool('rooms_title');
+    const cols = (await pool.query("SELECT column_name FROM information_schema.columns WHERE table_name='org_members'")).rows.map((r) => r.column_name);
+    expect(cols).toContain('title');
+    const store = await PgAccountStore.open(pool, { retryBaseMs: 10, log: quiet });
+    const a = store.create({ email: 'a@x.com', displayName: 'Ana', passwordHash: 'scrypt$x' });
+    a.orgsInit = true;
+    store.save(a);
+    store.orgs.putOrg({ id: 'o1', slug: 'o1', name: 'O1', settings: {}, createdAt: 1 });
+    await store.flush();
+    await pool.query("INSERT INTO org_members (org_id, account_id, role, status, title) VALUES ('o1', $1, 'member', 'active', 'Dev Sênior')", [a.id]);
+    await expect(pool.query("UPDATE org_members SET title = '' WHERE org_id = 'o1'")).rejects.toThrow();
+    await expect(pool.query("UPDATE org_members SET title = $1 WHERE org_id = 'o1'", ['x'.repeat(33)])).rejects.toThrow();
   });
 
   it('o mundo recarregado do banco traz o layout e o acesso da org certa, sem tocar na outra', async () => {

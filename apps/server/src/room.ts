@@ -11,6 +11,7 @@ import {
   footprintTiles,
   idx,
   inBounds,
+  isForbiddenChar,
   isValidPath,
   isWalkable,
   seatDir,
@@ -40,6 +41,10 @@ type PendingAction =
   | { kind: 'portal'; portal: Portal };
 
 export class Player {
+  /** Cargo e setor mostrados no mundo (ver directory.ts); vem do vinculo com a organizacao, nunca do cliente. */
+  title: string | undefined;
+  dept: string | undefined;
+  deptColor: string | undefined;
   /** Organization of the live session; everything this player can see or reach is inside it. Set by World.hello. */
   orgId = '';
   role: Role = 'member';
@@ -79,6 +84,8 @@ export class Player {
   readonly deckBucket: TokenBucket;
   /** Room editor and access changes (each one is validated, persisted and broadcast: keep them from flooding). */
   readonly adminBucket: TokenBucket;
+  /** Buscas no diretorio da recepcao. */
+  readonly dirBucket: TokenBucket;
 
   constructor(
     readonly id: string,
@@ -95,6 +102,7 @@ export class Player {
     this.stageBucket = new TokenBucket(20, 8, now);
     this.deckBucket = new TokenBucket(10, 1, now);
     this.adminBucket = new TokenBucket(12, 3, now);
+    this.dirBucket = new TokenBucket(6, 1, now);
   }
 }
 
@@ -103,17 +111,6 @@ export interface RoomHooks {
   onChange(): void;
   /** A player used the podium. */
   onPodium?(player: Player): void;
-}
-
-/** Control, zero-width and bidi-override characters are never allowed in chat. */
-function isForbiddenChar(code: number): boolean {
-  return (
-    code < 32 ||
-    (code >= 0x7f && code <= 0x9f) ||
-    (code >= 0x200b && code <= 0x200f) ||
-    (code >= 0x2028 && code <= 0x202e) ||
-    (code >= 0x2066 && code <= 0x2069)
-  );
 }
 
 /** Strips forbidden characters and collapses whitespace. Rendering is always as plain text. */
@@ -323,6 +320,8 @@ export class RoomInstance {
       path: p.path.slice(i + 1),
       stepRemainingMs: this.stepRemaining(p, now),
       ...(p.staff && p.onDuty ? { staff: p.staff } : {}),
+      ...(p.title ? { title: p.title } : {}),
+      ...(p.dept ? { dept: p.dept, deptColor: p.deptColor } : {}),
     };
   }
 

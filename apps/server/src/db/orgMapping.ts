@@ -6,7 +6,7 @@ import type { Invite, Org, OrgData, OrgMember, OrgOp, RoomInviteRow, RoomLayout,
 export interface OrgRows {
   orgs: Array<{ id: string; slug: string; name: string; settings: Record<string, unknown> | null; created_at: Date }>;
   teams: Array<{ id: string; org_id: string; name: string; color: string }>;
-  members: Array<{ org_id: string; account_id: string; role: string; team_id: string | null; status: string; created_at: Date }>;
+  members: Array<{ org_id: string; account_id: string; role: string; team_id: string | null; status: string; created_at: Date; title?: string | null }>;
   invites: Array<{
     id: string;
     org_id: string;
@@ -39,6 +39,7 @@ export function orgDataFromRows(r: OrgRows): OrgData {
         teamId: m.team_id,
         status: m.status as MemberStatus,
         createdAt: m.created_at.getTime(),
+        ...(m.title ? { title: m.title } : {}),
       }),
     ),
     invites: r.invites.map(
@@ -82,8 +83,8 @@ export const UPSERT_ORG_SQL = `INSERT INTO orgs (id, slug, name, settings, creat
 export const UPSERT_TEAM_SQL = `INSERT INTO teams (id, org_id, name, color) VALUES ($1, $2, $3, $4)
   ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, color = EXCLUDED.color`;
 
-export const UPSERT_MEMBER_SQL = `INSERT INTO org_members (org_id, account_id, role, team_id, status, created_at) VALUES ($1, $2, $3, $4, $5, $6)
-  ON CONFLICT (org_id, account_id) DO UPDATE SET role = EXCLUDED.role, team_id = EXCLUDED.team_id, status = EXCLUDED.status`;
+export const UPSERT_MEMBER_SQL = `INSERT INTO org_members (org_id, account_id, role, team_id, status, created_at, title) VALUES ($1, $2, $3, $4, $5, $6, $7)
+  ON CONFLICT (org_id, account_id) DO UPDATE SET role = EXCLUDED.role, team_id = EXCLUDED.team_id, status = EXCLUDED.status, title = EXCLUDED.title`;
 
 export const DELETE_MEMBER_SQL = 'DELETE FROM org_members WHERE org_id = $1 AND account_id = $2';
 
@@ -116,7 +117,7 @@ export function opToSql(op: OrgOp): { sql: string; params: unknown[]; key?: stri
     case 'member': {
       const m = op.row;
       // Sem chave de fusao: remover e readicionar o mesmo vinculo precisa respeitar a ordem das operacoes.
-      return { sql: UPSERT_MEMBER_SQL, params: [m.orgId, m.accountId, m.role, m.teamId, m.status, new Date(m.createdAt)] };
+      return { sql: UPSERT_MEMBER_SQL, params: [m.orgId, m.accountId, m.role, m.teamId, m.status, new Date(m.createdAt), m.title ?? null] };
     }
     case 'member_delete':
       return { sql: DELETE_MEMBER_SQL, params: [op.orgId, op.accountId] };

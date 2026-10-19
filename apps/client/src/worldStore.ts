@@ -1,8 +1,8 @@
 import { useSyncExternalStore } from 'react';
-import { DEFAULT_TEAM, presentationOf, type AvatarConfig, type Deck, type OnlineEntry, type PresenceStatus, type RoomAdminEntry, type RoomDef, type ServerMessage, type SlideState, type StaffLevel, type StaffLogEntry, type StaffSelf, type StageView } from '@workverse/shared';
+import { DEFAULT_TEAM, presentationOf, type DirResult, type ProfileTag, type AvatarConfig, type Deck, type OnlineEntry, type PresenceStatus, type RoomAdminEntry, type RoomDef, type ServerMessage, type SlideState, type StaffLevel, type StaffLogEntry, type StaffSelf, type StageView } from '@workverse/shared';
 import { net } from './net';
 
-export interface RosterEntry {
+export interface RosterEntry extends ProfileTag {
   id: string;
   name: string;
   avatar: AvatarConfig;
@@ -10,6 +10,15 @@ export interface RosterEntry {
   status: PresenceStatus;
   /** Selo de staff: so vale o que o SERVIDOR mandou (PlayerView.staff / staff_flag). */
   staff?: StaffLevel;
+}
+
+/** Atendimento da recepcao (a NPC): painel aberto, ultima resposta do servidor e se ha uma busca em andamento. */
+export interface DirState {
+  open: boolean;
+  busy: boolean;
+  result: DirResult | null;
+  /** Mensagem da atendente (recusa, limite de pedidos...). */
+  notice: string | null;
 }
 
 export interface StaffAnnounce {
@@ -80,6 +89,7 @@ export interface WorldState {
   staffRooms: RoomAdminEntry[];
   /** Ultimo anuncio de staff (faixa dourada no topo). */
   announce: StaffAnnounce | null;
+  dir: DirState;
 }
 
 const MAX_LINES = 120;
@@ -107,6 +117,7 @@ const initial = (): WorldState => ({
   staffLog: [],
   staffRooms: [],
   announce: null,
+  dir: { open: false, busy: false, result: null, notice: null },
 });
 
 /** Error codes of the auditorium: shown in the presentation panel and in the chat log. */
@@ -163,18 +174,19 @@ net.on((msg: ServerMessage) => {
       set({
         room: msg.room.def,
         youId: msg.room.youId,
-        roster: msg.room.players.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, status: p.status ?? 'available', staff: p.staff })),
+        roster: msg.room.players.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, status: p.status ?? 'available', staff: p.staff, title: p.title, dept: p.dept, deptColor: p.deptColor })),
         population: msg.room.population,
         stage: null,
         deck: null,
         slide: { live: false, index: 0 },
         stageNotice: null,
+        dir: { ...state.dir, open: false },
       });
       addLine('system', '', `Você entrou em: ${msg.room.def.name}`);
 
       break;
     case 'joined':
-      set({ roster: [...state.roster.filter((p) => p.id !== msg.player.id), { id: msg.player.id, name: msg.player.name, avatar: msg.player.avatar, status: msg.player.status ?? 'available', staff: msg.player.staff }] });
+      set({ roster: [...state.roster.filter((p) => p.id !== msg.player.id), { id: msg.player.id, name: msg.player.name, avatar: msg.player.avatar, status: msg.player.status ?? 'available', staff: msg.player.staff, title: msg.player.title, dept: msg.player.dept, deptColor: msg.player.deptColor }] });
       addLine('system', '', `${msg.player.name} entrou na sala.`);
       break;
     case 'left': {
@@ -215,6 +227,12 @@ net.on((msg: ServerMessage) => {
     case 'slide':
       set({ slide: msg.state });
       break;
+    case 'profile':
+      set({ roster: state.roster.map((p) => (p.id === msg.id ? { ...p, title: msg.title, dept: msg.dept, deptColor: msg.deptColor } : p)) });
+      break;
+    case 'dir_result':
+      set({ dir: { ...state.dir, busy: false, notice: null, result: msg } });
+      break;
     case 'staff_flag':
       set({ roster: state.roster.map((p) => (p.id === msg.id ? { ...p, staff: msg.staff ?? undefined } : p)) });
       break;
@@ -239,6 +257,7 @@ net.on((msg: ServerMessage) => {
       addLine('system', '', `[${msg.scope === 'private' ? 'MENSAGEM DA EQUIPE' : msg.scope === 'all' ? 'AVISO GERAL' : 'AVISO'}] ${msg.from}: ${msg.text}`);
       break;
     case 'error':
+      if (state.dir.busy && (msg.code === 'rate_limited' || msg.code === 'forbidden')) set({ dir: { ...state.dir, busy: false, notice: msg.message } });
       if (['rate_limited', 'room_full', 'room_locked', 'room_denied', 'forbidden', 'muted', 'unmuted', 'kicked_room', 'off_duty'].includes(msg.code)) addLine('system', '', msg.message);
       if (msg.code === 'dm_offline' || msg.code === 'dm_self') set({ socialNotice: msg.message });
       if (STAGE_ERRORS.has(msg.code)) {
@@ -272,6 +291,18 @@ export const worldStore = {
       const conv = state.conversations[tab];
       set({ chatTab: tab, socialNotice: null, ...(conv ? { conversations: { ...state.conversations, [tab]: { ...conv, unread: 0 } } } : {}) });
     }
+  },
+  /** A atendente da recepcao: abre/fecha o painel e pede buscas ao servidor (que valida, isola a organizacao e limita a taxa). */
+  openReception() {
+    set({ dir: { ...state.dir, open: true, busy: true, notice: null } });
+    net.send({ t: 'dir_search' });
+  },
+  closeReception() {
+    set({ dir: { ...state.dir, open: false } });
+  },
+  dirSearch(dept: string | null, q: string) {
+    set({ dir: { ...state.dir, busy: true, notice: null } });
+    net.send({ t: 'dir_search', ...(dept ? { dept } : {}), ...(q.trim() ? { q: q.trim() } : {}) });
   },
   clearAnnounce(key: number) {
     if (state.announce?.key === key) set({ announce: null });

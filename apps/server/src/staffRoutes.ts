@@ -3,7 +3,7 @@ import { MAX_STAFF_REASON, isStaffLevel, staffCan, type ApiErrorBody, type Audit
 import { authenticate, type AuthDeps } from './authRoutes';
 import { KeyedLimiter } from './limiter';
 import { cleanChat } from './room';
-import { accountDetail, accountRow, addStaff, banAccount, createAccount, findAccount, removeStaff, resetPassword, setDisabled, setStaffLevel, staffRow, unbanAccount, type Actor, type AdminCtx } from './staffAdmin';
+import { accountDetail, accountRow, addStaff, banAccount, createAccount, findAccount, removeStaff, resetPassword, saveDept, setDisabled, setMemberProfile, setStaffLevel, staffRow, unbanAccount, type Actor, type AdminCtx } from './staffAdmin';
 import type { Result } from './org';
 import type { Account } from './store';
 import { isBanned, isDisabled } from './accountState';
@@ -115,7 +115,7 @@ export function registerStaffRoutes(app: FastifyInstance, deps: AuthDeps) {
     const actor = gate(req, reply, 'accounts.view', false);
     if (!actor) return;
     return {
-      orgs: store.orgs.listOrgs().map((o) => ({ id: o.id, name: o.name, teams: store.orgs.teamsOf(o.id).map((t) => ({ id: t.id, name: t.name })) })),
+      orgs: store.orgs.listOrgs().map((o) => ({ id: o.id, name: o.name, teams: store.orgs.teamsOf(o.id).map((t) => ({ id: t.id, name: t.name, color: t.color })) })),
     };
   });
 
@@ -154,10 +154,10 @@ export function registerStaffRoutes(app: FastifyInstance, deps: AuthDeps) {
   app.post('/api/staff/accounts', { bodyLimit: BODY_LIMIT }, async (req, reply) => {
     const actor = gate(req, reply, 'accounts.create', true);
     if (!actor) return;
-    const b = strict(req.body, ['email', 'displayName', 'password', 'orgId', 'teamId', 'role']);
+    const b = strict(req.body, ['email', 'displayName', 'password', 'orgId', 'teamId', 'role', 'title']);
     if (!b || !str(b.email, 254) || !str(b.displayName, 64)) return fail(reply, 400, 'bad_request', 'Informe e-mail e nome de exibição.');
-    for (const k of ['password', 'orgId', 'teamId', 'role'] as const) {
-      if (b[k] !== undefined && b[k] !== '' && !str(b[k], k === 'password' ? 200 : MAX_ID)) return fail(reply, 400, 'bad_request', 'Campo inválido.');
+    for (const k of ['password', 'orgId', 'teamId', 'role', 'title'] as const) {
+      if (b[k] !== undefined && b[k] !== '' && !str(b[k], k === 'password' ? 200 : k === 'title' ? 128 : MAX_ID)) return fail(reply, 400, 'bad_request', 'Campo inválido.');
     }
     const opt = (k: string) => (typeof b[k] === 'string' && b[k] !== '' ? (b[k] as string) : undefined);
     const r = await createAccount(ctx, actor, {
@@ -167,8 +167,40 @@ export function registerStaffRoutes(app: FastifyInstance, deps: AuthDeps) {
       orgId: opt('orgId'),
       teamId: opt('teamId'),
       role: opt('role'),
+      title: opt('title'),
     });
     return send(reply, r, (v) => ({ account: accountRow(ctx, v.account, actor.level), provisionalPassword: v.provisionalPassword }), 201);
+  });
+
+  /** Cargo e/ou setor de uma pessoa numa organizacao. */
+  app.patch('/api/staff/accounts/:id/profile', { bodyLimit: BODY_LIMIT }, async (req, reply) => {
+    const actor = gate(req, reply, 'accounts.profile', true);
+    if (!actor) return;
+    const acc = target(req, reply);
+    if (!acc) return;
+    const b = strict(req.body, ['orgId', 'teamId', 'title']);
+    if (!b || !str(b.orgId, MAX_ID) || (b.teamId !== undefined && !str(b.teamId, MAX_ID)) || (b.title !== undefined && b.title !== null && !str(b.title, 128))) return fail(reply, 400, 'bad_request', 'Requisição inválida.');
+    return send(reply, setMemberProfile(ctx, actor, acc, { orgId: b.orgId, teamId: b.teamId as string | undefined, title: b.title as string | null | undefined }), (v) => v);
+  });
+
+  // ---- setores ----------------------------------------------------------------------------------------------
+
+  app.post('/api/staff/orgs/:orgId/depts', { bodyLimit: BODY_LIMIT }, async (req, reply) => {
+    const actor = gate(req, reply, 'dept.manage', true);
+    if (!actor) return;
+    const b = strict(req.body, ['name', 'color']);
+    const orgId = (req.params as { orgId?: unknown }).orgId;
+    if (!b || !str(orgId, MAX_ID) || !str(b.name, 100) || (b.color !== undefined && !str(b.color, 16))) return fail(reply, 400, 'bad_request', 'Informe o nome e a cor.');
+    return send(reply, saveDept(ctx, actor, orgId, null, { name: b.name, color: b.color }), (v) => ({ dept: v }), 201);
+  });
+
+  app.patch('/api/staff/orgs/:orgId/depts/:teamId', { bodyLimit: BODY_LIMIT }, async (req, reply) => {
+    const actor = gate(req, reply, 'dept.manage', true);
+    if (!actor) return;
+    const b = strict(req.body, ['name', 'color']);
+    const { orgId, teamId } = req.params as { orgId?: unknown; teamId?: unknown };
+    if (!b || !str(orgId, MAX_ID) || !str(teamId, MAX_ID) || (b.name !== undefined && !str(b.name, 100)) || (b.color !== undefined && !str(b.color, 16))) return fail(reply, 400, 'bad_request', 'Requisição inválida.');
+    return send(reply, saveDept(ctx, actor, orgId, teamId, { name: b.name, color: b.color }), (v) => ({ dept: v }));
   });
 
   app.post('/api/staff/accounts/:id/reset-password', { bodyLimit: BODY_LIMIT }, async (req, reply) => {

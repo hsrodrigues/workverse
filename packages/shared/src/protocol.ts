@@ -7,6 +7,7 @@ import type { Permission, Role } from './rbac';
 import type { Deck, SlideState, StageView } from './stage';
 import type { Activity } from './activity';
 import type { EventMode, EventsView } from './events';
+import type { DirResult, ProfileTag } from './directory';
 import type { OnlineEntry, RoomAdminEntry, RoomOp, StaffLevel, StaffLogEntry } from './staff';
 
 /** Time an avatar takes to cross one tile. Shared so client animation matches the server clock. */
@@ -40,7 +41,7 @@ export const DEFAULT_TEAM = 'geral';
 /** Max length of the `to` field of a private message (account id or display name). */
 export const MAX_DM_TARGET_LENGTH = 64;
 
-export interface PlayerView {
+export interface PlayerView extends ProfileTag {
   id: string;
   name: string;
   avatar: AvatarConfig;
@@ -139,6 +140,8 @@ export type ClientMessage =
   | { t: 'room_invite_remove'; rid: number; roomId: string; accountId: string }
   /** Invite a person who is online to the room you are in: a private message with an "Entrar" button. */
   | { t: 'meeting_invite'; target: string }
+  /** Diretorio da recepcao: `dept` = id do setor, `q` = parte do nome (sem acento/caixa). Sem nenhum dos dois, lista os primeiros. */
+  | { t: 'dir_search'; dept?: string; q?: string }
   | StaffClientMessage;
 
 export type ServerMessage =
@@ -163,6 +166,9 @@ export type ServerMessage =
   /** The role or team of the live session changed (a member-management action). */
   | { t: 'perms'; orgId: string; role: Role; teamId: string | null; team: string; perms: Permission[] }
   | { t: 'room'; room: RoomSnapshot }
+  /** Cargo/setor de alguem da sala mudou (ou foi definido): todos veem na hora. Campos ausentes = sem etiqueta. */
+  | ({ t: 'profile'; id: string } & ProfileTag)
+  | ({ t: 'dir_result' } & DirResult)
   | { t: 'joined'; player: PlayerView }
   | { t: 'left'; id: string }
   | { t: 'path'; id: string; from: Point; path: Point[]; stepRemainingMs: number }

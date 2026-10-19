@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { tagBox } from '@workverse/shared';
 
 /**
  * Nitidez dos textos no mundo. A camera amplia tudo pelo zoom (1, 1.5, 2, 3) com `pixelArt`, entao um Text comum
@@ -14,6 +15,8 @@ export const INK = '#1d1a24';
 export const NAME_PX = 12;
 export const STAFF_PX = 10;
 export const BUBBLE_PX = 12;
+export const TAG_PX = 10;
+export const DEPT_PX = 8;
 const BUBBLE_WRAP = 168;
 
 /** Arredonda um valor do mundo para a grade de pixels da tela (1 / zoom), evitando meio pixel. */
@@ -60,4 +63,27 @@ export function buildBubble(scene: Phaser.Scene, c: Phaser.GameObjects.Container
   t.setPosition(-Math.round(t.width / 2), -Math.round(t.height / 2));
   c.add([g, t]);
   return h;
+}
+
+const hexNum = (hex: string) => parseInt(hex.slice(1), 16);
+
+/**
+ * Etiqueta de cargo/setor sobre o avatar: placa com contorno escuro, cor do setor e brilho de 1 pixel no topo (pixel art).
+ * Preenche `c` (origem no centro; o container deve ter `scale = 1 / zoom`) e devolve o tamanho em pixels de tela.
+ */
+export function buildTag(scene: Phaser.Scene, c: Phaser.GameObjects.Container, text: string, bg: string, fg: string, zoom: number): { w: number; h: number } {
+  c.removeAll(true);
+  const t = crisp(
+    scene.add.text(0, 0, text, { fontFamily: TEXT_FONT, fontSize: `${TAG_PX}px`, fontStyle: '600', color: fg }).setOrigin(0, 0),
+    zoom,
+  );
+  t.setScale(1);
+  const { w, h } = tagBox(t.width, t.height);
+  const g = scene.add.graphics();
+  g.fillStyle(0x1d1a24, 1).fillRoundedRect(-w / 2 - 1, -h / 2 - 1, w + 2, h + 2, 3);
+  g.fillStyle(hexNum(bg), 1).fillRoundedRect(-w / 2, -h / 2, w, h, 2);
+  g.fillStyle(0xffffff, 0.28).fillRect(-w / 2 + 2, -h / 2, w - 4, 1);
+  t.setPosition(-Math.round(t.width / 2), -Math.round(t.height / 2));
+  c.add([g, t]);
+  return { w, h };
 }

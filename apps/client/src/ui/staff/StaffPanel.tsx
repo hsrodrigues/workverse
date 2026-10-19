@@ -4,6 +4,7 @@ import { net } from '../../net';
 import { useNetStatus, useWorld, worldStore } from '../../worldStore';
 import { Window } from '../Window';
 import { AccountsTab } from './AccountsTab';
+import { DeptsTab } from './DeptsTab';
 import { EventsTab } from './EventsTab';
 import { LogTab } from './LogTab';
 import { ModeTab } from './ModeTab';
@@ -55,12 +56,13 @@ export function StaffBarButton() {
   );
 }
 
-type TabId = 'online' | 'rooms' | 'notices' | 'accounts' | 'events' | 'team' | 'mode' | 'log';
+type TabId = 'online' | 'rooms' | 'notices' | 'accounts' | 'depts' | 'events' | 'team' | 'mode' | 'log';
 const TABS: { id: TabId; label: string }[] = [
   { id: 'online', label: 'Online' },
   { id: 'rooms', label: 'Salas' },
   { id: 'notices', label: 'Avisos' },
   { id: 'accounts', label: 'Contas' },
+  { id: 'depts', label: 'Setores' },
   { id: 'events', label: 'Eventos' },
   { id: 'team', label: 'Equipe staff' },
   { id: 'mode', label: 'Modo' },
@@ -151,6 +153,7 @@ export function StaffPanel() {
             {tab === 'rooms' && <RoomsTab />}
             {tab === 'notices' && <NoticesTab />}
             {tab === 'accounts' && (staffCan(level, 'accounts.view') ? <AccountsTab /> : null)}
+            {tab === 'depts' && (staffCan(level, 'accounts.view') ? <DeptsTab /> : null)}
             {tab === 'events' && <EventsTab />}
             {tab === 'team' && <TeamTab />}
             {tab === 'mode' && <ModeTab />}

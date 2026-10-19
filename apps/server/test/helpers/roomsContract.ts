@@ -47,6 +47,26 @@ export function roomsStoreContract(label: string, make: () => Promise<RoomsHandl
       expect(again.orgs.roomInvitesOf('orgA', 'private')).toHaveLength(1);
     });
 
+    it('keeps member title and sector color after a restart, and removing the title sticks', async () => {
+      const h = await make();
+      const { boss, ana } = await seed(h);
+      h.store.orgs.putMember({ orgId: 'orgA', accountId: boss.id, role: 'owner', teamId: 'orgA-t', status: 'active', createdAt: 1, title: 'Diretor Financeiro' });
+      h.store.orgs.putMember({ orgId: 'orgA', accountId: ana.id, role: 'member', teamId: 'orgA-t', status: 'active', createdAt: 2 });
+      h.store.orgs.putTeam({ id: 'orgA-t', orgId: 'orgA', name: 'Financeiro', color: '#f0883e' });
+      await h.settle();
+      let again = await h.reopen();
+      expect(again.orgs.getMember('orgA', boss.id)?.title).toBe('Diretor Financeiro');
+      expect(again.orgs.getMember('orgA', ana.id)?.title).toBeUndefined();
+      expect(again.orgs.getTeam('orgA-t')).toMatchObject({ name: 'Financeiro', color: '#f0883e' });
+      // changing, then clearing
+      const m = { ...again.orgs.getMember('orgA', boss.id)! };
+      again.orgs.putMember({ ...m, title: 'Diretor de Finanças' });
+      again.orgs.putMember({ orgId: m.orgId, accountId: m.accountId, role: m.role, teamId: m.teamId, status: m.status, createdAt: m.createdAt });
+      await (again as { flush?: () => Promise<void> }).flush?.();
+      again = await h.reopen();
+      expect(again.orgs.getMember('orgA', boss.id)?.title).toBeUndefined();
+    });
+
     it('updates in place (the version grows) and removes invitations for good', async () => {
       const h = await make();
       const { boss, ana } = await seed(h);

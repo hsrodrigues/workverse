@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { MAX_CHAT_LENGTH, ROOM_DEFS, STATUS_LABELS } from '@workverse/shared';
+import { MAX_CHAT_LENGTH, ROOM_DEFS, STATUS_LABELS, badgeTextColor, deptShort, safeDeptColor } from '@workverse/shared';
+import { BadgeCard } from './BadgeCard';
+import { ReceptionPanel } from './Reception';
 import { net } from '../net';
 import { listen } from '../bus';
 import { useNetStatus, useWorld, worldStore } from '../worldStore';
@@ -43,11 +45,23 @@ export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onRec
   useEffect(() => {
     const off1 = listen('avatarClick', (d) => d && setMenu(d));
     const off2 = listen('closeMenus', () => setMenu(null));
+    const off3 = listen('receptionistClick', () => worldStore.openReception());
     return () => {
       off1();
       off2();
+      off3();
     };
   }, []);
+
+  // clicar fora da ficha/menu fecha (o Esc ja fecha)
+  useEffect(() => {
+    if (!menu) return;
+    const off = (e: PointerEvent) => {
+      if (!(e.target as HTMLElement | null)?.closest?.('.ctx') && !(e.target as HTMLElement | null)?.closest?.('canvas')) setMenu(null);
+    };
+    document.addEventListener('pointerdown', off);
+    return () => document.removeEventListener('pointerdown', off);
+  }, [menu]);
 
   useEffect(() => {
     const el = log.current;
@@ -96,6 +110,7 @@ export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onRec
     return () => clearTimeout(id);
   }, [status]);
   const menuPerson = menu ? world.roster.find((p) => p.id === menu.id) : undefined;
+  const [cardId, setCardId] = useState<string | null>(null);
 
   return (
     <div className="hud">
@@ -149,8 +164,16 @@ export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onRec
             <ul className="people">
               {world.roster.map((p) => (
                 <li key={p.id} className={p.id === world.youId ? 'me' : ''}>
-                  <StatusDot status={p.status} /> {p.name}
+                  <StatusDot status={p.status} />{' '}
+                  <button type="button" className="link-name" onClick={() => setCardId(cardId === p.id ? null : p.id)} aria-expanded={cardId === p.id} title="Ver crachá" data-testid={`people-name-${p.name}`}>
+                    {p.name}
+                  </button>
                   {p.staff && <StaffBadge level={p.staff} />}
+                  {deptShort(p.dept) && (
+                    <span className="role-chip" style={{ background: safeDeptColor(p.deptColor), color: badgeTextColor(safeDeptColor(p.deptColor)) }} data-testid={`people-role-${p.name}`}>
+                      {deptShort(p.dept, 14)}
+                    </span>
+                  )}
                   {p.id === world.youId && <em> (você)</em>}
                   {world.stage?.speakerId === p.id && <em title="Está no palco"> 🎤</em>}
                   {indicators.get(p.id) && (indicators.get(p.id)!.micPublished || indicators.get(p.id)!.camPublished) && (
@@ -178,6 +201,11 @@ export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onRec
                       </button>
                     </>
                   )}
+                  {cardId === p.id && (
+                    <div className="people-card">
+                      <BadgeCard compact name={p.name} avatar={p.avatar} title={p.title} dept={p.dept} deptColor={p.deptColor} staff={p.staff} />
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
@@ -186,8 +214,9 @@ export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onRec
       )}
 
       {menu && (
-        <div className="ctx" style={{ left: Math.min(menu.x, window.innerWidth - 190), top: Math.min(menu.y, window.innerHeight - 190) }} role="menu">
+        <div className="ctx" style={{ left: Math.min(menu.x, window.innerWidth - 290), top: Math.min(menu.y, window.innerHeight - 190) }} role="menu">
           <div className="ctx-title">{menu.name}</div>
+          {menuPerson && <BadgeCard compact onClose={() => setMenu(null)} name={menuPerson.name} avatar={menuPerson.avatar} title={menuPerson.title} dept={menuPerson.dept} deptColor={menuPerson.deptColor} staff={menuPerson.staff} />}
           {menuPerson && (
             <div className="ctx-status">
               <StatusDot status={menuPerson.status} /> {STATUS_LABELS[menuPerson.status]}
@@ -242,6 +271,7 @@ export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onRec
       )}
 
       <ChatWindow />
+      <ReceptionPanel onWalkNear={onWalkNear} />
       <StaffPanel />
       <AnnounceBanner />
       <VideoDock />

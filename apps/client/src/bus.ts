@@ -3,6 +3,8 @@ import type { Furniture } from '@workverse/shared';
 export interface BusEvents {
   avatarClick: { id: string; name: string; x: number; y: number };
   closeMenus: undefined;
+  /** scene -> UI: the player clicked the receptionist NPC (opens the "Atendimento" panel). */
+  receptionistClick: undefined;
   // ---- room editor ("Modo decoração"): the scene only reports pointers and draws what the UI asks for
   /** UI -> scene: decorate mode on/off (while on, clicks never walk, sit or open avatar menus). */
   furnishActive: boolean;

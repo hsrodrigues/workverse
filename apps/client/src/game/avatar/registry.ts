@@ -24,6 +24,12 @@ export interface DrawerDef {
   hold?(pose: Pose, it: Resolved): HoldSpec | null;
 }
 
+/**
+ * Extras of the frame being rendered that are NOT part of the saved look: the color of the sector stripe on the corporate badge
+ * (`sp.badge`). Set by `renderFrame` for the duration of one frame (rendering is synchronous), never stored.
+ */
+export const renderExtras: { stripe: string | null } = { stripe: null };
+
 const DRAWERS = new Map<string, DrawerDef>();
 
 export function registerDrawer(key: string, def: DrawerDef | DrawerDef['draw']): void {

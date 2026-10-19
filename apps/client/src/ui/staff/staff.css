@@ -951,3 +951,7 @@ textarea.sf-input {
   margin: 8px 0;
   font-weight: 700;
 }
+
+.sf-swatches { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.sf-swatch { width: 26px; height: 26px; border: 2px solid #1d1a24; border-radius: 3px; cursor: pointer; font-weight: 700; padding: 0; }
+.sf-swatch.on { outline: 3px solid #ffe27a; }

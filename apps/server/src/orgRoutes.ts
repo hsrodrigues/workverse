@@ -102,6 +102,7 @@ export function registerOrgRoutes(app: FastifyInstance, deps: AuthDeps, opts: Or
         accountId: m.accountId,
         displayName: a?.displayName ?? '?',
         ...(manages && a ? { email: a.email } : {}),
+        ...(m.title ? { title: m.title } : {}),
         role: m.role,
         teamId: m.teamId,
         status: m.status,
@@ -174,6 +175,19 @@ export function registerOrgRoutes(app: FastifyInstance, deps: AuthDeps, opts: Or
     return send(reply, svc.createTeam(actor, body.name, body.color), (t): TeamView => ({ id: t.id, name: t.name, color: t.color }), 201);
   });
 
+  /** Renomeia/recolore um setor (permissao `team.manage`); quem esta online ve a etiqueta mudar na hora. */
+  app.patch<{ Params: { id: string; teamId: string } }>('/api/orgs/:id/teams/:teamId', { bodyLimit: BODY_LIMIT, preHandler: checkOrigin }, async (req, reply) => {
+    void reply.header('Cache-Control', 'no-store');
+    const account = identify(req);
+    if (!account) return fail(reply, 401, 'unauthorized', 'Sessão inválida ou expirada.');
+    const actor = actorIn(account, req.params.id, reply);
+    if (!actor) return;
+    const body = bodyOf(req);
+    const r = svc.updateTeam(actor, req.params.teamId, { ...('name' in body ? { name: body.name } : {}), ...('color' in body ? { color: body.color } : {}) });
+    if (r.ok) world.refreshTeam(actor.orgId, r.value.id);
+    return send(reply, r, (t): TeamView => ({ id: t.id, name: t.name, color: t.color }));
+  });
+
   app.patch<{ Params: { id: string; accountId: string } }>('/api/orgs/:id/members/:accountId', { bodyLimit: BODY_LIMIT, preHandler: checkOrigin }, async (req, reply) => {
     void reply.header('Cache-Control', 'no-store');
     const account = identify(req);
@@ -184,11 +198,16 @@ export function registerOrgRoutes(app: FastifyInstance, deps: AuthDeps, opts: Or
     const r = svc.updateMember(actor, req.params.accountId, {
       ...('role' in body ? { role: body.role } : {}),
       ...('teamId' in body ? { teamId: body.teamId } : {}),
+      ...('title' in body ? { title: body.title } : {}),
     });
-    if (r.ok) world.refreshMembership(r.value.accountId, actor.orgId);
+    if (r.ok) {
+      world.refreshMembership(r.value.accountId, actor.orgId);
+      world.refreshProfile(r.value.accountId, actor.orgId);
+    }
     return send(reply, r, (m): MemberView => ({
       accountId: m.accountId,
       displayName: deps.store.getById(m.accountId)?.displayName ?? '?',
+      ...(m.title ? { title: m.title } : {}),
       role: m.role,
       teamId: m.teamId,
       status: m.status,

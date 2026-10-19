@@ -13,7 +13,7 @@ Salas, avatares personalizáveis, chat em balões, reuniões com áudio e vídeo
 ![Fastify](https://img.shields.io/badge/Fastify-5-000000?logo=fastify)
 ![LiveKit](https://img.shields.io/badge/LiveKit-WebRTC-1f2937)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-opcional-336791?logo=postgresql&logoColor=white)
-![Testes](https://img.shields.io/badge/testes-430%2B-2ea44f)
+![Testes](https://img.shields.io/badge/testes-640%2B-2ea44f)
 ![Licença](https://img.shields.io/badge/licen%C3%A7a-MIT-blue)
 
 </div>
@@ -53,6 +53,7 @@ corporativas ficam integradas a ele.
 ## O que dá para fazer
 
 **Mundo isométrico**
+- Cargo e setor por pessoa (pílula do setor sobre o avatar, ficha/crachá ao clicar) e uma atendente na recepção que encontra colegas por setor e nome ([docs/directory.md](docs/directory.md)).
 - 9 salas (recepção, escritório, copa, auditório, equipe, duas de reunião, privada e concentração) ligadas por portas com placas.
 - Clique no chão para andar: caminho por A\* validado no servidor, animação por direção e profundidade correta (avatares passam na frente e atrás dos móveis).
 - Sentar em cadeiras e sofás; **sentar num computador mostra "trabalhando"**; pegar café ou água e ver a caneca na mão.
@@ -139,7 +140,7 @@ Para testar rápido sem senha, com `ALLOW_DEV_LOGIN=1` (**somente desenvolviment
 Para ser staff admin, crie um arquivo `.env.local` com `BOOTSTRAP_STAFF_EMAILS=voce@email.com:admin`.
 
 ```bash
-npm test               # 430+ testes (unidade, integração, rede, segurança, PostgreSQL embutido)
+npm test               # 640+ testes (unidade, integração, rede, segurança, PostgreSQL embutido)
 npm run typecheck      # tsc em todos os projetos
 npm run build          # build do cliente
 npm run loadtest       # teste de carga progressivo

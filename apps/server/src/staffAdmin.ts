@@ -1,5 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import {
   BAN_MAX_MINUTES,
+  DEFAULT_DEPT_COLOR,
+  cleanDeptName,
+  cleanTitle,
+  isDeptColor,
   CREATE_ROLE_MAX,
   DEFAULT_ORG_ID,
   DEFAULT_TEAM_ID,
@@ -82,6 +87,8 @@ export function accountDetail(ctx: AdminCtx, a: Account, viewer: StaffLevel): St
     orgName: ctx.store.orgs.getOrg(m.orgId)?.name ?? m.orgId,
     role: m.role,
     team: m.teamId ? (ctx.store.orgs.getTeam(m.teamId)?.name ?? null) : null,
+    teamId: m.teamId,
+    title: m.title ?? null,
     status: m.status,
   }));
   return {
@@ -149,6 +156,7 @@ export interface CreateInput {
   orgId?: string;
   teamId?: string;
   role?: string;
+  title?: string;
 }
 
 export async function createAccount(ctx: AdminCtx, actor: Actor, input: CreateInput): Promise<Result<{ account: Account; provisionalPassword: string }>> {
@@ -178,6 +186,13 @@ export async function createAccount(ctx: AdminCtx, actor: Actor, input: CreateIn
     teamId = orgId === DEFAULT_ORG_ID ? DEFAULT_TEAM_ID : (ctx.store.orgs.teamsOf(orgId)[0]?.id ?? null);
   }
 
+  let title: string | undefined;
+  if (input.title !== undefined) {
+    const t = cleanTitle(input.title);
+    if (t === null) return fail(400, 'bad_title', 'O cargo deve ter até 32 caracteres (letras, números, espaço e . , - / & ( )).');
+    if (t) title = t;
+  }
+
   if (ctx.store.getByEmail(email)) return fail(409, 'email_taken', 'Este e-mail já está cadastrado.');
   if (ctx.store.getByName(displayName)) return fail(409, 'name_taken', 'Esse nome já está em uso por outra pessoa.');
   const passwordHash = await hashPassword(password);
@@ -194,9 +209,69 @@ export async function createAccount(ctx: AdminCtx, actor: Actor, input: CreateIn
   account.createdBy = actor.account.displayName;
   svc.markInitialized(account);
   ctx.store.save(account);
-  ctx.store.orgs.putMember({ orgId, accountId: account.id, role, teamId, status: 'active', createdAt: ctx.clock() });
-  ctx.world.staff.record(who(actor), 'account.create', label(account), `org ${ctx.store.orgs.getOrg(orgId)!.name}, papel ${role}`);
+  ctx.store.orgs.putMember({ orgId, accountId: account.id, role, teamId, status: 'active', createdAt: ctx.clock(), ...(title ? { title } : {}) });
+  ctx.world.staff.record(who(actor), 'account.create', label(account), `org ${ctx.store.orgs.getOrg(orgId)!.name}, papel ${role}${title ? `, cargo ${title}` : ''}`);
   return ok({ account, provisionalPassword: password });
+}
+
+/** Define cargo e/ou setor de uma pessoa numa organizacao (painel de staff). Quem esta online ve a etiqueta mudar na hora. */
+export function setMemberProfile(ctx: AdminCtx, actor: Actor, target: Account, input: { orgId: string; teamId?: string; title?: string | null }): Result<{ orgId: string; teamId: string | null; title: string | null }> {
+  const m = ctx.store.orgs.getMember(input.orgId, target.id);
+  if (!m) return fail(404, 'not_member', 'A pessoa não faz parte dessa organização.');
+  const next = { ...m };
+  const changes: string[] = [];
+  if (input.teamId !== undefined) {
+    const team = ctx.store.orgs.getTeam(input.teamId);
+    if (!team || team.orgId !== input.orgId) return fail(404, 'team_not_found', 'Setor não encontrado nessa organização.');
+    next.teamId = team.id;
+    changes.push(`setor ${team.name}`);
+  }
+  if (input.title !== undefined) {
+    const t = input.title === null ? '' : cleanTitle(input.title);
+    if (t === null) return fail(400, 'bad_title', 'O cargo deve ter até 32 caracteres (letras, números, espaço e . , - / & ( )).');
+    if (t) next.title = t;
+    else delete next.title;
+    changes.push(t ? `cargo ${t}` : 'cargo removido');
+  }
+  if (changes.length === 0) return fail(400, 'bad_request', 'Nada para alterar.');
+  ctx.store.orgs.putMember(next);
+  ctx.world.refreshMembership(target.id, input.orgId);
+  ctx.world.refreshProfile(target.id, input.orgId);
+  ctx.world.staff.record(who(actor), 'account.profile', label(target), `${ctx.store.orgs.getOrg(input.orgId)?.name ?? input.orgId}: ${changes.join(', ')}`);
+  return ok({ orgId: input.orgId, teamId: next.teamId, title: next.title ?? null });
+}
+
+/** Cria ou edita um setor (equipe) de uma organizacao pelo painel de staff. */
+export function saveDept(ctx: AdminCtx, actor: Actor, orgId: string, teamId: string | null, input: { name?: unknown; color?: unknown }): Result<{ id: string; name: string; color: string }> {
+  const org = ctx.store.orgs.getOrg(orgId);
+  if (!org) return fail(404, 'org_not_found', 'Organização não encontrada.');
+  const exists = (name: string, except?: string) => ctx.store.orgs.teamsOf(orgId).some((t) => t.id !== except && t.name.toLowerCase() === name.toLowerCase());
+  if (input.color !== undefined && !isDeptColor(input.color)) return fail(400, 'bad_color', 'Escolha uma das cores da paleta.');
+  if (teamId === null) {
+    const name = cleanDeptName(input.name);
+    if (!name) return fail(400, 'bad_name', 'O nome do setor deve ter de 2 a 24 caracteres (letras, números e espaço).');
+    if (exists(name)) return fail(409, 'team_exists', 'Já existe um setor com esse nome.');
+    const team = { id: randomUUID(), orgId, name, color: typeof input.color === 'string' ? input.color.toLowerCase() : DEFAULT_DEPT_COLOR };
+    ctx.store.orgs.putTeam(team);
+    ctx.world.staff.record(who(actor), 'dept.create', { id: team.id, name }, org.name);
+    return ok({ id: team.id, name: team.name, color: team.color });
+  }
+  const team = ctx.store.orgs.getTeam(teamId);
+  if (!team || team.orgId !== orgId) return fail(404, 'team_not_found', 'Setor não encontrado.');
+  let next = team;
+  if (input.name !== undefined) {
+    const name = cleanDeptName(input.name);
+    if (!name) return fail(400, 'bad_name', 'O nome do setor deve ter de 2 a 24 caracteres (letras, números e espaço).');
+    if (exists(name, team.id)) return fail(409, 'team_exists', 'Já existe um setor com esse nome.');
+    next = { ...next, name };
+  }
+  if (typeof input.color === 'string') next = { ...next, color: input.color.toLowerCase() };
+  if (next !== team) {
+    ctx.store.orgs.putTeam(next);
+    ctx.world.refreshTeam(orgId, team.id);
+    ctx.world.staff.record(who(actor), 'dept.update', { id: team.id, name: next.name }, `${org.name}: ${team.name} -> ${next.name}, ${next.color}`);
+  }
+  return ok({ id: next.id, name: next.name, color: next.color });
 }
 
 export async function resetPassword(ctx: AdminCtx, actor: Actor, target: Account, password?: string): Promise<Result<{ provisionalPassword: string }>> {

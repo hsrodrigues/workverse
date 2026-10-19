@@ -13,3 +13,5 @@ export * from './layoutRules';
 export * from './furnish';
 export * from './events';
 export * from './eventLayout';
+export * from './directory';
+export * from './receptionist';

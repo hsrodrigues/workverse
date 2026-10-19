@@ -40,12 +40,14 @@ export const PERMISSIONS = [
   'media.use',
   'stage.attend',
   'stage.host',
+  // diretorio da recepcao (buscar colegas por setor e nome); visitantes nao listam a organizacao
+  'dir.search',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 export const isPermission = (v: unknown): v is Permission => typeof v === 'string' && (PERMISSIONS as readonly string[]).includes(v);
 
 const DAILY: Permission[] = ['room.enter', 'chat.say', 'dm.send', 'presence.set', 'avatar.edit', 'media.use', 'stage.attend'];
-const MEMBER: Permission[] = [...DAILY, 'chat.team', 'stage.host', 'file.upload', 'task.manage', 'event.create'];
+const MEMBER: Permission[] = [...DAILY, 'dir.search', 'chat.team', 'stage.host', 'file.upload', 'task.manage', 'event.create'];
 const ADMIN: Permission[] = [
   ...MEMBER,
   'member.invite',
@@ -95,6 +97,8 @@ export interface TeamView {
 export interface MemberView {
   accountId: string;
   displayName: string;
+  /** Cargo (texto curto) definido por quem administra. */
+  title?: string;
   /** Only visible to people who can manage members. */
   email?: string;
   role: Role;

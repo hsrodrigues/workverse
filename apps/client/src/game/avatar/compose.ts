@@ -18,7 +18,7 @@ import {
   type View,
 } from './engine';
 import { tonesOf } from './recolor';
-import { getDrawer, type Emitter } from './registry';
+import { getDrawer, renderExtras, type Emitter } from './registry';
 import './drawers';
 import { HELD_HEX, HELD_ITEM_DEFS } from './held';
 import type { HeldItem } from '@workverse/shared';
@@ -79,7 +79,16 @@ interface Part {
  * Renders one frame (64x128, feet anchored at (32,100)) as ABGR pixels. `held` puts a cup of the environment (coffee mug,
  * glass of water) in the hand. Both hands are on the keyboard while typing, so nothing is held in those frames.
  */
-export function renderFrame(av: AvatarV2, view: View, frame: number, held: HeldItem | null = null): Uint32Array {
+export function renderFrame(av: AvatarV2, view: View, frame: number, held: HeldItem | null = null, stripe: string | null = null): Uint32Array {
+  renderExtras.stripe = stripe;
+  try {
+    return renderFrameInner(av, view, frame, held);
+  } finally {
+    renderExtras.stripe = null;
+  }
+}
+
+function renderFrameInner(av: AvatarV2, view: View, frame: number, held: HeldItem | null): Uint32Array {
   const f = Math.max(0, Math.min(FRAME_COUNT - 1, frame));
   const pose = poseOfFrame(f);
   const look = resolveLook(av, pose, view, f >= FRAME_TYPE && f < FRAME_DRINK ? null : held);

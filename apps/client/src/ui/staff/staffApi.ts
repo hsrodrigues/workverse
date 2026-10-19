@@ -6,7 +6,7 @@ import { ApiError, request } from '../../api';
 export interface OrgChoice {
   id: string;
   name: string;
-  teams: { id: string; name: string }[];
+  teams: { id: string; name: string; color: string }[];
 }
 
 export interface AuditFilters {
@@ -30,8 +30,13 @@ export const staffApi = {
   accounts: (q: string, filter: 'all' | 'staff' | 'online' | 'blocked') =>
     request<{ total: number; accounts: StaffAccountRow[] }>('GET', `/api/staff/accounts${qs({ q, filter })}`),
   account: (id: string) => request<{ account: StaffAccountDetail }>('GET', `/api/staff/accounts/${encodeURIComponent(id)}`).then((r) => r.account),
-  create: (body: { email: string; displayName: string; password?: string; orgId?: string; teamId?: string; role?: string }) =>
+  create: (body: { email: string; displayName: string; password?: string; orgId?: string; teamId?: string; role?: string; title?: string }) =>
     request<{ account: StaffAccountRow; provisionalPassword: string }>('POST', '/api/staff/accounts', body),
+  setProfile: (id: string, body: { orgId: string; teamId?: string; title?: string | null }) =>
+    request<{ orgId: string; teamId: string | null; title: string | null }>('PATCH', `/api/staff/accounts/${encodeURIComponent(id)}/profile`, body),
+  createDept: (orgId: string, name: string, color: string) => request<{ dept: { id: string; name: string; color: string } }>('POST', `/api/staff/orgs/${encodeURIComponent(orgId)}/depts`, { name, color }),
+  updateDept: (orgId: string, teamId: string, body: { name?: string; color?: string }) =>
+    request<{ dept: { id: string; name: string; color: string } }>('PATCH', `/api/staff/orgs/${encodeURIComponent(orgId)}/depts/${encodeURIComponent(teamId)}`, body),
   resetPassword: (id: string, password?: string) =>
     request<{ provisionalPassword: string }>('POST', `/api/staff/accounts/${encodeURIComponent(id)}/reset-password`, password ? { password } : {}),
   setDisabled: (id: string, disabled: boolean, reason?: string) =>

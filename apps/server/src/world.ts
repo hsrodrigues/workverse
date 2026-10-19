@@ -10,8 +10,16 @@ import {
   AUTO_AWAY_MS,
   DEFAULT_TEAM,
   MAX_DM_TARGET_LENGTH,
+  DIR_MAX_RESULTS,
+  MAX_DIR_QUERY,
+  RECEPTIONIST_LINES,
+  foldText,
+  isGeneralDept,
+  type DirEntry,
+  type DirResult,
   isPresenceStatus,
   isActivity,
+  isForbiddenChar,
   type PresenceStatus,
   type ClientMessage,
   type Dir8,
@@ -33,7 +41,7 @@ import { OrgWorld } from './orgWorld';
 import { StaffService, applyBootstrapStaff, isStaffMessage, parseStaffEmails } from './staff';
 import { EventsService, parseCompanyDate, parseOptionalEvents, type EventsConfig } from './eventsService';
 import { setActiveEventsProvider } from './wardrobe';
-import { accessBlock } from './accountState';
+import { accessBlock, isBanned, isDisabled } from './accountState';
 import { roomAccessOf, type RoomAdminEntry, type RoomListEntry, type RoomOp } from '@workverse/shared';
 
 export interface Connection {
@@ -415,6 +423,99 @@ export class World {
     return can(this.actorOf(player), action, this.resourceFor(player, msg));
   }
 
+  // ---- cargo e setor ---------------------------------------------------------------------------------
+
+  /** Copia cargo/setor do vinculo para o jogador. Devolve true quando algo mudou. */
+  private syncProfile(p: Player): boolean {
+    const tag = this.orgService.profileOf(p.orgId, p.accountId);
+    const changed = p.title !== tag.title || p.dept !== tag.dept || p.deptColor !== tag.deptColor;
+    p.title = tag.title;
+    p.dept = tag.dept;
+    p.deptColor = tag.deptColor;
+    return changed;
+  }
+
+  /** Cargo ou setor de uma pessoa mudou: quem esta na sala dela (inclusive ela) ve a etiqueta nova na hora. */
+  refreshProfile(accountId: string, orgId: string) {
+    const entry = this.online.get(accountId);
+    if (!entry || entry.player.orgId !== orgId) return;
+    const p = entry.player;
+    if (!this.syncProfile(p)) return;
+    const msg = { t: 'profile' as const, id: p.id, ...(p.title ? { title: p.title } : {}), ...(p.dept ? { dept: p.dept, deptColor: p.deptColor } : {}) };
+    if (p.roomId) this.roomOf(p)?.broadcast(msg);
+    else p.send(msg);
+  }
+
+  /** Um setor foi renomeado/recolorido: todos os online dele atualizam. */
+  refreshTeam(orgId: string, teamId: string) {
+    for (const p of [...this.playersOfOrg(orgId)]) if (p.teamId === teamId) this.refreshProfile(p.accountId, orgId);
+  }
+
+  // ---- diretorio da recepcao ---------------------------------------------------------------------------
+
+  /** Setores da organizacao para os botoes do diretorio ("Geral" nao conta como setor). */
+  deptsOf(orgId: string) {
+    return this.store.orgs
+      .teamsOf(orgId)
+      .filter((t) => !isGeneralDept(t))
+      .map((t) => ({ id: t.id, name: t.name, color: t.color }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  }
+
+  /**
+   * Busca de colegas. Isolada por organizacao (so os membros ativos da org de quem pergunta), sem e-mail, sem contas
+   * desativadas/banidas, e staff invisivel aparece como offline. A sala so e dita quando quem pergunta pode entrar nela.
+   */
+  searchDirectory(player: Player, dept: string | null, q: string): DirResult {
+    const orgId = player.orgId;
+    const depts = this.deptsOf(orgId);
+    const needle = foldText(q);
+    const now = this.clock();
+    const found: Array<DirEntry & { key: string }> = [];
+    for (const m of this.store.orgs.membersOf(orgId)) {
+      if (m.status !== 'active') continue;
+      if (dept && m.teamId !== dept) continue;
+      const acc = this.store.getById(m.accountId);
+      if (!acc || isDisabled(acc) || isBanned(acc, now)) continue;
+      if (needle && !foldText(acc.displayName).includes(needle)) continue;
+      const tag = this.orgService.profileOf(orgId, m.accountId);
+      const live = this.online.get(m.accountId)?.player;
+      const visible = !!live && live.orgId === orgId && !live.invisible && !!live.roomId;
+      const entry: DirEntry & { key: string } = {
+        key: foldText(acc.displayName),
+        name: acc.displayName,
+        ...tag,
+        avatar: live?.avatar ?? acc.avatar,
+        ...(live && live.staff && live.onDuty && !live.invisible ? { staff: live.staff } : {}),
+        online: visible,
+        ...(m.accountId === player.accountId ? { you: true } : {}),
+      };
+      if (visible && live!.roomId) {
+        if (this.canEnter(player, live!.roomId).allow) {
+          entry.roomId = live!.roomId;
+          entry.roomName = this.roomOf(live!)?.built.def.name;
+        } else entry.roomHidden = true;
+      }
+      found.push(entry);
+    }
+    // online primeiro, depois ordem alfabetica
+    found.sort((a, b) => Number(b.online) - Number(a.online) || a.key.localeCompare(b.key, 'pt-BR'));
+    const results = found.slice(0, DIR_MAX_RESULTS).map(({ key: _k, ...e }) => e);
+    return { depts, dept, q, results, truncated: found.length > DIR_MAX_RESULTS };
+  }
+
+  private dirSearch(conn: Connection, player: Player, msg: Extract<ClientMessage, { t: 'dir_search' }>, now: number) {
+    const dept = msg.dept;
+    const q = msg.q;
+    if ((dept !== undefined && (typeof dept !== 'string' || dept.length === 0 || dept.length > 64)) || (q !== undefined && (typeof q !== 'string' || q.length > MAX_DIR_QUERY * 2))) return this.strike(conn);
+    if (!player.dirBucket.take(now)) return conn.send({ t: 'error', code: 'rate_limited', message: RECEPTIONIST_LINES.slow });
+    const cleanQ = typeof q === 'string' ? [...q].filter((c) => !isForbiddenChar(c.codePointAt(0)!)).join('').normalize('NFKC').replace(/\s+/g, ' ').trim().slice(0, MAX_DIR_QUERY) : '';
+    // um setor de outra organizacao (ou inexistente) e tratado como "nenhum resultado", sem pista de que existe
+    const deptOk = dept !== undefined && this.store.orgs.getTeam(dept)?.orgId === player.orgId;
+    const res = this.searchDirectory(player, dept === undefined ? null : deptOk ? dept : '__none__', cleanQ);
+    conn.send({ t: 'dir_result', ...res, dept: deptOk ? dept! : null });
+  }
+
   /** Called after a membership changed (role, team, removal): updates live sessions and tells the client. */
   refreshMembership(accountId: string, orgId: string) {
     const entry = this.online.get(accountId);
@@ -424,6 +525,7 @@ export class World {
     const p = entry.player;
     p.role = actor.role;
     p.teamId = actor.teamId;
+    this.refreshProfile(accountId, orgId);
     // A guest cannot stay in a room that is not open to guests, and a new role/team may close the door of a restricted room.
     if (p.role === 'guest' && p.roomId && this.roomOf(p)?.built.def.guestAllowed !== true) {
       this.enterRoom(p, this.landingRoom(p));
@@ -503,6 +605,8 @@ export class World {
         return this.directMessage(conn, player, msg, now);
       case 'team':
         return this.teamMessage(conn, player, msg, now);
+      case 'dir_search':
+        return this.dirSearch(conn, player, msg, now);
       case 'join': {
         const id = typeof msg.roomId === 'string' && this.roomOf(player, msg.roomId) ? msg.roomId : undefined;
         const account = this.online.get(player.accountId)?.account;
@@ -761,6 +865,7 @@ export class World {
     player.orgId = org.id;
     player.role = chosen.role;
     player.teamId = chosen.teamId;
+    this.syncProfile(player);
     this.org(org.id);
     if (account.lastOrg !== org.id) {
       account.lastOrg = org.id;

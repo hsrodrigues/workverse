@@ -31,6 +31,8 @@ export type StaffAction =
   | 'accounts.create'
   | 'accounts.reset'
   | 'accounts.disable'
+  | 'accounts.profile'
+  | 'dept.manage'
   | 'ban'
   | 'unban'
   | 'audit.read'
@@ -57,6 +59,8 @@ export const STAFF_MIN_LEVEL: Readonly<Record<StaffAction, StaffLevel>> = {
   'accounts.create': 'moderator',
   'accounts.reset': 'moderator',
   'accounts.disable': 'moderator',
+  'accounts.profile': 'moderator',
+  'dept.manage': 'moderator',
   ban: 'moderator',
   unban: 'moderator',
   'audit.read': 'moderator',
@@ -121,7 +125,7 @@ export interface StaffAccountRow {
 }
 
 export interface StaffAccountDetail extends StaffAccountRow {
-  memberships: { orgId: string; orgName: string; role: string; team: string | null; status: string }[];
+  memberships: { orgId: string; orgName: string; role: string; team: string | null; teamId: string | null; title: string | null; status: string }[];
   ban: { at: number; by: string; reason: string; until: number | null } | null;
   disabledInfo: { at: number; by: string; reason: string } | null;
   mute: { until: number; by: string; reason: string } | null;
