@@ -443,7 +443,7 @@ registerDrawer('sp.hand_kit', {
       }
       // royal staff: a long slim gold rod leaning outward (clear of the face), grip rings, a big golden orb with a red gem and a cross on top
       const topY = hy - 25;
-      const lean = (y: number) => hx + Math.round((hy - y) * 0.3);
+      const lean = (_y: number) => hx + 3; // straight vertical rod, nudged outward to clear the face
       for (let y = topY + 4; y <= hy + 6; y++) {
         c.px(lean(y), y, GOLD.lt);
         c.px(lean(y) + 1, y, GOLD.base);
