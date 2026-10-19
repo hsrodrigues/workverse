@@ -13,7 +13,7 @@ import { TOP_Y, openingStrip, standCollar } from './outers';
 const WHITE = '#f4f1ea';
 
 /** Shared body of a jacket: hull + paint + optional opening that shows the top underneath. */
-function body(c: Ctx2, col: Tones, o: { hem: number; top?: number; grow?: number; low?: number; open?: [number, number, number, number]; deco?: (x: number, y: number, tone: 0 | 1 | 2) => string | undefined }) {
+export function body(c: Ctx2, col: Tones, o: { hem: number; top?: number; grow?: number; low?: number; open?: [number, number, number, number]; deco?: (x: number, y: number, tone: 0 | 1 | 2) => string | undefined }) {
   MAIN.clear();
   torsoHull(c, MAIN, o.hem, o.top ?? TOP_Y, o.grow ?? 0.55, o.low ?? 0.65);
   if (o.open && !c.back) {
@@ -25,12 +25,12 @@ function body(c: Ctx2, col: Tones, o: { hem: number; top?: number; grow?: number
   c.paint(MAIN, col, { lw: 2, sw: 4, deco: o.deco });
 }
 
-function done(c: Ctx2) {
+export function done(c: Ctx2) {
   MAIN.clear();
   c.clip = null;
 }
 
-const button = (c: Ctx2, psi: number, yo: number, hex = '#d6d0c2', grow = 0.9) => {
+export const button = (c: Ctx2, psi: number, yo: number, hex = '#d6d0c2', grow = 0.9) => {
   const p = torsoPoint(c, psi, yo, grow);
   if (p[2] > 0.3) {
     c.px(p[0], p[1], hex);
@@ -39,7 +39,7 @@ const button = (c: Ctx2, psi: number, yo: number, hex = '#d6d0c2', grow = 0.9) =
 };
 
 /** Pair of collar flaps lying open on the chest (front view). */
-function flaps(c: Ctx2, t: Tones, drop = 18.6) {
+export function flaps(c: Ctx2, t: Tones, drop = 18.6) {
   const bz = c.rig.bz;
   for (const sg of SIDE) {
     const poly = [

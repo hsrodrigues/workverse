@@ -13,7 +13,7 @@ for (const key of ['top.tee', 'top.shirt', 'top.polo', 'top.hoodie', 'top.sweate
       const len = specOf(it).sleeve;
       if (len <= 0) return null;
       // contrast sleeves (raglan) and patterned fabrics (plaid, rugby stripes) carry through to the arms
-      return { len, cuff: cuffOf(styleOf(it)), deco: topDeco(it), ...(it.item.params?.variant === 'raglan' ? { tones: OFF_WHITE } : {}) };
+      return { len, cuff: it.item.params?.variant === 'staff' ? 'plain' : cuffOf(styleOf(it)), deco: topDeco(it), ...(it.item.params?.variant === 'raglan' ? { tones: OFF_WHITE } : {}) };
     },
   });
 }

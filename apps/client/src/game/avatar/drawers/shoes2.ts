@@ -1,5 +1,5 @@
 import { mix, shade } from '../../pixel';
-import { MAIN, SIDE, v3, type Ctx2, type P2, type Resolved, type V3 } from '../engine';
+import { MAIN, SIDE, drawShoe, v3, type Ctx2, type P2, type Resolved, type V3 } from '../engine';
 import { tonesOf, type Tones } from '../recolor';
 import { registerDrawer } from '../registry';
 
@@ -218,3 +218,25 @@ function flatShoe(c: Ctx2, i: 0 | 1, it: Resolved) {
   finish(c);
 }
 registerDrawer('shoes.flat_kit', { draw: (c, it, e) => e.leg('shoe', (i) => flatShoe(c, i, it)) });
+
+// ---- staff dress shoes -----------------------------------------------------------------------------------------------------
+
+registerDrawer('staff.shoes', {
+  draw: (c, it, e) =>
+    e.leg('shoe', (i) => {
+      drawShoe(c, i, it);
+      const f = foot(c, i);
+      const gold = '#d9b24a';
+      // gold toe cap, a buckle on the instep and a gold heel edge
+      const tc = f.along(0.88, 0);
+      c.line(tc[0] - 2, tc[1] - 2, tc[0] + 2, tc[1] - 2, gold);
+      c.px(tc[0], tc[1] - 3, '#f2cf63');
+      const b = f.along(0.5, -0.4);
+      c.px(b[0] - 1, b[1] - 3, gold);
+      c.px(b[0], b[1] - 3, '#f2cf63');
+      c.px(b[0] + 1, b[1] - 3, gold);
+      c.px(b[0], b[1] - 2, '#a87a1a');
+      c.line(f.heel[0] - 2, f.heel[1] + 3, f.heel[0] + 1, f.heel[1] + 3, gold);
+      c.clip = null;
+    }),
+});

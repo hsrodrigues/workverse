@@ -94,6 +94,30 @@ function hardHat(c: Ctx2, it: Resolved) {
   done(c);
 }
 
+function topHat(c: Ctx2, it: Resolved) {
+  const [cx, cy] = headCenter(c);
+  const col = it.t;
+  const by = cy - 9.2;
+  MAIN.clear();
+  MAIN.ellipse(cx, by, 15.6, 4.6);
+  c.paint(MAIN, tonesOf(shade(col.base, -0.1)), { lw: 2, sw: 3 });
+  MAIN.clear();
+  MAIN.ellipse(cx, cy - 23.6, 9.8, 3.4);
+  for (let y = Math.floor(cy - 23.6); y <= Math.floor(by - 0.5); y++) for (let x = Math.round(cx - 9.8); x <= Math.round(cx + 9.8); x++) MAIN.set(x, y);
+  c.paint(MAIN, col, { lw: 2, sw: 3 });
+  // gold band, a small gold star, and a shine along the left side of the crown
+  const gold = tonesOf('#d9b24a');
+  for (let y = Math.round(by - 4.4); y <= Math.round(by - 1.6); y++) {
+    for (let x = Math.round(cx - 10); x <= Math.round(cx + 10); x++) {
+      if (!MAIN.has(x, y)) continue;
+      c.px(x, y, y === Math.round(by - 4.4) ? gold.lt : y === Math.round(by - 1.6) ? gold.sh : gold.base);
+    }
+  }
+  for (const [dx, dy] of [[0, -1], [-1, 0], [0, 0], [1, 0], [0, 1]] as const) c.px(cx + dx, Math.round(by - 3) + dy - (dy === 0 ? 0 : 0), dx === 0 && dy === 0 ? WHITE : '#fff3b8');
+  for (let y = Math.round(cy - 22); y <= Math.round(by - 6); y++) c.px(cx - 7, y, col.lt);
+  done(c);
+}
+
 function halo(c: Ctx2) {
   const [cx, cy] = headCenter(c);
   const ry = 3.4;
@@ -149,6 +173,7 @@ registerDrawer('sp.head_kit', (c, it, e) => {
     else if (shape === 'horns') catEars(c, it, true);
     else if (shape === 'hardhat') hardHat(c, it);
     else if (shape === 'halo') halo(c);
+    else if (shape === 'tophat') topHat(c, it);
     else crown(c);
   });
 });
@@ -231,6 +256,21 @@ function cape(c: Ctx2, it: Resolved) {
   const l0 = bodyPt(c, -12, hem + 0.6, sit ? -11 : -8.4);
   const l1 = bodyPt(c, 12, hem + 0.6, sit ? -11 : -8.4);
   c.line(l0[0], l0[1], l1[0], l1[1], mix(col.base, WHITE, 0.4));
+  if (it.item.params?.gold) {
+    // golden trim: hem band, borders down both edges, a star emblem on the back
+    const g = '#d9b24a';
+    c.line(l0[0], l0[1] + 1, l1[0], l1[1] + 1, g);
+    c.line(l0[0], l0[1], l1[0], l1[1], '#f2cf63');
+    for (const sg of SIDE) {
+      const a = bodyPt(c, sg * 6.2, 21, -3.2);
+      const b = bodyPt(c, sg * 10.4, 5, -6.2);
+      const d = bodyPt(c, sg * 12.6, hem, sit ? -11 : -8.4);
+      c.line(a[0], a[1], b[0], b[1], g);
+      c.line(b[0], b[1], d[0], d[1], g);
+    }
+    const s = bodyPt(c, 0, 11, sit ? -6 : -5.6);
+    for (const [dx, dy] of [[0, -2], [0, -1], [-2, 0], [-1, 0], [0, 0], [1, 0], [2, 0], [-1, 1], [1, 1], [-1, 2], [1, 2]] as const) c.px(s[0] + dx, s[1] + dy, dx === 0 && dy === 0 ? WHITE : '#f2cf63');
+  }
   done(c);
 }
 
@@ -355,44 +395,94 @@ registerDrawer('sp.aura', (c, it, e) =>
 
 registerDrawer('sp.hand_kit', {
   hold: () => ({ side: 1, target: (rig: Rig) => v3(6.2, rig.hipY + 14.2, rig.bz + 9) }),
-  draw: (c, it, e) =>
-    e.part(armDepth(c, 1) + 0.02, () => {
+  draw: (c, it, e) => {
+    const trophy = it.item.params?.shape === 'trophy';
+    // the staff is tall: it is drawn over the head line (in front of the body) when seen from the front
+    e.part(!trophy && !c.back ? 21 : armDepth(c, 1) + 0.02, () => {
       const { rig } = c;
       const wr = rig.wrist[1];
       const dir = vNorm(vSub(wr, rig.elbow[1]));
       const tip = c.Pv(vAdd(wr, [dir[0] * 3.4, dir[1] * 3.4, dir[2] * 3.4]));
       const hx = Math.round(tip[0]);
       const hy = Math.round(tip[1]);
-      if (it.item.params?.shape === 'trophy') {
-        // a cup on a stem and a base, handles on both sides
-        const x0 = hx - 3;
-        const y0 = hy - 9;
+      const GOLD_D = '#a87a1a';
+      if (trophy) {
+        // a cup on a stem and a base, with a loop handle on each side
+        const x0 = hx - 4;
+        const y0 = hy - 12;
         MAIN.clear();
-        for (let y = 0; y < 5; y++) for (let x = y === 4 ? 1 : 0; x < (y === 4 ? 5 : 7); x++) MAIN.set(x0 + x, y0 + y);
+        for (let y = 0; y < 6; y++) {
+          const inset = y >= 4 ? y - 3 : 0;
+          for (let x = inset; x < 8 - inset; x++) MAIN.set(x0 + x, y0 + y);
+        }
         c.paint(MAIN, GOLD, { lw: 1, sw: 2 });
+        c.clip = null;
         c.px(x0 + 1, y0 + 1, WHITE);
         c.px(x0 + 1, y0 + 2, GOLD.lt);
-        for (const [dx, dy] of [[-1, 1], [-1, 2], [7, 1], [7, 2]] as const) c.px(x0 + dx, y0 + dy, GOLD.sh);
-        c.px(x0 + 3, y0 + 5, GOLD.sh);
+        c.px(x0 + 4, y0 + 2, GOLD_D);
+        c.px(x0 + 3, y0 + 3, GOLD_D);
+        c.px(x0 + 5, y0 + 3, GOLD_D);
+        c.px(x0 + 4, y0 + 4, GOLD_D);
+        for (const sg of SIDE) {
+          const hxp = sg < 0 ? x0 - 1 : x0 + 8;
+          c.px(hxp, y0 + 1, GOLD.base);
+          c.px(hxp + sg, y0 + 2, GOLD_D);
+          c.px(hxp + sg, y0 + 3, GOLD_D);
+          c.px(hxp, y0 + 4, GOLD.sh);
+        }
         c.px(x0 + 3, y0 + 6, GOLD.base);
-        for (let x = 1; x < 6; x++) c.px(x0 + x, y0 + 7, x === 1 ? GOLD.lt : GOLD.sh);
-        c.px(x0 + 3, y0 + 2, '#b57a1e');
+        c.px(x0 + 4, y0 + 6, GOLD.sh);
+        c.px(x0 + 3, y0 + 7, GOLD.base);
+        c.px(x0 + 4, y0 + 7, GOLD.sh);
+        for (let x = 1; x < 7; x++) {
+          c.px(x0 + x, y0 + 8, x < 3 ? GOLD.lt : GOLD.base);
+          c.px(x0 + x, y0 + 9, GOLD.sh);
+        }
         done(c);
         return;
       }
-      // scepter: a gold rod held at the grip, topped by a jewel with a small crown of points
-      for (let k = -8; k <= 5; k++) {
-        c.px(hx, hy + k, GOLD.base);
-        c.px(hx - 1, hy + k, k % 5 === 0 ? '#b57a1e' : GOLD.lt);
-        c.px(hx + 1, hy + k, GOLD.sh);
+      // royal staff: a long slim gold rod leaning outward (clear of the face), grip rings, a big golden orb with a red gem and a cross on top
+      const topY = hy - 25;
+      const lean = (y: number) => hx + Math.round((hy - y) * 0.3);
+      for (let y = topY + 4; y <= hy + 6; y++) {
+        c.px(lean(y), y, GOLD.lt);
+        c.px(lean(y) + 1, y, GOLD.base);
+        c.px(lean(y) + 2, y, GOLD.base);
+        c.px(lean(y) + 3, y, GOLD.sh);
       }
+      for (const y of [hy - 4, hy - 14]) {
+        const x = lean(y);
+        c.px(x - 1, y, GOLD.base);
+        c.px(x + 4, y, GOLD_D);
+        c.px(x, y, WHITE);
+        c.px(x + 1, y, GOLD.lt);
+        c.px(x + 2, y, GOLD.base);
+        c.px(x + 3, y, GOLD.base);
+      }
+      const ox = lean(topY);
       MAIN.clear();
-      MAIN.ellipse(hx, hy - 11, 3, 3);
-      c.paint(MAIN, tonesOf('#d03a5a'), { lw: 1, sw: 2 });
-      c.px(hx - 1, hy - 12, WHITE);
-      for (const dx of [-3, 3]) c.px(hx + dx, hy - 8, GOLD.base);
-      c.px(hx - 2, hy - 9, GOLD.lt);
-      c.px(hx + 2, hy - 9, GOLD.sh);
+      MAIN.ellipse(ox + 0.5, topY, 4.4, 4.4);
+      c.paint(MAIN, GOLD, { lw: 2, sw: 3 });
+      c.clip = null;
+      for (let x = -3; x <= 4; x++) {
+        c.px(ox + x, topY + 2, GOLD_D);
+        c.px(ox + x, topY - 2, GOLD_D);
+      }
+      c.px(ox, topY, '#e04858');
+      c.px(ox + 1, topY, '#b02a45');
+      c.px(ox, topY - 1, '#ff9aa8');
+      c.px(ox + 1, topY + 1, '#7a1a30');
+      c.px(ox - 2, topY - 3, WHITE);
+      // cross above the orb
+      for (let y = topY - 11; y <= topY - 5; y++) {
+        c.px(ox, y, GOLD.lt);
+        c.px(ox + 1, y, GOLD.sh);
+      }
+      for (const x of [-2, -1, 2, 3]) c.px(ox + x, topY - 9, x < 0 ? GOLD.lt : GOLD.sh);
+      c.px(ox - 3, topY - 9, GOLD_D);
+      c.px(ox + 4, topY - 9, GOLD_D);
+      c.px(ox, topY - 12, WHITE);
       done(c);
-    }),
+    });
+  },
 });

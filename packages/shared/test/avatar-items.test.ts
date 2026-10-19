@@ -390,4 +390,25 @@ describe('catalog expansion', () => {
     expect(dressed.ok).toBe(true);
     for (const i of ITEMS.filter((x) => x.slot === 'neck' || x.slot === 'aura')) expect(i.availability).toBe('available');
   });
+
+  it('has a coordinated staff set: legendary, staff-locked, tagged and wearable together', () => {
+    const set = ITEMS.filter((i) => i.id.startsWith('staff.'));
+    expect(set.map((i) => i.id).sort()).toEqual(['staff.aura', 'staff.cape', 'staff.glasses', 'staff.hat', 'staff.jacket', 'staff.shirt', 'staff.shoes', 'staff.tie', 'staff.trousers', 'staff.watch']);
+    for (const i of set) {
+      expect(i.unlock, i.id).toBe('staff');
+      expect(i.rarity, i.id).toBe('legendary');
+      expect(i.tags, i.id).toContain('staff');
+      expect(i.availability, i.id).toBe('available');
+      expect(accessOf(i, { unlocks: new Set() }), i.id).toBe('locked');
+      expect(accessOf(i, { unlocks: new Set(['staff']) }), i.id).toBe('ok');
+    }
+    let av: AvatarV2 = cloneAvatar(DEFAULT_AVATAR);
+    for (const i of set) {
+      const r = equipItem(av, i.id);
+      expect(r.ok, i.id).toBe(true);
+      if (r.ok) av = r.avatar;
+    }
+    expect(validateAvatar(av, makePolicy({ unlocks: new Set(['staff']) })).ok).toBe(true);
+    expect(validateAvatar(av, makePolicy({ unlocks: new Set() })).ok).toBe(false);
+  });
 });

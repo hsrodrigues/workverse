@@ -22,7 +22,7 @@ interface LegOpts {
   detail?: (g: { hip: P2; knee: P2; ank: P2; side: -1 | 1; col: Tones }) => void;
 }
 
-function legKit(c: Ctx2, i: 0 | 1, it: Resolved, o: LegOpts) {
+export function legKit(c: Ctx2, i: 0 | 1, it: Resolved, o: LegOpts) {
   const { rig } = c;
   const hp = c.Pv(rig.hip[i]);
   const kn = c.Pv(rig.knee[i]);
@@ -53,7 +53,7 @@ function legKit(c: Ctx2, i: 0 | 1, it: Resolved, o: LegOpts) {
   c.clip = null;
 }
 
-function pelvis(c: Ctx2, it: Resolved, deco?: LegOpts['deco']) {
+export function pelvis(c: Ctx2, it: Resolved, deco?: LegOpts['deco']) {
   MAIN.clear();
   torsoHull(c, MAIN, -5.2, 5.5, 0.35, 0.35);
   c.paint(MAIN, it.t, { lw: 2, sw: 3, deco });
@@ -274,5 +274,44 @@ registerDrawer('bottom.skirt_kit', {
     e.leg('garment', (i) => legKit(c, i, { ...it, t: c.skin } as Resolved, { r: [4.4, 3.9, 3.6, 2.9], bare: false }));
     e.part(sit ? 36 : -40, () => pelvis(c, it));
     e.part(sit ? 44 : -30, () => skirt(c, it));
+  },
+});
+
+// ---- staff trousers -----------------------------------------------------------------------------------------------------
+
+const STAFF_GOLD = '#d9b24a';
+
+registerDrawer('staff.trousers', {
+  draw(c, it, e) {
+    const sit = c.rig.sit;
+    e.leg('garment', (i) =>
+      legKit(c, i, it, {
+        r: [4.4, 4.0, 3.8, 3.5],
+        detail: ({ hip, knee, ank, side, col }) => {
+          // double gold stripe down the outer seam, pressed crease, gold cuff line
+          for (const o of [0.62, 0.86]) {
+            const a = limbPt(hip, knee, 0.08, side * o, 4.4);
+            const b = limbPt(hip, knee, 1.0, side * o, 4.0);
+            const d = limbPt(knee, ank, 0.06, side * o, 3.8);
+            const f = limbPt(knee, ank, 0.9, side * o, 3.5);
+            c.line(a[0], a[1], b[0], b[1], o < 0.7 ? STAFF_GOLD : '#a87a1a');
+            c.line(b[0], b[1], d[0], d[1], o < 0.7 ? STAFF_GOLD : '#a87a1a');
+            c.line(d[0], d[1], f[0], f[1], o < 0.7 ? STAFF_GOLD : '#a87a1a');
+          }
+          const f0 = limbPt(hip, knee, 0.15, 0.05, 4.4);
+          const f1 = limbPt(knee, ank, 0.85, 0.05, 3.5);
+          c.line(f0[0], f0[1], knee[0], knee[1], col.lt);
+          c.line(knee[0], knee[1], f1[0], f1[1], col.lt);
+          const c0 = limbPt(knee, ank, 0.82, -0.95, 3.5);
+          const c1 = limbPt(knee, ank, 0.82, 0.95, 3.5);
+          c.line(c0[0], c0[1], c1[0], c1[1], STAFF_GOLD);
+        },
+      }),
+    );
+    e.part(sit ? 36 : -40, () => pelvis(c, it));
+    e.part(sit ? 37 : -39, () => {
+      tuckedBelt(c);
+      surfLine(c, -1.4, 5.2, 1.4, 5.2, STAFF_GOLD, 0.45);
+    });
   },
 });

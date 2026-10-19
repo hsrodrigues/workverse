@@ -15,4 +15,5 @@ import './outers2';
 import './hairFem';
 import './specials';
 import './specials2';
+import './staff';
 import './events';

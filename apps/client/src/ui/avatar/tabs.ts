@@ -29,6 +29,7 @@ const STYLE_FILTERS: Filter[] = [
   { id: 'casual', label: 'Casual', tag: 'casual' },
   { id: 'corp', label: 'Corporativo', tag: 'corporate' },
   { id: 'uniform', label: 'Uniforme', tag: 'uniform' },
+  { id: 'staff', label: 'Equipe', tag: 'staff' },
 ];
 
 /** The option sections of every tab except "Meu Guarda-Roupa" (and the skin tone, handled by the editor). */

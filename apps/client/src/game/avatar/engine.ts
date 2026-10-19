@@ -355,9 +355,10 @@ export function makeRig(frame: number, view: View, hold: HoldSpec | null = null)
       }
     }
     if (wave >= 0 && i === rig.waveSide) {
-      const wob = [-3.2, 0.4, 3.6][wave];
-      target = v3(sg * (15.6 + wob), STAND_HIP + 33, 2.5);
-      pole = v3(sg * 1, -0.8, -0.1);
+      // hand well beside the head (head radius is ~14), swinging out and back; the elbow stays low and out
+      const wob = [-3.4, 0.6, 4.6][wave];
+      target = v3(sg * (21.5 + wob), STAND_HIP + 34, 3);
+      pole = v3(sg * 1, -0.5, -0.6);
     }
     const r = ik(sh, target, L_UPPER, L_FORE, pole);
     rig.elbow[i] = r.joint;
@@ -417,7 +418,7 @@ const STYLE_OF: Readonly<Record<string, number>> = {
   'shoes.sneakers': 0, 'shoes.runner': 0, 'shoes.hightop': 3, 'shoes.dress': 1, 'shoes.loafer': 1, 'shoes.boots': 2,
   'top.tee': 0, 'top.tank': 0, 'top.striped': 0, 'top.wv': 0, 'top.shirt': 1, 'top.hoodie': 2, 'outer.blazer': 3, 'top.polo': 4, 'top.sweater': 5,
   'hair.short': 0, 'hair.long': 1, 'hair.spiky': 2, 'hair.bun': 3, 'hair.bald': 4, 'hair.afro': 5, 'hair.ponytail': 6, 'hair.bob': 7, 'hair.pompadour': 8,
-  'top.plaid': 1, 'top.turtleneck': 6, 'top.longsleeve': 0, 'top.vneck': 7, 'top.henley': 8, 'top.print_bolt': 0, 'top.print_heart': 0, 'top.baseball': 0, 'top.jersey': 7, 'top.sweatshirt': 9, 'top.rugby': 4, 'top.hoodie_zip': 2,
+  'top.plaid': 1, 'top.turtleneck': 6, 'top.longsleeve': 0, 'top.vneck': 7, 'top.henley': 8, 'top.print_bolt': 0, 'top.print_heart': 0, 'top.baseball': 0, 'top.jersey': 7, 'top.sweatshirt': 9, 'top.rugby': 4, 'top.hoodie_zip': 2, 'staff.shirt': 1, 'staff.shoes': 1,
   'acc.snapback': 3,
   'acc.glasses': 1, 'acc.glasses_round': 1, 'acc.headset': 2, 'acc.cap': 3, 'acc.sunglasses': 4, 'acc.beanie': 5, 'acc.headphones': 6,
 };
@@ -1077,6 +1078,19 @@ function topExtras(c: Ctx2, it: Resolved) {
       c.px(pull[0], pull[1] + 1, '#8a8f9a');
     }
   }
+  if (variant === 'staff') {
+    // gold studs on the placket, a gold pin on the collar tip and a thin gold hem
+    if (front) {
+      for (const yy of [16.2, 12.4, 8.6, 4.8]) {
+        const q = torsoPoint(c, 0, yy, 0.5);
+        if (q[2] > 0.3) {
+          c.px(q[0], q[1], '#f2cf63');
+          c.px(q[0] + 1, q[1], '#a87a1a');
+        }
+      }
+    }
+    surfLine(c, -1.45, -1.4, 1.45, -1.4, '#d9b24a', 0.35);
+  }
   if (variant === 'rugby' && front) {
     // two-button placket under the white collar
     surfLine(c, 0, 18.2, 0, 13.4, col.sh, 0.4);
@@ -1144,7 +1158,7 @@ function neckline(c: Ctx2, it: Resolved) {
     }
   } else if (style === 1 || style === 4) {
     // collar flaps + placket + buttons
-    const flap = style === 1 || it.item.params?.variant === 'rugby' ? white : tonesOf(shade(col.base, 0.08));
+    const flap = it.item.params?.variant === 'staff' ? tonesOf('#d9b24a') : style === 1 || it.item.params?.variant === 'rugby' ? white : tonesOf(shade(col.base, 0.08));
     if (front) {
       AUX.clear();
       const l = [
