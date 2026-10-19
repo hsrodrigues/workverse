@@ -110,7 +110,12 @@ export const ITEMS: readonly ItemDef[] = [
   it({ id: 'facial.goatee', name: 'Cavanhaque', description: 'Bigode com barbicha no queixo.', drawer: 'facial.goatee', category: 'face', slot: 'facialHair', palette: 'brow', defaultColor: 'dark-brown', thumb: 'face', tags: ['bigode', 'barba'] }),
   it({ id: 'facial.beard', name: 'Barba cheia', description: 'Barba cobrindo o queixo e o maxilar.', drawer: 'facial.beard', category: 'face', slot: 'facialHair', palette: 'brow', defaultColor: 'dark-brown', thumb: 'face', tags: ['barba'] }),
 
-  // ---- tops ---------------------------------------------------------------
+  it({ id: 'mouth.lips', name: 'Batom', description: 'Sorriso com batom, na cor que você escolher.', drawer: 'mouth.lips', category: 'face', slot: 'mouth', palette: 'lip', defaultColor: 'red', thumb: 'face', tags: ['maquiagem', 'feminino', 'feliz'] }),
+  it({ id: 'mouth.lips_bold', name: 'Batom marcante', description: 'Lábios cheios com batom e brilho.', drawer: 'mouth.lips', category: 'face', slot: 'mouth', palette: 'lip', defaultColor: 'crimson', params: { bold: true }, thumb: 'face', tags: ['maquiagem', 'feminino'] }),
+  it({ id: 'acc.blush', name: 'Blush', description: 'Bochechas coradas.', drawer: 'acc.blush', category: 'accessories', slot: 'cheeks', palette: 'lip', colors: ['pink', 'coral', 'rose', 'nude', 'red'], defaultColor: 'pink', thumb: 'face', tags: ['maquiagem', 'feminino'] }),
+  it({ id: 'acc.freckles', name: 'Sardas', description: 'Sardinhas no nariz e nas bochechas.', drawer: 'acc.freckles', category: 'accessories', slot: 'freckles', thumb: 'face', tags: ['maquiagem', 'unissex'] }),
+  it({ id: 'acc.eyeshadow', name: 'Sombra', description: 'Sombra colorida nas pálpebras.', drawer: 'acc.eyeshadow', category: 'accessories', slot: 'lids', palette: 'shadow', defaultColor: 'lilac', thumb: 'face', tags: ['maquiagem', 'feminino'] }),
+  // ---- tops ----------------------------------------------------------
   top('top.tee', 'Camiseta', 'Camiseta de manga curta.', 'top.tee', ['casual']),
   top('top.tank', 'Regata', 'Camiseta sem mangas.', 'top.tee', ['casual'], { params: { variant: 'tank' } }),
   top('top.striped', 'Camiseta listrada', 'Camiseta com listras horizontais.', 'top.tee', ['casual'], { params: { variant: 'striped' } }),
@@ -134,6 +139,29 @@ export const ITEMS: readonly ItemDef[] = [
   top('top.rugby', 'Camisa rugby', 'Polo de manga longa com listras largas e gola branca.', 'top.polo', ['casual', 'esporte'], { params: { variant: 'rugby' }, defaultColor: 'navy' }),
   top('top.hoodie_zip', 'Moletom com zíper', 'Moletom com capuz, zíper na frente e bolsos.', 'top.hoodie', ['casual'], { params: { zip: true }, defaultColor: 'slate' }),
 
+  // feminine tops (bodice kit: straps, strapless, off-shoulder, halter, crop...)
+  top('top.crop', 'Cropped', 'Blusa curta de mangas curtas, deixa a barriga à mostra.', 'fem.top', ['casual', 'feminino'], { params: { variant: 'crop' }, defaultColor: 'rose' }),
+  top('top.cami', 'Regata de alcinha', 'Top de alças finas com decote em U.', 'fem.top', ['casual', 'feminino'], { params: { variant: 'cami' }, defaultColor: 'sky' }),
+  top('top.ruffle', 'Blusa de babado', 'Blusa de mangas bufantes com babados no decote e na barra.', 'fem.top', ['casual', 'feminino'], { params: { variant: 'ruffle' }, defaultColor: 'off-white' }),
+  top('top.bowblouse', 'Camisa com laço', 'Camisa de manga longa com laço grande na gola.', 'fem.top', ['corporate', 'feminino'], { params: { variant: 'bowblouse' }, defaultColor: 'rose', rarity: 'uncommon' }),
+  top('top.body', 'Body manga longa', 'Body justo de decote redondo e fundo.', 'fem.top', ['casual', 'feminino'], { params: { variant: 'body' }, defaultColor: 'charcoal' }),
+  top('top.offshoulder', 'Ciganinha', 'Blusa ombro a ombro com babado e mangas curtas.', 'fem.top', ['casual', 'feminino'], { params: { variant: 'offshoulder' }, defaultColor: 'coral' }),
+  top('top.tube', 'Tomara que caia', 'Top sem alças com borda reta.', 'fem.top', ['casual', 'feminino'], { params: { variant: 'tube' }, defaultColor: 'violet' }),
+  top('top.shortknit', 'Suéter curto', 'Suéter de tricô curto, de mangas compridas.', 'fem.top', ['casual', 'feminino'], { params: { variant: 'shortknit' }, defaultColor: 'sand' }),
+  top('top.babytee', 'Baby look', 'Camiseta justinha com uma estrelinha estampada.', 'fem.top', ['casual', 'feminino'], { params: { variant: 'babytee' }, defaultColor: 'rose' }),
+  top('top.sport', 'Top esportivo', 'Top de treino com alças largas e faixa na barra.', 'fem.top', ['esporte', 'feminino'], { params: { variant: 'sport' }, defaultColor: 'magenta' }),
+  top('top.halter', 'Frente única', 'Blusa com alças que se cruzam atrás do pescoço.', 'fem.top', ['casual', 'feminino'], { params: { variant: 'halter' }, defaultColor: 'teal' }),
+
+  // dresses: one-piece garments take the top slot and cover the bottom (the saved bottom just is not drawn)
+  top('dress.short', 'Vestido curto', 'Vestido curtinho de alças finas. Peça inteira: cobre a parte de baixo.', 'fem.dress', ['vestido', 'casual', 'feminino'], { params: { variant: 'short' }, covers: ['bottom'], thumb: 'full', defaultColor: 'coral' }),
+  top('dress.midi', 'Vestido midi', 'Vestido midi com decote em V, mangas curtas e cinto dourado. Peça inteira.', 'fem.dress', ['vestido', 'casual', 'corporate', 'feminino'], { params: { variant: 'midi' }, covers: ['bottom'], thumb: 'full', defaultColor: 'teal' }),
+  top('dress.long', 'Vestido longo', 'Vestido longo e fluido de alças largas. Peça inteira.', 'fem.dress', ['vestido', 'festa', 'feminino'], { params: { variant: 'long' }, covers: ['bottom'], thumb: 'full', defaultColor: 'wine', rarity: 'uncommon' }),
+  top('dress.floral', 'Vestido florido', 'Vestido midi estampado de florzinhas. Peça inteira.', 'fem.dress', ['vestido', 'casual', 'feminino'], { params: { variant: 'floral' }, covers: ['bottom'], thumb: 'full', defaultColor: 'sky' }),
+  top('dress.party', 'Vestido de festa', 'Vestido tomara que caia com brilhos e saia rodada. Peça inteira.', 'fem.dress', ['vestido', 'festa', 'feminino'], { params: { variant: 'party' }, covers: ['bottom'], thumb: 'full', defaultColor: 'violet', rarity: 'uncommon' }),
+  top('dress.formal', 'Vestido social', 'Vestido chemise de gola e botões, com cinto. Peça inteira.', 'fem.dress', ['vestido', 'corporate', 'feminino'], { params: { variant: 'formal' }, covers: ['bottom'], thumb: 'full', defaultColor: 'navy' }),
+  top('dress.sheath', 'Vestido tubinho', 'Tubinho justo até o joelho. Peça inteira.', 'fem.dress', ['vestido', 'corporate', 'feminino'], { params: { variant: 'sheath' }, covers: ['bottom'], thumb: 'full', defaultColor: 'charcoal' }),
+  top('dress.strap', 'Vestido de alças', 'Vestido de alças largas com laço sob o busto. Peça inteira.', 'fem.dress', ['vestido', 'casual', 'feminino'], { params: { variant: 'strap' }, covers: ['bottom'], thumb: 'full', defaultColor: 'rose' }),
+
   // ---- outer layer (over the top) ----------------------------------------------------
   outer('outer.blazer', 'Blazer', 'Blazer com lapelas sobre a camisa.', 'outer.blazer', ['corporate'], { rarity: 'uncommon' }),
   outer('outer.bomber', 'Jaqueta bomber', 'Jaqueta fechada com punhos e barra de elástico.', 'outer.bomber', ['casual'], { defaultColor: 'olive', rarity: 'uncommon' }),
@@ -149,6 +177,12 @@ export const ITEMS: readonly ItemDef[] = [
   outer('outer.raincoat', 'Capa de chuva', 'Capa impermeável com capuz e botões de pressão.', 'outer.raincoat', ['casual'], { defaultColor: 'yellow' }),
   outer('outer.labcoat', 'Jaleco', 'Jaleco branco comprido com três bolsos.', 'outer.labcoat', ['uniform'], { defaultColor: 'off-white' }),
   outer('outer.puffer', 'Jaqueta acolchoada', 'Jaqueta de gomos, fofa e quentinha.', 'outer.puffer', ['casual'], { defaultColor: 'blue', rarity: 'uncommon' }),
+
+  // feminine outer layers
+  outer('outer.blazer_fit', 'Blazer ajustado', 'Blazer de cintura marcada e barra evasê, com lapelas e botões dourados.', 'outer.blazer_fit', ['corporate', 'feminino'], { defaultColor: 'wine', rarity: 'uncommon' }),
+  outer('outer.kimono', 'Quimono', 'Quimono longo e aberto, de mangas largas e faixa na cintura.', 'outer.kimono', ['casual', 'feminino'], { defaultColor: 'violet', rarity: 'uncommon' }),
+  outer('outer.capelet', 'Capa curta', 'Capa curta sobre os ombros, com gola, botões e barra recortada.', 'outer.capelet', ['casual', 'feminino'], { defaultColor: 'sand', rarity: 'uncommon' }),
+  outer('outer.crop_jacket', 'Jaqueta cropped', 'Jaqueta curta de zíper dourado e gola de pontas.', 'outer.crop_jacket', ['casual', 'feminino'], { defaultColor: 'rose' }),
 
   // ---- bottoms ----------------------------------------------------------------
   bottom('bottom.pants', 'Calça', 'Calça reta casual.', 'bottom.pants', ['casual']),
@@ -169,6 +203,14 @@ export const ITEMS: readonly ItemDef[] = [
   bottom('bottom.mini', 'Minissaia', 'Saia bem curta, levemente evasê.', 'bottom.skirt_kit', ['casual'], { params: { variant: 'mini' }, defaultColor: 'rose' }),
   bottom('bottom.midi', 'Saia midi', 'Saia fluida até abaixo do joelho.', 'bottom.skirt_kit', ['casual', 'corporate'], { params: { variant: 'midi' }, defaultColor: 'forest' }),
 
+  // feminine bottoms
+  bottom('bottom.circle', 'Saia rodada', 'Saia bem rodada até o joelho.', 'fem.bottom', ['casual', 'feminino'], { params: { variant: 'circle' }, defaultColor: 'coral' }),
+  bottom('bottom.skirt_denim', 'Saia jeans', 'Saia jeans curta com botões na frente.', 'fem.bottom', ['casual', 'feminino'], { params: { variant: 'denim' }, defaultColor: 'denim' }),
+  bottom('bottom.pinafore', 'Jardineira', 'Jardineira de saia curta, com peitilho e alças. Vai por cima da blusa.', 'fem.bottom', ['casual', 'feminino'], { params: { variant: 'pinafore' }, defaultColor: 'light-denim' }),
+  bottom('bottom.shorts_hw', 'Short cintura alta', 'Short curtinho de cintura alta com botão.', 'fem.bottom', ['casual', 'feminino'], { params: { variant: 'shorts_hw' }, defaultColor: 'light-denim' }),
+  bottom('bottom.skinny', 'Calça skinny', 'Calça justa nas pernas, de costuras claras.', 'fem.bottom', ['casual', 'feminino'], { params: { variant: 'skinny' }, defaultColor: 'denim' }),
+  bottom('bottom.wide', 'Calça pantalona', 'Calça de perna larga e vinco marcado.', 'fem.bottom', ['casual', 'corporate', 'feminino'], { params: { variant: 'wide' }, defaultColor: 'sand' }),
+
   // ---- shoes ------------------------------------------------------------------
   shoes('shoes.sneakers', 'Tênis', 'Tênis casual com solado branco.', 'shoes.sneakers', ['casual']),
   shoes('shoes.runner', 'Tênis de corrida', 'Tênis leve com faixa contrastante.', 'shoes.sneakers', ['casual'], { params: { variant: 'runner' }, defaultColor: 'blue' }),
@@ -187,6 +229,16 @@ export const ITEMS: readonly ItemDef[] = [
   shoes('shoes.rain', 'Galocha', 'Bota de borracha brilhante, à prova d\'água.', 'shoes.boot_kit', ['casual'], { params: { variant: 'rain' }, defaultColor: 'yellow' }),
   shoes('shoes.slipon', 'Slip-on', 'Tênis de lona sem cadarço, com sola listrada.', 'shoes.flat_kit', ['casual'], { params: { variant: 'slipon' }, defaultColor: 'navy' }),
   shoes('shoes.colorblock', 'Tênis colorido', 'Tênis retrô com painéis em cores contrastantes.', 'shoes.flat_kit', ['casual'], { params: { variant: 'block' }, defaultColor: 'white' }),
+
+  // feminine shoes
+  shoes('shoes.blockheel', 'Salto bloco', 'Scarpin de salto grosso e bico arredondado.', 'shoes.pump_kit', ['casual', 'corporate', 'feminino'], { params: { variant: 'block' }, defaultColor: 'tan' }),
+  shoes('shoes.ballet', 'Sapatilha', 'Sapatilha baixa com lacinho no bico.', 'shoes.pump_kit', ['casual', 'feminino'], { params: { variant: 'ballet' }, defaultColor: 'pink' }),
+  shoes('shoes.maryjane', 'Boneca', 'Sapato boneca de tira no tornozelo e fivela.', 'shoes.pump_kit', ['casual', 'feminino'], { params: { variant: 'mary' }, defaultColor: 'red' }),
+  shoes('shoes.platform', 'Plataforma', 'Sapato de plataforma alta com salto bloco.', 'shoes.pump_kit', ['casual', 'feminino'], { params: { variant: 'platform' }, defaultColor: 'black', rarity: 'uncommon' }),
+  shoes('shoes.sandalheel', 'Sandália de salto', 'Sandália de tiras finas e salto bloco.', 'shoes.sandal_heel', ['casual', 'feminino'], { defaultColor: 'tan' }),
+  shoes('shoes.ankleheel', 'Bota cano curto com salto', 'Botina de salto bloco com zíper lateral.', 'shoes.boot_heel', ['casual', 'feminino'], { params: { variant: 'ankle' }, defaultColor: 'brown' }),
+  shoes('shoes.kneeboot', 'Bota cano alto', 'Bota de cano alto até o joelho, de salto.', 'shoes.boot_heel', ['casual', 'feminino'], { params: { variant: 'knee' }, defaultColor: 'black', rarity: 'uncommon' }),
+  shoes('shoes.sneakerfem', 'Tênis plataforma', 'Tênis branco de sola alta e lacinho rosa.', 'shoes.sneaker_fem', ['casual', 'feminino'], { defaultColor: 'white' }),
 
   // ---- accessories: eyewear -----------------------------------------------------------
   acc('acc.glasses', 'Óculos de grau', 'eyewear', 'Armação fina com lentes claras.', 'acc.glasses', ['grau'], { palette: 'frame', defaultColor: 'black', thumb: 'face' }),
@@ -224,8 +276,37 @@ export const ITEMS: readonly ItemDef[] = [
   acc('acc.bracelet', 'Pulseira', 'wrist', 'Pulseira de contas coloridas.', 'acc.wrist_kit', ['casual'], { palette: 'strap', defaultColor: 'red', params: { shape: 'beads' }, thumb: 'wrist' }),
   acc('acc.wristband', 'Munhequeira', 'wrist', 'Faixa de tecido para o pulso, de quem treina.', 'acc.wrist_kit', ['esporte'], { palette: 'strap', defaultColor: 'white', params: { shape: 'sweat' }, thumb: 'wrist' }),
   acc('acc.crossbody', 'Bolsa transversal', 'back', 'Bolsa pequena com alça cruzada no peito.', 'acc.bag_kit', ['casual'], { palette: 'bag', defaultColor: 'brown', thumb: 'torso' }),
-
-  // ---- special items ------------------------------------------------------------------
+  // feminine accessories
+  acc('acc.pearl_ear', 'Brincos de pérola', 'ears', 'Brincos de pérola clássicos.', 'acc.ear_kit', ['joia', 'feminino'], { params: { shape: 'pearl' }, thumb: 'head' }),
+  acc('acc.hoops_big', 'Argolas grandes', 'ears', 'Argolas grandes e marcantes.', 'acc.ear_kit', ['joia', 'feminino'], { palette: 'frame', defaultColor: 'gold', params: { shape: 'hoopbig' }, thumb: 'head' }),
+  acc('acc.drops', 'Brincos de pingente', 'ears', 'Brincos com pingente de pedra vermelha.', 'acc.ear_kit', ['joia', 'feminino'], { palette: 'frame', defaultColor: 'gold', params: { shape: 'drop' }, rarity: 'uncommon', thumb: 'head' }),
+  acc('acc.pearls', 'Colar de pérolas', 'neck', 'Fio de pérolas no pescoço.', 'acc.neck_kit', ['joia', 'feminino'], { params: { shape: 'pearls' }, rarity: 'uncommon', thumb: 'torso' }),
+  acc('acc.pendant', 'Colar com pingente', 'neck', 'Corrente longa com uma pedra vermelha.', 'acc.neck_kit', ['joia', 'feminino'], { palette: 'frame', defaultColor: 'gold', params: { shape: 'pendant' }, thumb: 'torso' }),
+  acc('acc.choker', 'Gargantilha', 'neck', 'Gargantilha justa com um coraçãozinho.', 'acc.neck_kit', ['joia', 'feminino'], { palette: 'strap', defaultColor: 'black', params: { shape: 'choker' }, thumb: 'torso' }),
+  acc('acc.silkscarf', 'Lenço de seda', 'neck', 'Lenço de bolinhas amarrado no pescoço.', 'acc.neck_kit', ['feminino'], { palette: 'cloth', defaultColor: 'red', params: { shape: 'silk' }, thumb: 'torso' }),
+  acc('acc.tiara', 'Tiara', 'head', 'Tiara delicada com pedrinhas.', 'acc.hat_kit', ['joia', 'feminino'], { palette: 'frame', defaultColor: 'gold', params: { shape: 'tiara', openTop: true }, rarity: 'uncommon', thumb: 'head' }),
+  acc('acc.flowerclip', 'Presilha de flor', 'head', 'Presilha de flor no cabelo.', 'acc.hat_kit', ['feminino'], { palette: 'hat', defaultColor: 'pink', params: { shape: 'clip', openTop: true }, thumb: 'head' }),
+  acc('acc.pamela', 'Pamela', 'head', 'Chapéu pamela de aba larga com laço de fita.', 'acc.hat_kit', ['verão', 'feminino'], { palette: 'hat', defaultColor: 'sand', params: { shape: 'pamela' }, rarity: 'uncommon', thumb: 'head' }),
+  acc('acc.scrunchie', 'Xuxinha', 'wrist', 'Xuxinha de tecido no pulso.', 'acc.wrist_kit', ['casual', 'feminino'], { palette: 'cloth', defaultColor: 'rose', params: { shape: 'scrunchie' }, thumb: 'wrist' }),
+  acc('acc.bangles', 'Pulseiras douradas', 'wrist', 'Várias pulseirinhas finas empilhadas.', 'acc.wrist_kit', ['joia', 'feminino'], { palette: 'frame', defaultColor: 'gold', params: { shape: 'bangles' }, thumb: 'wrist' }),
+  acc('acc.oversized', 'Óculos oversized', 'eyewear', 'Óculos escuros enormes, estilo diva.', 'acc.eyewear_kit', ['sol', 'feminino'], { palette: 'frame', defaultColor: 'tortoise', params: { shape: 'oversized' }, rarity: 'uncommon', thumb: 'face' }),
+  acc('acc.heartshades', 'Óculos de coração', 'eyewear', 'Óculos de lentes em formato de coração.', 'acc.eyewear_kit', ['sol', 'feminino', 'fofo'], { palette: 'frame', defaultColor: 'pink', params: { shape: 'heart' }, rarity: 'uncommon', thumb: 'face' }),
+  acc('acc.handbag', 'Bolsa de mão', 'back', 'Bolsa de mão com fecho dourado, pendurada na mão.', 'acc.handbag', ['feminino'], {
+    palette: 'bag',
+    defaultColor: 'red',
+    thumb: 'hand',
+    poses: { idle: 'full', walk: 'full', sit: 'full', wave: 'hidden' },
+    notes: 'Ao acenar o braço sobe e a bolsa fica oculta (não há sprite).',
+  }),
+  acc('acc.clutch', 'Clutch', 'back', 'Clutch de festa segurada rente ao corpo.', 'acc.handbag', ['feminino', 'festa'], {
+    palette: 'bag',
+    defaultColor: 'black',
+    params: { shape: 'clutch' },
+    thumb: 'hand',
+    poses: { idle: 'full', walk: 'full', sit: 'full', wave: 'hidden' },
+    notes: 'Ao acenar o braço sobe e a clutch fica oculta (não há sprite).',
+  }),
+  // ---- special items ---------------------------------------------------------------
   special('sp.notebook', 'Notebook', 'hand', 'Notebook: carregado fechado em pé; aberto no colo ao sentar.', 'sp.notebook', ['tech', 'trabalho'], {
     palette: 'device',
     defaultColor: 'silver',

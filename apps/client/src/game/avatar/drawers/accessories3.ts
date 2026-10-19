@@ -132,12 +132,76 @@ function hairBow(c: Ctx2, it: Resolved) {
   done(c);
 }
 
+function pamela(c: Ctx2, it: Resolved) {
+  const [cx, cy] = headCenter(c);
+  const col = it.t;
+  const by = cy - 8.6;
+  const weave = (x: number, y: number, tone: 0 | 1 | 2) => ((x + y * 2) % 5 === 0 ? (tone === 2 ? col.ol : col.sh) : (x - y) % 7 === 0 && tone !== 2 ? col.lt : undefined);
+  MAIN.clear();
+  MAIN.ellipse(cx, by, 25.5, 6.8);
+  c.paint(MAIN, tonesOf(shade(col.base, -0.05)), { lw: 2, sw: 3, deco: weave });
+  MAIN.clear();
+  MAIN.ellipse(cx, cy - 12.6, 10.6, 5.8);
+  for (let y = Math.floor(cy - 12.6); y <= Math.floor(by - 0.5); y++) for (let x = Math.round(cx - 10.4); x <= Math.round(cx + 10.4); x++) MAIN.set(x, y);
+  c.paint(MAIN, col, { lw: 3, sw: 4, deco: weave });
+  // wide ribbon with a big bow on the side
+  const rib = tonesOf('#e88aa8');
+  const bandTop = Math.round(by - 3);
+  for (let y = bandTop; y <= bandTop + 2; y++) for (let x = Math.round(cx - 11.4); x <= Math.round(cx + 11.4); x++) if (MAIN.has(x, y)) c.px(x, y, y === bandTop ? rib.lt : y === bandTop + 2 ? rib.sh : rib.base);
+  const bx = cx + 9;
+  const byy = bandTop + 1;
+  for (const sg of [-1, 1]) {
+    MAIN.clear();
+    MAIN.poly([[bx, byy], [bx + sg * 6, byy - 3], [bx + sg * 6.5, byy + 4]]);
+    c.paint(MAIN, rib, { lw: 1, sw: 1 });
+  }
+  c.clip = null;
+  c.px(bx, byy, rib.sh);
+  c.px(bx - 1, byy + 5, rib.base);
+  c.px(bx + 1, byy + 6, rib.sh);
+  done(c);
+}
+
+function tiara(c: Ctx2, it: Resolved) {
+  const [cx, cy] = headCenter(c);
+  const col = it.t;
+  headRing(c, cx, cy, 10.2, 1.4, 2, (r) => (r === 0 ? col.lt : col.base));
+  for (let k = -3; k <= 3; k++) {
+    const p = facePoint(c, cx, cy, k * 0.3, 10.2);
+    if (p.vis < 0.2) continue;
+    const x = Math.round(cx + (p.x - cx) * ((HEAD_RX + 1.4) / HEAD_RX));
+    const h = 4 - Math.abs(k) * 0.9;
+    for (let y = 0; y < h; y++) c.px(x, p.y - 1 - y, y === 0 ? col.base : col.lt);
+    c.px(x, p.y - 1 - Math.round(h), k === 0 ? '#e04858' : '#bfe6ff');
+    if (k === 0) c.px(x, p.y - 2 - Math.round(h), WHITE);
+  }
+  done(c);
+}
+
+function flowerClip(c: Ctx2, it: Resolved) {
+  const [cx, cy] = headCenter(c);
+  const col = it.t;
+  const p = facePoint(c, cx, cy, 1.05, 8.4);
+  if (p.vis < -0.15) return;
+  const x = Math.round(p.x + 1);
+  const y = Math.round(p.y - 2);
+  for (const [dx, dy] of [[0, -2], [-2, 0], [2, 0], [0, 2], [-1, -1], [1, -1], [-1, 1], [1, 1]] as const) c.px(x + dx, y + dy, Math.abs(dx) + Math.abs(dy) === 2 && dx !== 0 && dy !== 0 ? col.base : dy < 0 || dx < 0 ? col.lt : col.base);
+  c.px(x, y, '#f0c93a');
+  c.px(x + 3, y + 2, '#5fae6a');
+  c.px(x + 4, y + 3, '#3f8a4f');
+  c.px(x - 3, y + 3, '#5fae6a');
+  done(c);
+}
+
 registerDrawer('acc.hat_kit', (c, it, e) => {
   const shape = it.item.params?.shape;
   e.part(20.5, () => {
     if (shape === 'straw') strawHat(c, it);
     else if (shape === 'beret') beret(c, it);
     else if (shape === 'headband') headband(c, it);
+    else if (shape === 'pamela') pamela(c, it);
+    else if (shape === 'tiara') tiara(c, it);
+    else if (shape === 'clip') flowerClip(c, it);
     else hairBow(c, it);
   });
 });
@@ -157,21 +221,23 @@ registerDrawer('acc.eyewear_kit', (c, it, e) =>
       return;
     }
     const sun = shape === 'aviator' || shape === 'roundsun';
-    const h = shape === 'square' ? 8 : shape === 'cat' ? 7 : shape === 'aviator' ? 9 : 9;
+    const h = shape === 'square' ? 8 : shape === 'cat' ? 7 : shape === 'oversized' ? 11 : 9;
     const pts: { x: number; y: number; w: number; sg: number }[] = [];
     for (const sg of SIDE) {
       const p = facePoint(c, cx, cy, sg * 0.4, -1.6);
       if (p.vis < 0.12) continue;
-      pts.push({ x: p.x, y: p.y, w: Math.max(3, Math.round((shape === 'aviator' ? 9 : 8.2) * p.vis)), sg });
+      pts.push({ x: p.x, y: p.y, w: Math.max(3, Math.round((shape === 'aviator' ? 9 : shape === 'oversized' ? 10.6 : 8.2) * p.vis)), sg });
     }
     const lensOf = (yy: number) => {
       if (shape === 'aviator') return yy < 3 ? '#6f8f6a' : yy < 6 ? '#4f6c52' : '#3a5440';
       if (shape === 'roundsun') return yy < 3 ? '#2a2f44' : '#171a28';
+      if (shape === 'oversized') return yy < 4 ? '#7a5a48' : yy < 8 ? '#6a4a3a' : '#5a4030';
+      if (shape === 'heart') return yy < 4 ? '#f8b4c8' : '#e88aa8';
       return yy > h - 3 ? '#b4d6f0' : '#cfe9ff';
     };
     for (const p of pts) {
       const x0 = Math.round(p.x - p.w / 2);
-      const y0 = Math.round(p.y - 4);
+      const y0 = Math.round(p.y - 4 - (shape === 'oversized' ? 1 : 0));
       for (let yy = 0; yy < h; yy++) {
         for (let xx = 0; xx < p.w; xx++) {
           const edge = yy === 0 || yy === h - 1 || xx === 0 || xx === p.w - 1;
@@ -179,6 +245,8 @@ registerDrawer('acc.eyewear_kit', (c, it, e) =>
           if (corner && p.w > 4) continue;
           const d = Math.min(xx, p.w - 1 - xx) + Math.min(yy, h - 1 - yy);
           if (shape === 'roundsun' && d < 2) continue;
+          if (shape === 'oversized' && d < 3) continue;
+          if (shape === 'heart' && ((yy === 0 && xx === Math.floor(p.w / 2)) || (yy >= 3 && (xx < (yy - 2) * 0.9 || xx > p.w - 1 - (yy - 2) * 0.9)))) continue;
           // aviator: tear drop, the lower corners are cut deeper
           if (shape === 'aviator' && yy > h - 4 && Math.min(xx, p.w - 1 - xx) + (h - 1 - yy) < 3) continue;
           // cat eye: the outer top corner rises
@@ -221,7 +289,8 @@ registerDrawer('acc.eyewear_kit', (c, it, e) =>
 registerDrawer('acc.ear_kit', (c, it, e) =>
   e.part(20.6, () => {
     const [cx, cy] = headCenter(c);
-    const buds = it.item.params?.shape === 'buds';
+    const shape = it.item.params?.shape;
+    const buds = shape === 'buds';
     for (const sg of SIDE) {
       MAIN.clear();
       const ear = earMask(c, MAIN, cx, cy, sg);
@@ -229,7 +298,18 @@ registerDrawer('acc.ear_kit', (c, it, e) =>
       if (ear.vis < -0.15) continue;
       const x = Math.round(ear.x);
       const y = Math.round(cy + 1.4);
-      if (buds) {
+      if (shape === 'pearl') {
+        for (const [dx, dy] of [[0, 3], [1, 3], [0, 4], [1, 4]] as const) c.px(x + dx, y + dy, dx === 0 && dy === 3 ? '#ffffff' : dx === 1 && dy === 4 ? '#b8b2c4' : '#e8e4ee');
+      } else if (shape === 'hoopbig') {
+        const r = 4.6;
+        for (let a = 0; a < 6.28; a += 0.32) c.px(x + Math.cos(a) * r * 0.8, y + 8 + Math.sin(a) * r, a < 3.14 ? it.t.lt : it.hex);
+        c.px(x, y + 3, it.t.base);
+      } else if (shape === 'drop') {
+        c.px(x, y + 3, it.t.base);
+        c.px(x, y + 4, it.t.lt);
+        c.px(x, y + 5, it.t.base);
+        for (const [dx, dy] of [[0, 6], [-1, 7], [0, 7], [1, 7], [0, 8], [0, 9]] as const) c.px(x + dx, y + dy, dy < 7 || dx === -1 ? '#ff9aa8' : '#d03a5a');
+      } else if (buds) {
         c.px(x, y - 1, it.hex);
         c.px(x, y, it.t.lt);
         c.px(x, y + 1, it.hex);
@@ -301,6 +381,66 @@ registerDrawer('acc.neck_kit', (c, it, e) => {
     });
     return;
   }
+  if (shape === 'pearls') {
+    e.part(0.15, () => {
+      for (let k = -9; k <= 9; k++) {
+        const t = k / 9;
+        for (const base of [0, Math.PI]) {
+          const p = torsoPoint(c, base + t * 0.95, 22.2 - 5.4 * (1 - t * t), 1.0);
+          if (p[2] > 0.3 && (base === 0 ? k % 1 === 0 : Math.abs(k) < 7)) {
+            c.px(p[0], p[1], '#f6f3ec');
+            c.px(p[0] + 1, p[1], '#cfc9d6');
+            c.px(p[0], p[1] + 1, it.t.sh);
+          }
+        }
+      }
+    });
+    return;
+  }
+  if (shape === 'pendant') {
+    e.part(0.15, () => {
+      if (c.back) {
+        surfLine(c, Math.PI - 0.7, 22.4, Math.PI + 0.7, 22.4, col.base, 0.8);
+        return;
+      }
+      surfLine(c, -0.72, 22.4, 0, 12.6, col.base, 1.0);
+      surfLine(c, 0.72, 22.4, 0, 12.6, col.base, 1.0);
+      surfLine(c, -0.66, 23, -0.02, 13.4, col.lt, 1.0);
+      const p = torsoPoint(c, 0, 11.2, 1.3);
+      if (p[2] > 0.2) {
+        for (const [dx, dy] of [[0, -2], [-1, -1], [0, -1], [1, -1], [-1, 0], [0, 0], [1, 0], [0, 1]] as const) c.px(p[0] + dx, p[1] + dy, dy < 0 && dx <= 0 ? '#ff9aa8' : dx > 0 || dy > 0 ? '#a82040' : '#e04858');
+        c.px(p[0] - 1, p[1] - 1, '#ffffff');
+      }
+    });
+    return;
+  }
+  if (shape === 'choker' || shape === 'silk') {
+    e.part(0.15, () => {
+      const silk = shape === 'silk';
+      for (let k = 0; k < 28; k++) {
+        const psi = (k / 28) * Math.PI * 2;
+        const q = c.P(Math.sin(psi) * 4.0, levelY(c, 23.4), c.rig.bz + Math.cos(psi) * 3.4);
+        if (q[2] <= 0) continue;
+        c.px(q[0], q[1] - 1, col.lt);
+        c.px(q[0], q[1], col.base);
+        if (silk) {
+          c.px(q[0], q[1] + 1, col.base);
+          c.px(q[0], q[1] + 2, col.sh);
+          if (k % 3 === 0) c.px(q[0], q[1], WHITE);
+        } else c.px(q[0], q[1] + 1, col.sh);
+      }
+      if (!c.back) {
+        const m = torsoPoint(c, silk ? 0.3 : 0, 21.6, 1.0);
+        if (silk) {
+          for (const [dx, dy, hex] of [[0, 0, col.base], [1, 0, col.lt], [0, 1, col.sh], [1, 1, col.base], [-1, 2, col.base], [2, 2, col.sh], [-1, 3, col.sh], [2, 3, col.base]] as const) c.px(m[0] + dx, m[1] + dy, hex);
+          c.px(m[0], m[1] + 1, WHITE);
+        } else if (m[2] > 0.2) {
+          for (const [dx, dy] of [[0, 0], [-1, -1], [1, -1], [0, 1]] as const) c.px(m[0] + dx, m[1] + dy + 1, dy === 1 ? '#a82040' : '#e04858');
+        }
+      }
+    });
+    return;
+  }
   if (shape === 'tie') {
     e.part(0.16, () => {
       if (c.back) return;
@@ -358,6 +498,30 @@ registerDrawer('acc.wrist_kit', (c, it, e) =>
     const elS: P2 = [el[0], el[1]];
     const wrS: P2 = [wr[0], wr[1]];
     const col = it.t;
+    if (it.item.params?.shape === 'scrunchie') {
+      // gathered fabric ring with a ruffle edge
+      for (const [t, hex] of [[0.8, col.lt], [0.87, col.base], [0.94, col.sh]] as const) {
+        const a = limbPt(elS, wrS, t, -1, 3.4);
+        const b = limbPt(elS, wrS, t, 1, 3.4);
+        c.line(a[0], a[1], b[0], b[1], hex);
+        c.line(a[0], a[1] + 1, b[0], b[1] + 1, hex);
+      }
+      for (let k = 0; k < 7; k++) {
+        const q = limbPt(elS, wrS, 0.8 + (k % 2) * 0.16, -1 + k / 3.5, 3.6);
+        c.px(q[0], q[1], k % 2 ? col.lt : col.sh);
+      }
+      return;
+    }
+    if (it.item.params?.shape === 'bangles') {
+      // a stack of thin rings
+      for (const [t, hex] of [[0.72, col.lt], [0.8, col.base], [0.88, col.lt], [0.96, col.base]] as const) {
+        const a = limbPt(elS, wrS, t, -1, 3.0);
+        const b = limbPt(elS, wrS, t, 1, 3.0);
+        c.line(a[0], a[1], b[0], b[1], hex);
+        c.px(a[0], a[1] + 1, col.sh);
+      }
+      return;
+    }
     if (it.item.params?.shape === 'sweat') {
       // terry band: three rows, a stripe in the middle
       for (const [t, hex] of [[0.78, col.base], [0.86, col.lt], [0.94, col.base], [1.0, col.sh]] as const) {

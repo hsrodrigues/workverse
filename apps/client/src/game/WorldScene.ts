@@ -211,6 +211,13 @@ class Actor implements Sortable {
     this.place();
   }
 
+  /** Right edge of the name plus the tags after it (STAFF seal, sector pill); media icons are drawn past it. */
+  badgeRight(): number {
+    let r = this.label.x + (1 - this.label.originX) * this.label.displayWidth;
+    for (const t of [this.staffTag, this.roleTag]) if (t) r = Math.max(r, t.x + (1 - t.originX) * t.displayWidth);
+    return r;
+  }
+
   private refreshTag() {
     const text = deptShort(this.profile.dept);
     if (!text) {

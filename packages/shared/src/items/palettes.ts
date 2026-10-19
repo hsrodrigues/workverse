@@ -199,6 +199,30 @@ const DEVICE: PaletteColor[] = [
   c('green', 'Verde', '#4aa86a', 'cor'),
 ];
 
+const LIP: PaletteColor[] = [
+  c('red', 'Vermelho', '#d0283c', 'vivo'),
+  c('crimson', 'Carmim', '#a81a38', 'escuro'),
+  c('pink', 'Rosa', '#e8708f', 'vivo'),
+  c('nude', 'Nude', '#c98a78', 'suave'),
+  c('coral', 'Coral', '#ee6a5a', 'vivo'),
+  c('berry', 'Frutas vermelhas', '#8a2a5a', 'escuro'),
+  c('plum', 'Ameixa', '#6a2048', 'escuro'),
+  c('rose', 'Rosé', '#d4849a', 'suave'),
+  c('orange', 'Laranja', '#e8873a', 'vivo'),
+  c('mauve', 'Malva', '#a8607a', 'suave'),
+];
+
+const SHADOW: PaletteColor[] = [
+  c('rose', 'Rosé', '#e8a0b8', 'suave'),
+  c('lilac', 'Lilás', '#a890e0', 'cor'),
+  c('teal', 'Turquesa', '#3fb0a0', 'cor'),
+  c('gold', 'Dourado', '#d9b24a', 'metal'),
+  c('blue', 'Azul', '#5a8ae0', 'cor'),
+  c('smoke', 'Esfumado', '#5a5a6a', 'escuro'),
+  c('peach', 'Pêssego', '#f0a880', 'suave'),
+  c('green', 'Verde', '#6ab060', 'cor'),
+];
+
 const NAMES: Record<PaletteId, string> = {
   skin: 'Tons de pele',
   hair: 'Cores de cabelo',
@@ -214,6 +238,8 @@ const NAMES: Record<PaletteId, string> = {
   ceramic: 'Cores de cerâmica',
   lanyard: 'Cores de cordão',
   device: 'Cores de dispositivo',
+  lip: 'Cores de batom e blush',
+  shadow: 'Cores de sombra',
 };
 
 const RAW: Record<PaletteId, readonly PaletteColor[]> = {
@@ -231,6 +257,8 @@ const RAW: Record<PaletteId, readonly PaletteColor[]> = {
   ceramic: CERAMIC,
   lanyard: LANYARD,
   device: DEVICE,
+  lip: LIP,
+  shadow: SHADOW,
 };
 
 export const PALETTES: Readonly<Record<PaletteId, Palette>> = Object.fromEntries(

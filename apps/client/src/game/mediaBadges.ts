@@ -8,6 +8,8 @@ export interface BadgeTarget {
   id: string;
   label: Phaser.GameObjects.Text;
   shadow: Phaser.GameObjects.Ellipse;
+  /** Right edge (world px) of the name and of the STAFF / sector tags beside it: the icons start after it. */
+  badgeRight(): number;
 }
 
 const FONT = '"Pixelify Sans", "Segoe UI Emoji", "Courier New", monospace';
@@ -116,9 +118,10 @@ export class MediaBadges {
       let e = this.entries.get(t.id);
       if (!e) this.entries.set(t.id, (e = {}));
       const ind = mediaIndicators.get(t.id);
-      const lx = t.label.x;
-      const ly = t.label.y - t.label.height / 2;
-      const right = lx + t.label.width / 2 + 3;
+      // the name is a crisp (zoom-sized) text with a left origin: measure its edges in world px, not from a centre
+      const left = t.label.x - t.label.originX * t.label.displayWidth;
+      const ly = t.label.y - t.label.displayHeight / 2;
+      const right = t.badgeRight() + 3;
 
       let x = right;
       const show = (name: 'mic' | 'cam', visible: boolean, key: string) => {
@@ -146,7 +149,7 @@ export class MediaBadges {
       if (glyph) {
         if (!e.tag) e.tag = this.scene.add.text(0, 0, glyph, { fontFamily: FONT, fontSize: '10px' }).setOrigin(1, 0.5).setDepth(UI_DEPTH);
         if (e.tag.text !== glyph) e.tag.setText(glyph);
-        e.tag.setVisible(true).setPosition(lx - t.label.width / 2 - 2, ly);
+        e.tag.setVisible(true).setPosition(left - 2, ly);
       } else e.tag?.setVisible(false);
 
       if (ind?.speaking) {

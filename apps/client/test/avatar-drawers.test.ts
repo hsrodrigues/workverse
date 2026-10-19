@@ -19,6 +19,17 @@ describe('avatar drawers', () => {
     expect(FRAME_COUNT).toBeGreaterThan(10);
   }, 120_000);
 
+  it('a dress hides whatever bottom is saved under it', () => {
+    const dressed = equipItem(DEFAULT_AVATAR, 'dress.midi');
+    expect(dressed.ok).toBe(true);
+    if (!dressed.ok) return;
+    const asSkirt = { ...dressed.avatar, bottom: { id: 'bottom.skirt', color: 'wine' } };
+    const asPants = { ...dressed.avatar, bottom: { id: 'bottom.jeans', color: 'denim' } };
+    for (const view of VIEWS) for (const f of [0, 8]) {
+      expect(Array.from(renderFrame(asSkirt, view, f))).toEqual(Array.from(renderFrame(asPants, view, f)));
+    }
+  });
+
   it('items of the same slot look different from each other (no item is a visual copy of another)', () => {
     const bySlot = new Map<string, string[]>();
     for (const item of ITEMS) {

@@ -9,6 +9,7 @@ import { generateProvisionalPassword } from './provisional';
 /**
  * Cria uma conta direto no armazenamento (REGISTRATION_MODE=closed ou primeiro dono).
  *   npm run account:create -w @workverse/server -- email@exemplo.com "Nome" ["senha-com-10-ou-mais-caracteres"] [--trocar-senha]
+ * Com --resetar redefine a senha de uma conta que ja existe (gera uma provisoria se nao informar senha).
  * Sem senha: gera uma senha provisoria forte, mostrada UMA vez, e a conta fica marcada para trocar a senha no primeiro
  * login (o mesmo que o painel de staff faz). Com senha informada ela e a definitiva, a menos que use --trocar-senha.
  * Com o armazenamento em arquivo JSON, PARE o servidor antes (ele guarda as contas em memoria e sobrescreveria o
@@ -17,6 +18,7 @@ import { generateProvisionalPassword } from './provisional';
  */
 const argv = process.argv.slice(2);
 const forceChange = argv.includes('--trocar-senha');
+const reset = argv.includes('--resetar');
 const [emailArg, nameArg, passArg] = argv.filter((a) => !a.startsWith('--'));
 const generated = !passArg && !process.env.ACCOUNT_PASSWORD;
 const password = passArg ?? process.env.ACCOUNT_PASSWORD ?? generateProvisionalPassword();
@@ -40,6 +42,21 @@ const store: AccountStore & { flush(): void | Promise<void> } = pool
 
 let code = 0;
 try {
+  const existing = store.getByEmail(email);
+  if (reset) {
+    // redefine a senha de uma conta que ja existe (conta esquecida/trancada); a pessoa troca no proximo login
+    if (!existing) {
+      console.error('Nao existe conta com esse e-mail.');
+      process.exit(1);
+    }
+    existing.passwordHash = await hashPassword(password);
+    existing.mustChangePassword = true;
+    store.save(existing);
+    await store.flush();
+    console.log(`Senha de ${existing.email} redefinida. Reinicie o servidor se ele estiver ligado.`);
+    if (generated) console.log(`Senha provisoria (anote agora, nao sera mostrada de novo): ${password}`);
+    process.exit(0);
+  }
   const account = store.create({ email, displayName: name, passwordHash: await hashPassword(password) });
   account.createdBy = `cli:${process.env.USERNAME ?? process.env.USER ?? 'unknown'}`;
   if (generated || forceChange) account.mustChangePassword = true;

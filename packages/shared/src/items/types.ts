@@ -27,6 +27,9 @@ export type ItemSlot =
   | 'wrist'
   | 'neck' // scarf, tie, necklace
   | 'aura' // glow around the feet and body
+  | 'cheeks' // blush
+  | 'freckles'
+  | 'lids' // eye shadow
   | 'hand' // held object
   | 'badge'; // corporate badge on the chest
 
@@ -72,7 +75,9 @@ export type PaletteId =
   | 'strap'
   | 'ceramic'
   | 'lanyard'
-  | 'device';
+  | 'device'
+  | 'lip'
+  | 'shadow';
 
 export interface PaletteColor {
   /** Stable id; this is what an avatar stores. */
@@ -110,6 +115,11 @@ export interface ItemDef {
   defaultColor?: string;
   /** Slots that cannot be filled together with this item. */
   excludes?: readonly ItemSlot[];
+  /**
+   * One-piece garments (dresses): slots whose items are NOT drawn while this is worn. The covered piece stays in the saved
+   * avatar (required fields keep a value) and comes back as soon as the one-piece is taken off.
+   */
+  covers?: readonly ItemSlot[];
   /** Item ids that cannot be worn together with this one. */
   conflicts?: readonly string[];
   rarity: Rarity;
@@ -173,7 +183,7 @@ export interface AvatarIssue {
   message: string;
 }
 
-export const MAX_ACCESSORIES = 6;
+export const MAX_ACCESSORIES = 9;
 export const MAX_SPECIAL = 6;
 export const MAX_OUTFITS = 12;
 export const MIN_OUTFIT_NAME = 1;

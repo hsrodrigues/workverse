@@ -411,4 +411,32 @@ describe('catalog expansion', () => {
     expect(validateAvatar(av, makePolicy({ unlocks: new Set(['staff']) })).ok).toBe(true);
     expect(validateAvatar(av, makePolicy({ unlocks: new Set() })).ok).toBe(false);
   });
+
+  it('has feminine pieces: dresses cover the bottom, make-up uses its own slots', () => {
+    const dresses = ITEMS.filter((i) => i.id.startsWith('dress.'));
+    expect(dresses.length).toBeGreaterThanOrEqual(8);
+    for (const d of dresses) {
+      expect(d.slot, d.id).toBe('top');
+      expect(d.covers, d.id).toEqual(['bottom']);
+      expect(d.tags, d.id).toContain('vestido');
+      const r = equipItem(DEFAULT_AVATAR, d.id);
+      expect(r.ok, d.id).toBe(true);
+      // the saved bottom stays valid (required field) even though the dress hides it
+      if (r.ok) expect(validateAvatar(r.avatar).ok, d.id).toBe(true);
+    }
+    for (const id of ['mouth.lips', 'mouth.lips_bold', 'acc.blush', 'acc.freckles', 'acc.eyeshadow']) expect(ITEMS_BY_ID.has(id), id).toBe(true);
+    expect(getItem('acc.blush')!.slot).toBe('cheeks');
+    expect(getItem('acc.eyeshadow')!.slot).toBe('lids');
+    // make-up and jewelry all fit together under the accessory limit
+    const all = ['acc.blush', 'acc.freckles', 'acc.eyeshadow', 'acc.pearls', 'acc.hoops_big', 'acc.tiara', 'acc.heartshades', 'acc.handbag', 'acc.bangles'];
+    let av: AvatarV2 = cloneAvatar(DEFAULT_AVATAR);
+    for (const id of all) {
+      const r = equipItem(av, id);
+      expect(r.ok, id).toBe(true);
+      if (r.ok) av = r.avatar;
+    }
+    expect(av.accessories).toHaveLength(all.length);
+    expect(av.accessories.length).toBeLessThanOrEqual(MAX_ACCESSORIES);
+    expect(ITEMS.length).toBeGreaterThanOrEqual(220);
+  });
 });

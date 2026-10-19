@@ -66,6 +66,9 @@ function resolveLook(av: AvatarV2, pose: Pose, view: View, held: HeldItem | null
       list.push({ item, ref: { id: item.id }, hex, t: tonesOf(hex) });
     }
   }
+  // one-piece garments (dresses) hide the pieces they cover (the bottom stays in the saved avatar, it just is not drawn)
+  const covered = new Set<ItemSlot>(list.flatMap((r) => r.item.covers ?? []));
+  if (covered.size > 0) for (let i = list.length - 1; i >= 0; i--) if (covered.has(list[i].item.slot)) list.splice(i, 1);
   const bySlot = new Map<ItemSlot, Resolved>(list.map((r) => [r.item.slot, r]));
   return { skinHex: colorHex('skin', av.skin), list, get: (s) => bySlot.get(s) };
 }

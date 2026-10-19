@@ -10,7 +10,7 @@ import { registerDrawer } from '../registry';
 
 const WHITE = '#f4f1ea';
 
-interface Foot {
+export interface Foot {
   heel: P2;
   toe: P2;
   ankleTop: P2;
@@ -19,7 +19,7 @@ interface Foot {
   pv: (p: V3) => P2;
 }
 
-function foot(c: Ctx2, i: 0 | 1): Foot {
+export function foot(c: Ctx2, i: 0 | 1): Foot {
   const { rig } = c;
   const an = rig.ankle[i];
   const pitch = rig.pitch[i];
@@ -42,13 +42,13 @@ function foot(c: Ctx2, i: 0 | 1): Foot {
   return { heel, toe, ankleTop, rot, along, pv };
 }
 
-function paintCapsule(c: Ctx2, a: P2, b: P2, r0: number, r1: number, t: Tones, dy = 0, o: { lw?: number; sw?: number } = {}) {
+export function paintCapsule(c: Ctx2, a: P2, b: P2, r0: number, r1: number, t: Tones, dy = 0, o: { lw?: number; sw?: number } = {}) {
   MAIN.clear();
   MAIN.capsule(a[0], a[1] + dy, b[0], b[1] + dy, r0, r1);
   c.paint(MAIN, t, { lw: o.lw ?? 2, sw: o.sw ?? 3 });
 }
 
-function finish(c: Ctx2) {
+export function finish(c: Ctx2) {
   c.clip = null;
   MAIN.clear();
 }
