@@ -500,7 +500,7 @@ export function StageBarButton() {
     <>
       {free && (
         <button type="button" className="tool tool-send" data-testid="bar-take-stage" onClick={() => net.send({ t: 'stage_take' })} title={tv ? 'Apresentar na TV da sala' : 'Assumir o palco do auditório'}>
-          <span className="ico">{tv ? '📺' : '🎤'}</span> {tv ? 'Apresentar na TV' : 'Assumir palco'}
+          <span className="ico"><Icon name={tv ? 'tv' : 'mic'} /></span> {tv ? 'Apresentar na TV' : 'Assumir palco'}
         </button>
       )}
       <button
@@ -510,7 +510,7 @@ export function StageBarButton() {
         onClick={() => stageUi.set(mode === 'closed' ? 'open' : 'closed')}
         title="Painel da apresentação"
       >
-        <span className="ico">▤</span> {mine ? (tv ? 'Minha TV' : 'Palco') : 'Apresentação'}
+        <span className="ico"><Icon name="list" /></span> {mine ? (tv ? 'Minha TV' : 'Palco') : 'Apresentação'}
         {world.slide.live && <span className="badge live">●</span>}
       </button>
     </>

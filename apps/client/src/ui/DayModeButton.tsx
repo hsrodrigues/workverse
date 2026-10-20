@@ -1,3 +1,4 @@
+import { Icon } from '../media/icons';
 import { useEffect, useState } from 'react';
 import { getDayMode, onDayMode, setDayMode, type DayMode } from '../game/dayCycle';
 import { listen } from '../bus';
@@ -46,7 +47,7 @@ export function DayModeButton() {
           setOpen(open ? null : { x: Math.max(8, Math.min(r.left, window.innerWidth - 250)), y: window.innerHeight - r.top + 8 });
         }}
       >
-        <span className="ico">◐</span>
+        <span className="ico"><Icon name="contrast" /></span>
       </button>
       {open && (
         <div className="ctx daymode-menu" style={{ left: open.x, bottom: open.y, width: 240 }} role="menu" aria-label="Ciclo de dia">

@@ -1,3 +1,4 @@
+import { Icon } from '../../media/icons';
 import { useEffect, useMemo, useState } from 'react';
 import {
   FURNI_CATEGORY_LABELS,
@@ -30,7 +31,7 @@ export function FurnishBarButton() {
       aria-pressed={s.active}
       data-testid="furnish-button"
     >
-      <span className="ico">✎</span> Decorar sala
+      <span className="ico"><Icon name="pencil" /></span> Decorar sala
     </button>
   );
 }

@@ -295,14 +295,14 @@ export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onRec
 
       <form className="bar" onSubmit={send}>
         <button type="button" className="tool" onClick={() => setPanel(panel === 'rooms' ? null : 'rooms')} title="Navegador de salas">
-          <span className="ico">▦</span> Salas
+          <span className="ico"><Icon name="rooms" /></span> Salas
         </button>
         <button type="button" className="tool" onClick={() => setPanel(panel === 'people' ? null : 'people')} title="Quem está na sala">
-          <span className="ico">☺</span> Pessoas
+          <span className="ico"><Icon name="people" /></span> Pessoas
         </button>
         <StatusSelect />
         <button type="button" className="tool" onClick={() => worldStore.setChatOpen(!world.chatOpen)} title="Mensagens privadas e chat de equipe">
-          <span className="ico">✉</span> Conversas{unread > 0 && <span className="badge">{unread}</span>}
+          <span className="ico"><Icon name="chat" /></span> Conversas{unread > 0 && <span className="badge">{unread}</span>}
         </button>
         <StageBarButton />
         <FurnishBarButton />
@@ -319,17 +319,17 @@ export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onRec
         />
         <button className="tool tool-send" disabled={!online}>Falar</button>
         <button type="button" className="tool" onClick={() => net.send({ t: 'emote', emote: 'wave' })} title="Acenar" disabled={!online}>
-          <span className="ico">✋</span>
+          <span className="ico"><Icon name="hand" /></span>
         </button>
         <DayModeButton />
         <button type="button" className="tool" onClick={onEditAvatar} title="Mudar visual">
-          <span className="ico">👕</span>
+          <span className="ico"><Icon name="shirt" /></span>
         </button>
         <button type="button" className="tool" onClick={onChangePassword} title="Alterar senha" aria-label="Alterar senha" data-testid="change-password-button">
-          <span className="ico">🔑</span>
+          <span className="ico"><Icon name="key" /></span>
         </button>
         <button type="button" className="tool" onClick={onLeave} title="Sair">
-          <span className="ico">⏻</span>
+          <span className="ico"><Icon name="power" /></span>
         </button>
       </form>
 

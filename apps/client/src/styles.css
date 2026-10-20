@@ -485,6 +485,12 @@ input {
 
 .ico {
   font-family: system-ui, sans-serif;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+.ico .wvm-icon {
+  flex: none;
 }
 
 @media (max-width: 640px) {

@@ -1,3 +1,4 @@
+import { Icon } from '../../media/icons';
 import { useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from 'react';
 import { STAFF_LABELS, staffCan, type StaffLevel } from '@workverse/shared';
 import { net } from '../../net';
@@ -51,7 +52,7 @@ export function StaffBarButton() {
   if (!staff) return null;
   return (
     <button type="button" className={`tool tool-staff ${isOpen ? 'on' : ''}`} onClick={() => setOpen(!isOpen)} title="Painel de staff" aria-pressed={isOpen} data-testid="staff-button">
-      <span className="ico">★</span> Staff
+      <span className="ico"><Icon name="star" /></span> Staff
     </button>
   );
 }
