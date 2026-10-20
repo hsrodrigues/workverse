@@ -54,6 +54,7 @@ corporativas ficam integradas a ele.
 
 **Mundo isométrico**
 - Cargo e setor por pessoa (pílula do setor sobre o avatar, ficha/crachá ao clicar) e uma atendente na recepção que encontra colegas por setor e nome ([docs/directory.md](docs/directory.md)).
+- **Byte**, o gatinho-robô do escritório: passeia pelas salas abertas, dorme, aceita carinho e petisco e dá uma batidinha de coração a cada autoping ([docs/pet.md](docs/pet.md)).
 - 10 salas (recepção, escritório, copa, auditório, equipe, duas de reunião, privada, concentração e Sala da TI) ligadas por portas com placas.
 - Clique no chão para andar: caminho por A\* validado no servidor, animação por direção e profundidade correta (avatares passam na frente e atrás dos móveis).
 - Sentar em cadeiras e sofás; **sentar num computador mostra "trabalhando"**; pegar café ou água, comprar lanches e refrigerantes nas máquinas e esquentar marmita no micro-ondas, com o item na mão.

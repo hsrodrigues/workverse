@@ -50,7 +50,7 @@ export function ProfilePanel({ onEditAvatar, onChangePassword }: Props) {
   return (
     <Window id="profile" className="win panel panel-profile" title="Meu perfil" onClose={() => profileStore.close()} role="dialog" aria-label="Meu perfil" bodyClassName="pf-body">
       {profile ? (
-        <ProfileEditor key={profile.displayName + profile.nameChangeAt} profile={profile} saving={saving} onEditAvatar={onEditAvatar} onChangePassword={onChangePassword} />
+        <ProfileEditor profile={profile} saving={saving} onEditAvatar={onEditAvatar} onChangePassword={onChangePassword} />
       ) : (
         <p className="pf-status" role="status">
           {loadError ? (
@@ -99,7 +99,10 @@ function ProfileEditor({ profile, saving, onEditAvatar, onChangePassword }: { pr
     e.preventDefault();
     if (saving || !dirty || hasErrors) return;
     const res = await profileStore.save(buildPatch(form, profile));
-    if (res.ok) setSaved(true);
+    if (res.ok) {
+      setForm(formFromProfile(res.profile));
+      setSaved(true);
+    }
     else setServerError({ field: res.field, message: res.message });
   };
 

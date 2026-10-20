@@ -5,6 +5,7 @@ import { useWorld, worldStore } from '../worldStore';
 import { Window } from './Window';
 import { BadgeCard, paintBadgePhoto } from './BadgeCard';
 import { furnishStore } from './furnish/furnishStore';
+import { bookingStore } from './bookings/bookingStore';
 
 function Face() {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -65,6 +66,10 @@ export function ReceptionPanel({ onWalkNear }: { onWalkNear(id: string): void })
             {say}
           </p>
         </div>
+
+        <button type="button" className="btn btn-primary rc-book" onClick={() => { worldStore.closeReception(); bookingStore.open({ roomId: 'private', tab: 'request' }); }} data-testid="reception-book">
+          Reservar a sala privada
+        </button>
 
         <div className="rc-depts" role="group" aria-label="Setores">
           <button type="button" className={`rc-dept all ${picked && dept === null ? 'on' : ''}`} onClick={() => pick(null)} data-testid="reception-dept-all">

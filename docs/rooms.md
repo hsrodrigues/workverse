@@ -78,3 +78,7 @@ Móveis usáveis de 1x1 encostados na parede (`WALL_BACKED_KINDS`), categoria Co
 - Efeito na simulação: Eco usa meta +2 e puxa a 60% da força; Ventilar não esfria (só brisa, e não impede o alerta de superaquecimento); o ventilador multiplica o esfriamento (Baixa 0,6, Média 1, Alta 1,6, Auto 1). O timer desliga no servidor (relógio injetável) e avisa no chat. No desenho: LED por modo (Frio azul, Eco verde, Ventilar branco, Auto âmbar), brisa mais rápida com o ventilador alto, aletas paradas com a oscilação desligada.
 - Simulação (`shared/climate.ts`, passo de 5 s): a sala tende a `24 °C + 0,22 por pessoa + 0,7 por rack`; com o ar ligado desce até a meta (split 0,22 °C/passo, torre 0,4), nunca abaixo dela. A Sala da TI (10 racks) chega a ~31 °C sem ar: acima de 30 °C com o ar desligado liga o alerta (LEDs vermelhos piscando nos racks, chip vermelho no HUD e a linha de sistema "Sala da TI superaquecendo!", uma vez por episódio; o alerta só sai abaixo de 29 °C). Só visual, ninguém é punido.
 - Cliente: display de LED desenhado no sprite (alvo), termostato com ambiente + meta, aletas, brisa em faixas nítidas e "ondas de som" (`climateFx.ts`), chip "🌡 24°C ❄ 23°" no HUD. Peças altas ou de parede são clicadas pelos pixels desenhados.
+
+## Reserva temporaria
+
+Salas reservaveis restringem o acesso durante a janela de uma reserva confirmada (dono, convidados, owners/admins e staff admin), sem alterar `access`; ver [bookings.md](bookings.md).

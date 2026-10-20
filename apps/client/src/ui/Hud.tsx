@@ -20,6 +20,8 @@ import { Window } from './Window';
 import { DayModeButton } from './DayModeButton';
 import { FurnishBarButton, FurnishPanel } from './furnish/FurnishPanel';
 import { InviteBanner } from './furnish/InviteBanner';
+import { BookingsBarButton, BookingsPanel } from './bookings/BookingsPanel';
+import { BookingToasts } from './bookings/BookingToasts';
 import { furnishStore, useFurnish } from './furnish/furnishStore';
 import { ProfileBarButton, ProfilePanel } from './profile/ProfilePanel';
 import { profileStore } from './profile/profileStore';
@@ -337,6 +339,8 @@ export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onRec
       <StagePanel />
       <FurnishPanel />
       <InviteBanner />
+      <BookingsPanel />
+      <BookingToasts />
 
       <div className="chat-log" data-testid="chat-log" ref={log} aria-live="polite">
         {world.chat.slice(-40).map((l) => (
@@ -364,6 +368,7 @@ export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onRec
           <span className="ico"><Icon name="chat" /></span> <span className="lbl">Conversas</span>{unread > 0 && <span className="badge">{unread}</span>}
         </button>
         <StageBarButton />
+        <BookingsBarButton />
         <FurnishBarButton />
         <StaffBarButton />
         <MediaBar />

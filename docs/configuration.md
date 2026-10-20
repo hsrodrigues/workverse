@@ -13,6 +13,9 @@
 | `ALLOW_DEV_LOGIN` | *(vazio)* | `1` aceita `hello` só com nome, sem senha (desenvolvimento, bots, testes). **O servidor recusa iniciar com `NODE_ENV=production`.** |
 | `TRUST_PROXY` | `0` (dev), `1` (produção) | Número de proxies confiáveis à frente (Cloudflare, Caddy...). Sem isso, todos os limites de taxa veem o IP do proxy |
 | `PUBLIC_URL` | *(vazio)* | Endereço público; vira origem permitida |
+| `KEEPALIVE` | automático | Autoping (veja [deploy.md](deploy.md#autoping-render-gratuito)): liga sozinho só com `NODE_ENV=production` e `PUBLIC_URL` https que não seja localhost; `on` força, `off` desliga |
+| `KEEPALIVE_MINUTES` | `10` | Intervalo do autoping, de 1 a 14 (o plano gratuito do Render dorme após ~15 min) |
+| `PET` | *(ligado)* | `off` desliga o Byte, o pet do escritório, em todo o servidor ([pet.md](pet.md)) |
 | `REGISTRATION_MODE` | `closed` | `closed`, `invite` ou `open`. O padrão é cadastro fechado: só a equipe cria contas |
 | `WEB_ROOT` | `apps/client/dist` | Pasta do site servido pelo próprio servidor |
 | `BOOTSTRAP_STAFF_EMAILS` | *(vazio)* | `email:nivel,email2:nivel` — concede staff (`helper`, `moderator`, `admin`) a contas já existentes |

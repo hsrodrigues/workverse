@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { randomAvatar, type AccountView, type AvatarConfig, type ServerConfig } from '@workverse/shared';
 import { net } from './net';
-import { api, ApiError, describeError } from './api';
+import { api, ApiError, describeError, setApiDevName } from './api';
 import { worldStore } from './worldStore';
 import { Login } from './ui/Login';
 import { ChangePassword } from './ui/ChangePassword';
@@ -68,6 +68,7 @@ export function App() {
       const q = new URLSearchParams(location.search).get('name');
       if (config.devLogin && q) {
         devName.current = q;
+        setApiDevName(q);
         await enter({ skipEditor: true });
         return;
       }

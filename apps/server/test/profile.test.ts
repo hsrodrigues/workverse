@@ -265,3 +265,29 @@ describe('diretorio e staff', () => {
     expect(nameHistoryOf(store, a.account.id)).toEqual([{ at: expect.any(Number), from: 'Ana', to: 'Ana Dois' }]);
   });
 });
+
+describe('atalho de desenvolvimento (X-Dev-Name)', () => {
+  it('identifica a conta so-nome sem cookie, e nunca contas com senha', async () => {
+    const { app, join, store } = await setup();
+    join('Ana');
+    const ok = await app.inject({ method: 'GET', url: '/api/profile', headers: { 'x-dev-name': 'Ana' } });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().profile.displayName).toBe('Ana');
+    const patched = await app.inject({ method: 'PATCH', url: '/api/profile', payload: { about: 'oi' }, headers: { 'x-dev-name': 'Ana' } });
+    expect(patched.statusCode).toBe(200);
+    // conta real (com senha) nao e alcancavel pelo cabecalho
+    const real = store.create({ email: 'real@x.com', displayName: 'Real', passwordHash: 'scrypt$x' });
+    expect(real.id).toBeTruthy();
+    expect((await app.inject({ method: 'GET', url: '/api/profile', headers: { 'x-dev-name': 'Real' } })).statusCode).toBe(401);
+    expect((await app.inject({ method: 'GET', url: '/api/profile', headers: { 'x-dev-name': 'Ninguem' } })).statusCode).toBe(401);
+  });
+
+  it('sem ALLOW_DEV_LOGIN o cabecalho e ignorado', async () => {
+    const store = new MemoryAccountStore();
+    const { app, world } = await createApp({ store, tickMs: 50, allowDevLogin: false });
+    apps.push(app);
+    store.create({ email: 'a@x.com', displayName: 'Ana', passwordHash: '' });
+    void world;
+    expect((await app.inject({ method: 'GET', url: '/api/profile', headers: { 'x-dev-name': 'Ana' } })).statusCode).toBe(401);
+  });
+});

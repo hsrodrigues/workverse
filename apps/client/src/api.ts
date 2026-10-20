@@ -26,6 +26,12 @@ export function describeError(err: unknown): string {
   return 'Não foi possível falar com o servidor. Verifique sua conexão e tente de novo.';
 }
 
+/** Atalho de desenvolvimento (?name=): sem cookie de sessao, a conta so-nome vai no cabecalho X-Dev-Name (o servidor so aceita fora de producao). */
+let devName: string | undefined;
+export const setApiDevName = (name: string | undefined) => {
+  devName = name;
+};
+
 export type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 
 export async function request<T>(method: HttpMethod, path: string, body?: unknown): Promise<T> {
@@ -34,7 +40,7 @@ export async function request<T>(method: HttpMethod, path: string, body?: unknow
     res = await fetch(path, {
       method,
       credentials: 'same-origin',
-      headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+      headers: { ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(devName ? { 'X-Dev-Name': devName } : {}) },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
@@ -64,6 +70,9 @@ export const api = {
     request<{ account: AccountView }>('POST', '/api/register', { email, password, displayName, ...(inviteToken ? { inviteToken } : {}) }).then((r) => r.account),
   logout: () => request<void>('POST', '/api/logout', {}),
   profile: () => request<{ profile: ProfileView }>('GET', '/api/profile').then((r) => r.profile),
-  saveProfile: (patch: ProfilePatch) => request<{ profile: ProfileView }>('PATCH', '/api/profile', patch).then((r) => r.profile),
+  saveProfile: (patch: ProfilePatch) => request<{ profile: ProfileView }>('PATCH', '/api/profile', patch).then((r) => {
+    if (devName) devName = r.profile.displayName; // o atalho de dev identifica pelo nome: acompanha a troca
+    return r.profile;
+  }),
   changePassword: (current: string, next: string) => request<{ account: AccountView }>('POST', '/api/account/password', { current, next }).then((r) => r.account),
 };

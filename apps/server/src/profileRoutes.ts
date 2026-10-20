@@ -3,7 +3,7 @@ import { DEFAULT_NAME_LIMITS, nextNameChangeAt, parseProfilePatch, type AccountP
 import { authenticate, type AuthDeps } from './authRoutes';
 import { KeyedLimiter } from './limiter';
 import { DuplicateAccountError, type Account } from './store';
-import { isReservedName } from './world';
+import { isReservedName, normalizeName } from './world';
 import { profileViewOf, renameAudit } from './profileService';
 
 /**
@@ -38,6 +38,16 @@ function fail(reply: FastifyReply, status: number, code: string, message: string
 
 export function registerProfileRoutes(app: FastifyInstance, deps: AuthDeps, opts: ProfileRouteOptions = {}) {
   const { store, world, clock } = deps;
+  // Atalho de desenvolvimento (?name=): sem cookie, a conta so-nome e identificada por X-Dev-Name. Nunca em producao (cookies seguros).
+  const devLogin = deps.allowDevLogin && !deps.secureCookies;
+  const identify = (headers: Record<string, unknown>): Account | undefined => {
+    const fromCookie = authenticate(deps, headers.cookie as string | undefined)?.account;
+    if (fromCookie || !devLogin) return fromCookie;
+    const raw = headers['x-dev-name'];
+    const name = typeof raw === 'string' ? normalizeName(raw) : null;
+    const acc = name ? store.getByName(name) : undefined;
+    return acc && acc.passwordHash === '' ? acc : undefined;
+  };
   const limits = opts.nameLimits ?? nameLimitsFromEnv();
   // Leitura generosa, escrita moderada: 12 gravacoes em rajada e depois 1 a cada 5 s por conta.
   const writes = new KeyedLimiter(12, 1 / 5);
@@ -52,17 +62,17 @@ export function registerProfileRoutes(app: FastifyInstance, deps: AuthDeps, opts
 
   app.get('/api/profile', async (req, reply) => {
     void reply.header('Cache-Control', 'no-store');
-    const auth = authenticate(deps, req.headers.cookie);
-    if (!auth) return fail(reply, 401, 'unauthorized', 'Sessão inválida ou expirada.');
-    if (!reads.take(auth.account.id, clock())) return fail(reply, 429, 'rate_limited', 'Muitas consultas. Aguarde um instante.', { retryAfterSeconds: 5 });
-    return { profile: view(auth.account) };
+    const me = identify(req.headers);
+    if (!me) return fail(reply, 401, 'unauthorized', 'Sessão inválida ou expirada.');
+    if (!reads.take(me.id, clock())) return fail(reply, 429, 'rate_limited', 'Muitas consultas. Aguarde um instante.', { retryAfterSeconds: 5 });
+    return { profile: view(me) };
   });
 
   app.patch('/api/profile', { bodyLimit: BODY_LIMIT }, async (req, reply) => {
     void reply.header('Cache-Control', 'no-store');
-    const auth = authenticate(deps, req.headers.cookie);
-    if (!auth) return fail(reply, 401, 'unauthorized', 'Sessão inválida ou expirada.');
-    const account = auth.account;
+    const me = identify(req.headers);
+    if (!me) return fail(reply, 401, 'unauthorized', 'Sessão inválida ou expirada.');
+    const account = me;
     const now = clock();
     if (!writes.take(account.id, now)) return fail(reply, 429, 'rate_limited', 'Você está salvando rápido demais. Aguarde alguns segundos.', { retryAfterSeconds: Math.max(1, Math.ceil(writes.retryAfterSeconds(account.id, now))) });
 

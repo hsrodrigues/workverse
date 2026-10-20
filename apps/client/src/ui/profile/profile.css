@@ -1,14 +1,29 @@
 /* "Meu perfil": painel de edicao com previa ao vivo do cracha. Reaproveita .win, .btn e .mini de styles.css. */
-.panel-profile {
-  width: min(760px, calc(100vw - 24px));
+.win.panel-profile {
+  position: absolute;
   top: 12px;
-  right: auto;
-  left: 50%;
-  transform: translateX(-50%);
+  right: 12px;
+  left: auto;
+  bottom: auto;
+  transform: none;
+  width: min(720px, calc(100vw - 300px));
+  max-height: calc(100vh - 84px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
-.panel-profile .pf-body {
-  max-height: calc(100vh - 140px);
-  overflow: auto;
+.win.panel-profile .pf-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+@media (max-width: 1000px) {
+  .win.panel-profile {
+    left: 12px;
+    width: auto;
+  }
 }
 .pf {
   display: grid;
@@ -156,15 +171,11 @@
   margin: 0;
 }
 @media (max-width: 640px) {
-  .panel-profile {
+  .win.panel-profile {
     top: 6px;
     left: 6px;
     right: 6px;
-    width: auto;
-    transform: none;
-  }
-  .panel-profile .pf-body {
-    max-height: calc(100dvh - 80px);
+    max-height: calc(100dvh - 150px);
   }
   .pf {
     grid-template-columns: 1fr;

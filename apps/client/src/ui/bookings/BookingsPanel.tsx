@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import {
   BOOKING_MINUTE,
-  BOOKING_PRESETS,
   BOOKING_TZ,
   LIMIT_LABELS,
   MAX_BOOKING_GUESTS,
@@ -9,18 +8,14 @@ import {
   MAX_BOOKING_SLOTS,
   MAX_BOOKING_TITLE,
   BOOKING_LIMIT_BOUNDS,
-  addDaysMs,
   dateInputOf,
   formatMinutes,
-  isValidTimeZone,
+  fmtRange,
   parseLocalInput,
-  startOfDayMs,
   timeInputOf,
-  type BookingBlock,
   type BookingLimits,
   type BookingMine,
   type BookingRoomInfo,
-  type BookingWindow,
 } from '@workverse/shared';
 import { net } from '../../net';
 import { useNetStatus } from '../../worldStore';
@@ -46,7 +41,6 @@ import {
   queueText,
   suggestStartTime,
 } from './bookingLogic';
-import { fmtRange } from '@workverse/shared';
 
 const HOUR_PX = 22;
 
@@ -818,6 +812,3 @@ function SettingsTab() {
   );
 }
 
-/** Evita avisos de importacao nao usada em builds estritos. */
-void [BOOKING_PRESETS, addDaysMs, isValidTimeZone, startOfDayMs];
-export type { BookingBlock, BookingWindow };

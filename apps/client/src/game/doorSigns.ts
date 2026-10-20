@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import type { Portal, RoomDef } from '@workverse/shared';
 import { tileToScreen } from '@workverse/shared';
 import { TEXT_FONT, snap } from './text';
+import { bookingStore } from '../ui/bookings/bookingStore';
+import { doorText } from '../ui/bookings/bookingLogic';
 
 /**
  * Placas de identificacao nas portas: cada porta mostra o NOME da sala para onde leva.
@@ -46,7 +48,9 @@ interface Sign {
 }
 
 /** Desenha a placa (ja cisalhada para a parede `side`) num canvas com `s` pixels de textura por pixel do mundo. */
-function drawSign(label: string, side: 'n' | 'w', s: number): HTMLCanvasElement {
+function drawSign(label: string, side: 'n' | 'w', s: number, tone: 'name' | 'free' | 'busy' | 'soon' = 'name'): HTMLCanvasElement {
+  const FILL = { name: GREEN, free: GREEN, busy: '#a82f3a', soon: '#b07d00' }[tone];
+  const FILL_LT = { name: GREEN_LT, free: GREEN_LT, busy: '#ff8f98', soon: '#ffd45e' }[tone];
   const probe = document.createElement('canvas').getContext('2d')!;
   probe.font = `600 ${FONT_PX * s}px ${TEXT_FONT}`;
   const tw = Math.ceil(probe.measureText(label).width);
@@ -77,8 +81,8 @@ function drawSign(label: string, side: 'n' | 'w', s: number): HTMLCanvasElement 
   rect(0, 0, W, H - px, BRASS);
   // fundo verde
   rect(px * 1.5, px * 1.5, W - px * 3, H - px * 3, INK);
-  rect(px * 2, px * 2, W - px * 4, H - px * 4, GREEN);
-  rect(px * 2, px * 2, W - px * 4, px, GREEN_LT);
+  rect(px * 2, px * 2, W - px * 4, H - px * 4, FILL);
+  rect(px * 2, px * 2, W - px * 4, px, FILL_LT);
   // parafusos
   for (const [x, y] of [
     [px * 0.5, px * 0.5],
@@ -105,7 +109,13 @@ export class DoorSigns {
   private zoom = 1;
   private def: RoomDef | null = null;
 
-  constructor(private readonly scene: Phaser.Scene) {}
+  private plates: Phaser.GameObjects.Image[] = [];
+  private unsub: (() => void) | null = null;
+
+  constructor(private readonly scene: Phaser.Scene) {
+    // placa de reserva (Livre / Reservada por... ate...) nas portas das salas reservaveis: refaz quando o servidor manda novas placas
+    this.unsub = bookingStore.subscribe(() => this.layoutPlates());
+  }
 
   /** Recria as placas da sala atual. */
   build(def: RoomDef, zoom: number) {
@@ -144,14 +154,50 @@ export class DoorSigns {
         .setDepth(3);
       this.signs.push({ portal, img });
     }
+    this.layoutPlates();
+  }
+
+  private layoutPlates() {
+    for (const p of this.plates) p.destroy();
+    this.plates = [];
+    if (!this.def || !this.scene.sys?.isActive()) return;
+    const st = bookingStore.get();
+    const z = this.zoom;
+    const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+    const s = Math.max(1, z * dpr);
+    for (const portal of this.def.portals) {
+      const door = st.doors[portal.toRoom];
+      if (!door) continue;
+      const t = doorText(door, st.tz);
+      const north = portal.y === 0;
+      const side = north ? 'n' : 'w';
+      const label = (t.locked ? '🔒 ' : '') + t.text;
+      const key = `plate:${label}:${t.tone}:${side}:${s.toFixed(2)}`;
+      if (!this.scene.textures.exists(key)) this.scene.textures.addCanvas(key, drawSign(label, side, s, t.tone));
+      const p = north ? tileToScreen(portal.x + 0.5, 0) : tileToScreen(0, portal.y + 0.5);
+      this.plates.push(
+        this.scene.add
+          .image(snap(p.x, z), snap(p.y - SIGN_Z - 15, z), key)
+          .setOrigin(0.5, 0.5)
+          .setScale(1 / s)
+          .setDepth(3),
+      );
+    }
   }
 
   private destroyImages() {
     for (const s of this.signs) s.img.destroy();
     this.signs = [];
+    for (const p of this.plates) p.destroy();
+    this.plates = [];
   }
 
   destroy() {
     this.destroyImages();
+  }
+
+  dispose() {
+    this.destroyImages();
+    this.unsub?.();
   }
 }

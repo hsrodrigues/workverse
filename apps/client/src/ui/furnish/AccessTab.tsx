@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { RoomAccess } from '@workverse/shared';
 import { furnishStore, useFurnish } from './furnishStore';
+import { RoomBookingConfig } from '../bookings/BookingsPanel';
+import { bookingStore } from '../bookings/bookingStore';
 
 const OPTIONS: Array<{ id: RoomAccess; label: string; hint: string }> = [
   { id: 'org', label: 'Aberta para todos', hint: 'Qualquer pessoa da organização entra.' },
@@ -38,6 +40,9 @@ export function AccessTab() {
   const [hours, setHours] = useState(72);
   const [teamId, setTeamId] = useState('');
 
+  useEffect(() => {
+    bookingStore.syncQuiet();
+  }, []);
   // follow the room the person is in
   useEffect(() => {
     if (s.def?.id) setRoomId(s.def.id);
@@ -174,6 +179,15 @@ export function AccessTab() {
             ))}
             {(view?.invites.length ?? 0) === 0 && <li className="fz-empty">Ninguém convidado ainda. Donos e administradores sempre entram.</li>}
           </ul>
+        </div>
+      )}
+      {!locked && (
+        <div className="fz-guests" data-testid="access-booking">
+          <div className="fz-sub">Reserva da sala</div>
+          <RoomBookingConfig roomId={roomId} />
+          <button type="button" className="mini" onClick={() => bookingStore.open({ roomId, tab: 'settings' })}>
+            Limites de reserva…
+          </button>
         </div>
       )}
       {s.accessNotice && (

@@ -166,6 +166,18 @@ escritorio.seudominio.com {
 - A primeira conta dona: rode o `account:create` num shell da plataforma (`railway run npm run account:create -w @workverse/server -- email nome`
   usa o `DATABASE_URL` do projeto) **antes** de abrir ao público.
 
+### Autoping (Render gratuito)
+
+Com `NODE_ENV=production` e `PUBLIC_URL` https público, o servidor chama o **próprio** `PUBLIC_URL/health` a cada 10 min
+(`KEEPALIVE_MINUTES`, 1 a 14; `KEEPALIVE=off` desliga, `on` força). Só chama o host de `PUBLIC_URL`, não segue
+redirecionamentos, usa o User-Agent `WorkVerse-keepalive` e registra uma linha de resumo por hora. Limites honestos:
+
+- Só funciona **enquanto o servidor está acordado**: se o serviço já dormiu (deploy novo, reinício, falha), o autoping não o acorda.
+  Para isso use um monitor externo gratuito (por exemplo UptimeRobot, checando `https://seu-app/health` a cada 5 min).
+- Não contorna o **limite mensal de horas** do plano gratuito: manter acordado 24 h consome as horas do mês.
+- Confira os termos de uso do seu provedor sobre tráfego automático antes de depender disso.
+- O Byte (pet) dá uma batidinha de coração a cada autoping, mas **não** mantém nada acordado por si só.
+
 ---
 
 ## Primeiros passos depois de publicar
