@@ -63,8 +63,8 @@ const VIEW_FOR_DIR: ReadonlyArray<{ view: View; flip: boolean }> = [
 ];
 /** Key-press rhythm while typing: index of the typing frame (0 = left hand down, 1 = right hand down). */
 const TYPING = [0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1];
-// 0.5 and 0.75 only appear on small screens (fitCamera), so a whole room fits a phone; wheel/pinch steps through them too
-const ZOOMS = [0.375, 0.5, 0.75, 1, 1.5, 2, 3];
+// 0.5 is only reachable with the zoom-out button (the automatic fit never goes below 1)
+const ZOOMS = [0.5, 1, 1.5, 2, 3];
 const UI_DEPTH = 1_000_000;
 const BUBBLE_MS = 8000;
 /** Pieces picked by their drawn pixels (they are tall or hang on the wall, so the floor tile under the pointer is the wrong one). */
@@ -614,8 +614,10 @@ export class WorldScene extends Phaser.Scene {
   private hover!: Phaser.GameObjects.Graphics;
   private marker!: Phaser.GameObjects.Graphics;
   private markerAt: { x: number; y: number; born: number } | null = null;
-  private zoomIndex = 5;
+  private zoomIndex = 3;
   private userMoved = false;
+  /** Two-finger pinch on touch screens: distance between the fingers at the last zoom step (0 = not pinching). */
+  private pinchDist = 0;
   private downAt: { x: number; y: number } | null = null;
   private dragged = false;
   private unsubscribe?: () => void;
@@ -663,6 +665,7 @@ export class WorldScene extends Phaser.Scene {
       this.dragged = false;
       if (this.furn.active && p.button === 0) this.furn.pointer('down', this.tileAt(p), p);
     });
+    this.input.addPointer(1); // second finger, for pinch-zoom
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.onMove(p));
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
       if (this.furn.active) {
@@ -685,6 +688,17 @@ export class WorldScene extends Phaser.Scene {
 
     this.unsubscribe = net.on((m) => this.onNet(m));
     const offLocate = listen('locateHost', (d) => d && this.requestLocate(d.roomId, d.x, d.y, d.label));
+    const offZoom = listen('cameraZoom', (d) => {
+      if (d === 'fit') {
+        this.userMoved = false;
+        this.fitCamera();
+        return;
+      }
+      this.userMoved = true;
+      this.zoomIndex = Phaser.Math.Clamp(this.zoomIndex + (d === 'in' ? 1 : -1), 0, ZOOMS.length - 1);
+      this.cameras.main.setZoom(ZOOMS[this.zoomIndex]);
+    });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, offZoom);
     const offPlay = listen('petPlay', () => {
       this.playUntil = performance.now() + 5200;
       this.playSent = null;
@@ -1023,13 +1037,9 @@ export class WorldScene extends Phaser.Scene {
     const { width: W, height: H } = this.built.grid;
     const bw = (W + H) * (TILE_W / 2);
     const bh = (W + H) * (TILE_H / 2) + WALL_H + 12;
-    // phones: the bottom bar wraps into several rows and the top cards take room, so measure instead of guessing
-    const bar = typeof document !== 'undefined' ? document.querySelector('.bar') : null;
-    const barH = bar ? Math.ceil(bar.getBoundingClientRect().height) : 52;
-    const small = this.scale.width <= 640;
-    const availW = this.scale.width - (small ? 12 : 40);
-    const availH = this.scale.height - barH - (small ? 64 : 138);
-    let idx = 0;
+    const availW = this.scale.width - 40;
+    const availH = this.scale.height - 190;
+    let idx = ZOOMS.indexOf(1);
     ZOOMS.forEach((z, i) => {
       if (bw * z <= availW && bh * z <= availH) idx = i;
     });
@@ -1047,7 +1057,32 @@ export class WorldScene extends Phaser.Scene {
     return { x: Math.floor(t.x), y: Math.floor(t.y) };
   }
 
+  /** Pinch with two fingers: spreading zooms in, pinching zooms out (one step per ~25% change of the distance). Returns true while pinching. */
+  private pinch(): boolean {
+    const a = this.input.pointer1;
+    const b = this.input.pointer2;
+    if (!a?.isDown || !b?.isDown) {
+      this.pinchDist = 0;
+      return false;
+    }
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    this.dragged = true; // the lift of the fingers must not count as a tap on the floor
+    this.userMoved = true;
+    if (this.pinchDist === 0) {
+      this.pinchDist = d;
+      return true;
+    }
+    const ratio = d / this.pinchDist;
+    if (ratio > 1.25 || ratio < 0.8) {
+      this.zoomIndex = Phaser.Math.Clamp(this.zoomIndex + (ratio > 1 ? 1 : -1), 0, ZOOMS.length - 1);
+      this.cameras.main.setZoom(ZOOMS[this.zoomIndex]);
+      this.pinchDist = d;
+    }
+    return true;
+  }
+
   private onMove(p: Phaser.Input.Pointer) {
+    if (this.pinch()) return;
     if (this.furn.active && (this.furn.grabbed || !p.isDown)) {
       this.hover.clear();
       this.furn.pointer('move', this.tileAt(p), p);

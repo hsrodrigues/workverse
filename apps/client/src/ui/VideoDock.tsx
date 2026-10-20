@@ -10,8 +10,7 @@ export function VideoDock() {
   const { state } = useMedia();
   const world = useWorld();
   const stageMode = useStageMode();
-  // on a phone the open dock would cover the room: start collapsed there
-  const [open, setOpen] = useState(() => typeof window === 'undefined' || window.innerWidth > 640);
+  const [open, setOpen] = useState(true);
   if (state.status === 'idle' || state.status === 'unavailable') return null;
 
   const inStage = isStageRoomDef(world.room);

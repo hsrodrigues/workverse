@@ -689,22 +689,29 @@ input {
   transform: none;
 }
 @media (max-width: 640px) {
-  .room-card span {
-    display: none;
-  }
-  .room-card {
-    padding: 5px 8px;
-  }
-  .bar .tool .lbl {
-    display: none;
-  }
-  .bar .tool:not(.tool-send) {
-    padding: 7px 9px;
-  }
   .chat-log {
     max-height: 96px;
     font-size: 12px;
     left: 6px;
     width: calc(100vw - 12px);
   }
+}
+
+/* Zoom do mapa: coluna de botoes acima da barra inferior, a direita */
+.zoom-controls {
+  position: absolute;
+  right: 10px;
+  bottom: calc(var(--bar-h, 52px) + 12px);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.zoom-controls .tool {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }

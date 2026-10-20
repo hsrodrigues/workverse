@@ -19,6 +19,9 @@ const PATHS = {
   tv: 'M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-5l1 3H8l1-3H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm1 2v8h14V7z',
   list: 'M4 5h16v3H4zm0 5.5h16v3H4zM4 16h16v3H4z',
   chevron: 'M7 10l5 5 5-5z',
+  plus: 'M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7z',
+  minus: 'M4 11h16v2H4z',
+  fit: 'M4 4h6v2H6v4H4zm10 0h6v6h-2V6h-4zM4 14h2v4h4v2H4zm14 0h2v6h-6v-2h4z',
   /** Cracha (Meu perfil): cartao com cordao, cabeca e ombros vazados (enrolamento invertido). */
   user: 'M9 2h6v3H9zM4 7h16v14H4zM12 10.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 1 0 0-5zM16.5 19c0-2-3-2.7-4.5-2.7s-4.5.7-4.5 2.7z',
   /** Bolo de aniversario (ficha, no dia). */

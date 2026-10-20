@@ -6,6 +6,7 @@ import './climate.css';
 import { BadgeCard } from './BadgeCard';
 import { ReceptionPanel } from './Reception';
 import { PetMenu } from './PetMenu';
+import { ZoomControls } from './ZoomControls';
 import { net } from '../net';
 import { listen } from '../bus';
 import { useNetStatus, useWorld, worldStore } from '../worldStore';
@@ -331,6 +332,7 @@ export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onRec
       <ProfilePanel onEditAvatar={onEditAvatar} onChangePassword={onChangePassword} />
       <ReceptionPanel onWalkNear={onWalkNear} />
       <PetMenu />
+      <ZoomControls />
       <InventoryPanel />
       <RemoteControl />
       <StaffPanel />

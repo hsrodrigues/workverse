@@ -55,7 +55,8 @@ export function BookingsBarButton() {
       <span className="ico">
         <Icon name="calendar" />
       </span>{' '}
-      Reservas{pending > 0 && <span className="badge" aria-label={`${pending} pedidos pendentes`}>{pending}</span>}
+      <span className="lbl">Reservas</span>
+      {pending > 0 && <span className="badge" aria-label={`${pending} pedidos pendentes`}>{pending}</span>}
     </button>
   );
 }

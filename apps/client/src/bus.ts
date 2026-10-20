@@ -11,6 +11,8 @@ export interface BusEvents {
   petClick: { name: string; x: number; y: number };
   /** UI -> scene: "Brincar" was chosen: for a few seconds the pointer position is sent to the server so Byte chases it. */
   petPlay: undefined;
+  /** UI -> scene: zoom buttons (+/-) and "ver tudo" (fit): the camera zoom steps through the integer-ish levels. */
+  cameraZoom: 'in' | 'out' | 'fit';
   // ---- room editor ("Modo decoração"): the scene only reports pointers and draws what the UI asks for
   /** UI -> scene: decorate mode on/off (while on, clicks never walk, sit or open avatar menus). */
   furnishActive: boolean;
