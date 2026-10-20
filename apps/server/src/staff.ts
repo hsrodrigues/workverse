@@ -17,6 +17,9 @@ import {
   type AvatarV2,
   type OnlineEntry,
   type EventMode,
+  PET_STAFF_OPS,
+  type PetAdminEntry,
+  type PetStaffOp,
   type EventsView,
   type Point,
   type ServerMessage,
@@ -52,6 +55,7 @@ export const STAFF_MESSAGE_TYPES: ReadonlySet<string> = new Set([
   'staff_rooms',
   'staff_room',
   'staff_event',
+  'staff_pet',
 ]);
 export const isStaffMessage = (t: string): boolean => STAFF_MESSAGE_TYPES.has(t);
 
@@ -91,6 +95,14 @@ export interface StaffHost {
   roomExists(orgId: string, roomId: string): boolean;
   /** Forca um evento (ligado / desligado / automatico) e avisa todos os online. `changed` = false quando ja estava assim. */
   setEvent(id: string, mode: EventMode): { changed: boolean; view: EventsView };
+  /** Byte, o pet do escritorio, por organizacao (ver pet.ts). */
+  pets: {
+    list(): PetAdminEntry[];
+    /** false = ja estava assim. */
+    setEnabled(orgId: string, on: boolean): boolean;
+    rename(orgId: string, name: unknown): string | null;
+    bring(orgId: string, roomId: string, at: Point): { ok: true } | { ok: false; message: string };
+  };
 }
 
 /** `email[:nivel],email2[:nivel]` (nivel padrao: admin). Linhas invalidas sao ignoradas. */
@@ -566,6 +578,47 @@ export class StaffService {
         const label = { on: 'forçado LIGADO', off: 'forçado DESLIGADO', auto: 'voltou a seguir a data' }[mode];
         this.say(p, r.changed ? `Evento ${def.name}: ${label}.` : `Evento ${def.name} já estava assim.`);
         if (r.changed) this.audit(p, level, `event.${mode}`, { id: def.id, name: def.name }, `${label}; ativos agora: ${r.view.active.join(', ') || 'nenhum'}`);
+        return true;
+      }
+      case 'staff_pet': {
+        if (typeof m.op !== 'string' || !(PET_STAFF_OPS as readonly string[]).includes(m.op) || (m.orgId !== undefined && !str(m.orgId, MAX_TARGET)) || (m.name !== undefined && typeof m.name !== 'string')) return this.malformedIfStaff(p);
+        const op = m.op as PetStaffOp;
+        if (op === 'list') {
+          if (!this.gate(p, 'rooms.view', now)) return true;
+          p.send({ t: 'staff_pet', pets: this.host.pets.list() });
+          return true;
+        }
+        const level = this.gate(p, 'pet.control', now);
+        if (!level) return true;
+        const orgId = (m.orgId as string | undefined) ?? p.orgId;
+        const org = this.host.store.orgs.getOrg(orgId);
+        if (!org) {
+          this.say(p, 'Organização não encontrada.');
+          return true;
+        }
+        const target = { id: orgId, name: org.name };
+        if (op === 'on' || op === 'off') {
+          const changed = this.host.pets.setEnabled(orgId, op === 'on');
+          this.say(p, changed ? `Byte ${op === 'on' ? 'ligado' : 'desligado'} em ${org.name}.` : `O Byte já estava ${op === 'on' ? 'ligado' : 'desligado'}.`);
+          if (changed) this.audit(p, level, `pet.${op}`, target);
+        } else if (op === 'rename') {
+          const name = this.host.pets.rename(orgId, m.name);
+          if (!name) this.say(p, 'Nome inválido (2 a 16 letras, números, espaço, - ou _).');
+          else {
+            this.say(p, `O pet de ${org.name} agora se chama ${name}.`);
+            this.audit(p, level, 'pet.rename', target, name);
+          }
+        } else {
+          // "levar ate mim": so dentro da organizacao e da sala em que a staff esta
+          const at = this.host.position(p);
+          if (orgId !== p.orgId || !at) this.say(p, 'Você não está em uma sala dessa organização: o Byte só vem até quem está na mesma organização.');
+          else {
+            const r = this.host.pets.bring(orgId, at.roomId, { x: at.x, y: at.y });
+            this.say(p, r.ok ? 'O Byte está a caminho.' : r.message);
+            if (r.ok) this.audit(p, level, 'pet.bring', target, at.roomId);
+          }
+        }
+        p.send({ t: 'staff_pet', pets: this.host.pets.list() });
         return true;
       }
       case 'staff_item': {

@@ -608,7 +608,7 @@ describe('room editor: validation on the server', () => {
     furnish(c, 0, ring.map(([x, y]) => add('bin', x!, y!)));
     const r = c.last('furnish_result')!;
     expect(r.ok).toBe(false);
-    expect(['isolated', 'overlap', 'portal_unreachable', 'arrival_unreachable']).toContain(r.code);
+    expect(['isolated', 'overlap', 'portal_unreachable', 'arrival_unreachable', 'usable_unreachable']).toContain(r.code);
     expect(room.version).toBe(0);
   });
 

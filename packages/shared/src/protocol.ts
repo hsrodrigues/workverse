@@ -9,6 +9,10 @@ import type { Activity } from './activity';
 import type { EventMode, EventsView } from './events';
 import type { DirResult, ProfileTag } from './directory';
 import type { OnlineEntry, RoomAdminEntry, RoomOp, StaffLevel, StaffLogEntry } from './staff';
+import type { ClimateSet, ClimateView } from './climate';
+import type { InventoryAction, InventoryResult } from './inventory';
+import type { BookingClientMessage, BookingServerMessage } from './bookingProtocol';
+import type { PetAct, PetAdminEntry, PetFx, PetStaffOp, PetState, PetView } from './pet';
 
 /** Time an avatar takes to cross one tile. Shared so client animation matches the server clock. */
 export const STEP_MS = 380;
@@ -59,6 +63,11 @@ export interface PlayerView extends ProfileTag {
   stepRemainingMs: number;
   /** Selo de staff: só presente quando o SERVIDOR marcou a conta como staff em serviço. */
   staff?: StaffLevel;
+  /** Campos opcionais do perfil (ver profile.ts). O servidor so os envia a membros da organizacao (nunca a visitantes). */
+  about?: string;
+  pronouns?: string;
+  /** Hoje e o aniversario da pessoa e ela permitiu mostrar. */
+  bday?: true;
 }
 
 export interface RoomSnapshot {
@@ -72,6 +81,8 @@ export interface RoomSnapshot {
   furnishVersion?: number;
   /** True when the organization changed the layout of this room (the original can be restored). */
   customized?: boolean;
+  /** Ar-condicionado e temperatura da sala (ver climate.ts). */
+  climate?: ClimateView;
 }
 
 /** Person with a live invite to a restricted room (seen only by people who manage its access). */
@@ -142,6 +153,15 @@ export type ClientMessage =
   | { t: 'meeting_invite'; target: string }
   /** Diretorio da recepcao: `dept` = id do setor, `q` = parte do nome (sem acento/caixa). Sem nenhum dos dois, lista os primeiros. */
   | { t: 'dir_search'; dept?: string; q?: string }
+  /** Inventario de PCs da organizacao (so equipe de TI e staff). Os filtros ficam no cliente. */
+  | { t: 'inventory_query' }
+  /** Controle remoto do ar-condicionado da sala atual (so quem esta nela). Todos os campos sao opcionais; ver parseClimateSet. */
+  | ({ t: 'climate_set' } & ClimateSet)
+  /** Ping (latencia fictícia) ou reinicio (so um aviso divertido para quem esta sentado) de um host do inventario. */
+  | { t: 'inventory_action'; host: string; action: InventoryAction }
+  /** Interacao com o Byte, o pet do escritorio (carinho, petisco, chamar, brincar; `x`/`y` = ponteiro do brincar). */
+  | { t: 'pet_do'; act: PetAct; x?: number; y?: number }
+  | BookingClientMessage
   | StaffClientMessage;
 
 export type ServerMessage =
@@ -167,7 +187,7 @@ export type ServerMessage =
   | { t: 'perms'; orgId: string; role: Role; teamId: string | null; team: string; perms: Permission[] }
   | { t: 'room'; room: RoomSnapshot }
   /** Cargo/setor de alguem da sala mudou (ou foi definido): todos veem na hora. Campos ausentes = sem etiqueta. */
-  | ({ t: 'profile'; id: string } & ProfileTag)
+  | ({ t: 'profile'; id: string; name?: string; about?: string; pronouns?: string; bday?: true } & ProfileTag)
   | ({ t: 'dir_result' } & DirResult)
   | { t: 'joined'; player: PlayerView }
   | { t: 'left'; id: string }
@@ -185,6 +205,20 @@ export type ServerMessage =
   | { t: 'dm'; peerId: string; peer: string; self: boolean; text: string; at: number; /** Meeting invitation: the UI shows an "Entrar" button. */ roomInvite?: { roomId: string; roomName: string } }
   | { t: 'team'; team: string; from: string; self: boolean; text: string; at: number }
   | { t: 'furni'; id: string; on: boolean }
+  /** Ar-condicionado/temperatura da sala atual mudou (liga/desliga, meta, temperatura, superaquecimento). */
+  | ({ t: 'climate' } & ClimateView)
+  /** A pessoa usou o ar-condicionado ou o termostato: abre o controle remoto. */
+  | { t: 'climate_open' }
+  /** A pessoa usou um rack/console da Sala da TI e e da TI (ou staff): abre o painel do inventario. */
+  | { t: 'inventory_open' }
+  | ({ t: 'inventory_result' } & InventoryResult)
+  /** O pet da sala (ou null: nao esta nesta sala / desligado). Enviado ao entrar e quando ele muda de sala. */
+  | { t: 'pet'; pet: PetView | null }
+  /** Novo caminho do pet (mesmo formato de `path` dos jogadores). */
+  | { t: 'pet_path'; from: Point; path: Point[]; stepRemainingMs: number }
+  /** Postura do pet (parado, sentado, dormindo...), com efeito e fala opcionais. */
+  | { t: 'pet_act'; state: PetState; x: number; y: number; dir: Dir8; fx?: PetFx; say?: string }
+  | { t: 'inventory_action_result'; host: string; action: InventoryAction; ok: boolean; ms?: number; message: string }
   | { t: 'population'; population: Record<string, number> }
   | { t: 'pong'; ts: number }
   /** Auditorium state; sent after `room` when entering one and on every change. */
@@ -202,6 +236,7 @@ export type ServerMessage =
   | { t: 'room_access_result'; rid: number; ok: boolean; code?: string; message?: string }
   /** Events (Halloween, Natal...) active now for everybody, plus the staff's manual overrides. Sent on login and on every change. */
   | ({ t: 'events' } & EventsView)
+  | BookingServerMessage
   | StaffServerMessage;
 
 /** Shape of the HTTP auth API (`/api/*`). */
@@ -254,7 +289,9 @@ export type StaffClientMessage =
   /** Concede/revoga uma chave de desbloqueio do guarda-roupa (ex.: event:natal, item:sp.mug_gold). */
   | { t: 'staff_item'; target: string; key: string; grant: boolean }
   /** Forca um evento (Halloween, Natal...) ligado ('on'), desligado ('off') ou volta a seguir a data ('auto'). */
-  | { t: 'staff_event'; id: string; mode: EventMode };
+  | { t: 'staff_event'; id: string; mode: EventMode }
+  /** Controle do pet (Byte) de uma organizacao: ligar/desligar, renomear, trazer ate a staff. */
+  | { t: 'staff_pet'; op: PetStaffOp; orgId?: string; name?: string };
 
 export type StaffServerMessage =
   | ({ t: 'staff_self' } & StaffSelf)
@@ -263,6 +300,7 @@ export type StaffServerMessage =
   /** Selo de um jogador da sala mudou (entrou/saiu de serviço). */
   | { t: 'staff_flag'; id: string; staff: StaffLevel | null }
   | { t: 'staff_rooms'; rooms: RoomAdminEntry[] }
+  | { t: 'staff_pet'; pets: PetAdminEntry[] }
   /** O nivel de staff desta conta foi removido (efeito imediato): esconda o painel. */
   | { t: 'staff_revoked' }
   /** Anúncio de staff: sala, organização, todos os online ou mensagem privada; `highlight` = destaque. */

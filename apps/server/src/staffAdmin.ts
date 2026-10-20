@@ -24,6 +24,7 @@ import type { Result } from './org';
 import { generateProvisionalPassword } from './provisional';
 import { DuplicateAccountError, type Account, type AccountStore } from './store';
 import { isReservedName, normalizeName, type World } from './world';
+import { nameHistoryOf } from './profileService';
 
 /**
  * Regras de negocio da administracao de contas e da equipe de staff. Sem HTTP aqui: staffRoutes.ts cuida de autenticacao,
@@ -100,6 +101,7 @@ export function accountDetail(ctx: AdminCtx, a: Account, viewer: StaffLevel): St
     unlocks: [...(a.unlocks ?? [])],
     createdBy: a.createdBy ?? null,
     passwordChangedAt: a.passwordChangedAt ?? null,
+    nameHistory: nameHistoryOf(ctx.store, a.id),
   };
 }
 

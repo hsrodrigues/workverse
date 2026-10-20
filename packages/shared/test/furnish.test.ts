@@ -40,7 +40,7 @@ describe('validateLayout: placement rules', () => {
   });
 
   it('keeps wall pieces on the north row / west column and away from doors', () => {
-    expect(checkOps(office, office.furniture, [add(piece('n1', 'frame', 11, 0))]).ok).toBe(true);
+    expect(checkOps(office, office.furniture, [add(piece('n1', 'frame', 2, 0))]).ok).toBe(true);
     expect(checkOps(office, office.furniture, [add(piece('n1', 'frame', 0, 9, 1))]).ok).toBe(true);
     expect(codes(checkOps(office, office.furniture, [add(piece('n1', 'frame', 4, 3))]))).toContain('wall_only');
     // dir 1 runs along the west column, so y = 0 with dir 0 is fine but x = 3 with dir 1 is not

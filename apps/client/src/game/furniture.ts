@@ -16,6 +16,7 @@ import {
   type Pt,
 } from './pixel';
 import { TECH_BUILDERS } from './furnitureTech';
+import { CLIMATE_BUILDERS } from './furnitureClimate';
 
 /**
  * Procedural furniture. Each kind returns boxes in footprint tile-space; the
@@ -61,7 +62,8 @@ export interface Parts {
 const METAL = '#2b2f3a';
 const LEAF: readonly [string, string, string, string] = ['#97e583', '#58bc60', '#3b9150', '#2a6a3e'];
 
-export type Builder = (fw: number, fd: number, f: Furniture, on: boolean) => Parts;
+/** `opt`: estado extra do desenho (alvo do ar-condicionado, temperatura do termostato, alerta dos racks); 0 = nenhum. */
+export type Builder = (fw: number, fd: number, f: Furniture, on: boolean, opt?: number) => Parts;
 
 /** Stable per-position variation (colours, dual monitors) so neighbours differ but a reload looks the same. */
 const seatVariant = (f: Furniture) => Math.floor(hash2(f.x, f.y, 31) * 3);
@@ -1758,6 +1760,7 @@ const BUILDERS: Record<FurniKind, Builder> = {
 
   // ---- IT room (Sala da TI): the rest lives in furnitureTech.ts
   ...TECH_BUILDERS,
+  ...CLIMATE_BUILDERS,
   ergo_chair: (_fw, _fd, f) => chairParts(f, '#2c4a78', '#1d2f52', 9),
   espresso: (fw, fd, f, on) => {
     const alongX = fw >= fd;
@@ -1816,7 +1819,7 @@ const cache = new Map<string, FurniSprite>();
 const MAX_Z = 96;
 const PAD = 6;
 
-export function renderFurniture(f: Furniture, on = false): FurniSprite {
+export function renderFurniture(f: Furniture, on = false, opt = 0): FurniSprite {
   const dir = ((f.dir % 4) + 4) % 4;
   const variant =
     f.kind === 'frame'
@@ -1830,14 +1833,14 @@ export function renderFurniture(f: Furniture, on = false): FurniSprite {
           : f.kind === 'rug'
             ? `:${rugVariant(f)}`
             : '';
-  const key = `fu:${f.kind}:${dir}:${on ? 1 : 0}${variant}`;
+  const key = `fu:${f.kind}:${dir}:${on ? 1 : 0}${variant}${opt ? `~${opt}` : ''}`;
   const hit = cache.get(key);
   if (hit) return hit;
   const { w: fw, d: fd } = footprint(f);
   const build = BUILDERS[f.kind] as Builder | undefined;
   // Tipo sem desenho registrado: bloco provisório, para uma peça faltando nunca derrubar a sala inteira.
   const parts: Parts = build
-    ? build(fw, fd, f, on)
+    ? build(fw, fd, f, on, opt)
     : { z1: 20, boxes: [{ x: 0.1, y: 0.1, z: 0, w: fw - 0.2, d: fd - 0.2, h: 20, top: '#c75bd6' }] };
   const width = (fw + fd) * 32 + PAD * 2;
   const height = (fw + fd) * 16 + MAX_Z + PAD * 2;

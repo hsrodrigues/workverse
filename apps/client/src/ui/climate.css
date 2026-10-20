@@ -1,0 +1,40 @@
+/* Chip da temperatura da sala (HUD) */
+.temp-chip {
+  background: rgba(27, 24, 48, 0.92);
+  color: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  padding: 5px 9px;
+  font-size: 10px;
+  width: fit-content;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.temp-chip.cooling {
+  color: #bfe8ff;
+}
+.temp-chip.hot {
+  background: #7a1d1d;
+  color: #fff;
+  animation: temp-alert 0.8s steps(2) infinite;
+}
+.temp-chip .ac {
+  color: #7fd6ff;
+}
+@keyframes temp-alert {
+  50% {
+    background: #c0392b;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .temp-chip.hot {
+    animation: none;
+  }
+}
+.hud-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}

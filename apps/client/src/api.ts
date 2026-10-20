@@ -1,4 +1,4 @@
-import type { AccountView, ApiErrorBody, ServerConfig } from '@workverse/shared';
+import type { AccountView, ApiErrorBody, ProfilePatch, ProfileView, ServerConfig } from '@workverse/shared';
 
 export class ApiError extends Error {
   constructor(
@@ -6,6 +6,8 @@ export class ApiError extends Error {
     readonly code: string,
     message: string,
     readonly retryAfterSeconds?: number,
+    /** Campo do formulario a que o erro se refere (quando o servidor informa). */
+    readonly field?: string,
   ) {
     super(message);
   }
@@ -48,7 +50,7 @@ export async function request<T>(method: HttpMethod, path: string, body?: unknow
   if (!res.ok) {
     const e = (data as Partial<ApiErrorBody> | undefined)?.error;
     const retry = e?.retryAfterSeconds ?? (Number(res.headers.get('Retry-After')) || undefined);
-    throw new ApiError(res.status, e?.code ?? 'unknown', e?.message ?? 'Algo deu errado. Tente de novo.', retry);
+    throw new ApiError(res.status, e?.code ?? 'unknown', e?.message ?? 'Algo deu errado. Tente de novo.', retry, (e as { field?: string } | undefined)?.field);
   }
   return data as T;
 }
@@ -61,5 +63,7 @@ export const api = {
   register: (email: string, password: string, displayName: string, inviteToken?: string) =>
     request<{ account: AccountView }>('POST', '/api/register', { email, password, displayName, ...(inviteToken ? { inviteToken } : {}) }).then((r) => r.account),
   logout: () => request<void>('POST', '/api/logout', {}),
+  profile: () => request<{ profile: ProfileView }>('GET', '/api/profile').then((r) => r.profile),
+  saveProfile: (patch: ProfilePatch) => request<{ profile: ProfileView }>('PATCH', '/api/profile', patch).then((r) => r.profile),
   changePassword: (current: string, next: string) => request<{ account: AccountView }>('POST', '/api/account/password', { current, next }).then((r) => r.account),
 };

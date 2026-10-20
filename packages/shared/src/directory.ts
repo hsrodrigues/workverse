@@ -131,6 +131,8 @@ export interface DirEntry {
   title?: string;
   dept?: string;
   deptColor?: string;
+  /** "Sobre mim" curto (opcional; so membros da organizacao veem). */
+  about?: string;
   online: boolean;
   /** Aparencia (a mesma que todo mundo ve na sala): a foto do cracha e a cabeca dela. */
   avatar?: AvatarConfig;

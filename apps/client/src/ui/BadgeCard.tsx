@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { STAFF_LABELS, badgeTextColor, safeDeptColor, type AvatarConfig, type StaffLevel } from '@workverse/shared';
 import { FH, FRAMES_IDLE, FW, drawAvatarFrame } from '../game/avatarRenderer';
 import { createCanvas } from '../game/pixel';
+import { Icon } from '../media/icons';
 import './badge.css';
 
 /** Recorte da cabeça no quadro frontal (64x128, cabeça entre y 13 e 49): 40x40, ampliado por número inteiro (pixels nítidos). */
@@ -29,13 +30,18 @@ interface Props {
   dept?: string;
   deptColor?: string;
   staff?: StaffLevel;
+  /** Campos opcionais do perfil (so quando preenchidos; o servidor decide quem os recebe). */
+  about?: string;
+  pronouns?: string;
+  /** Hoje e o aniversario (e a pessoa permitiu mostrar). */
+  birthday?: boolean;
   /** Versão horizontal e menor (resultados da busca da recepção). */
   compact?: boolean;
   onClose?(): void;
 }
 
 /** Cartão de crachá em pixel art: cordão, faixa na cor do setor, foto (cabeça do avatar), nome, cargo e setor; selo STAFF quando for staff. */
-export function BadgeCard({ name, avatar, title, dept, deptColor, staff, compact, onClose }: Props) {
+export function BadgeCard({ name, avatar, title, dept, deptColor, staff, about, pronouns, birthday, compact, onClose }: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
   const color = dept ? safeDeptColor(deptColor) : undefined;
   const avatarKey = JSON.stringify(avatar);
@@ -68,6 +74,11 @@ export function BadgeCard({ name, avatar, title, dept, deptColor, staff, compact
           <div className="bcard-info">
             <strong className="bcard-name" data-testid="badge-name">
               {name}
+              {birthday && (
+                <span className="bcard-bday" title="Hoje é aniversário!" role="img" aria-label="Hoje é aniversário" data-testid="badge-bday">
+                  <Icon name="cake" size={13} />
+                </span>
+              )}
             </strong>
             {title && (
               <span className="bcard-title" data-testid="badge-title">
@@ -80,6 +91,11 @@ export function BadgeCard({ name, avatar, title, dept, deptColor, staff, compact
               </span>
             )}
             {!title && !dept && <span className="bcard-none">Sem cargo definido</span>}
+            {pronouns && (
+              <span className="bcard-pron" data-testid="badge-pronouns">
+                {pronouns}
+              </span>
+            )}
             {staff && (
               <span className="bcard-staff" title={STAFF_LABELS[staff]} data-testid="badge-staff">
                 STAFF
@@ -87,6 +103,11 @@ export function BadgeCard({ name, avatar, title, dept, deptColor, staff, compact
             )}
           </div>
         </div>
+        {about && (
+          <p className="bcard-about" data-testid="badge-about">
+            {about}
+          </p>
+        )}
         <div className="bcard-foot" aria-hidden="true" />
       </div>
     </div>

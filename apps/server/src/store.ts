@@ -3,7 +3,8 @@ import { copyFileSync, mkdirSync, readFileSync, renameSync, writeFileSync, exist
 import { dirname } from 'node:path';
 import { OrgStore, type OrgData } from './orgStore';
 import { OrgService } from './org';
-import { DEFAULT_ROOM_ID, MAX_OUTFITS, randomAvatar, sanitizeAvatar, sanitizeOutfitName, type AuditRecord, type AvatarConfig, type Outfit, type PresenceStatus, type StaffLevel } from '@workverse/shared';
+import { BookingStore, type BookingData } from './bookingStore';
+import { DEFAULT_ROOM_ID, MAX_OUTFITS, type AccountProfile, randomAvatar, sanitizeAvatar, sanitizeOutfitName, type AuditRecord, type AvatarConfig, type Outfit, type PresenceStatus, type StaffLevel } from '@workverse/shared';
 
 export interface Account {
   id: string;
@@ -33,6 +34,8 @@ export interface Account {
   lastLoginAt?: number;
   /** Nome da staff que criou a conta pelo painel / CLI. */
   createdBy?: string;
+  /** Perfil editavel pela propria pessoa (sobre mim, pronomes, aniversario, preferencias, trocas de nome). Ausente = tudo vazio. */
+  profile?: AccountProfile;
   /** Last status chosen manually by the player (automatic away is never persisted). */
   status?: PresenceStatus;
   /** @deprecated Legacy team name. Teams now live in the org store (org_members.team_id); read only by the v3 migration. */
@@ -73,6 +76,8 @@ export class DuplicateAccountError extends Error {
 export interface AccountStore {
   /** Organizations, memberships, teams and invites (see orgStore.ts). */
   readonly orgs: OrgStore;
+  /** Reservas de sala, limites e configuracao por sala (ver bookingStore.ts). */
+  readonly bookings: BookingStore;
   /** Every account (used to migrate existing accounts into the default organization). */
   listAccounts(): Account[];
   getById(id: string): Account | undefined;
@@ -81,6 +86,8 @@ export interface AccountStore {
   /** Throws DuplicateAccountError when the e-mail or display name is taken. */
   create(input: NewAccount): Account;
   save(account: Account): void;
+  /** Troca o nome de exibicao mantendo o indice de unicidade. Lanca DuplicateAccountError se outra conta ja usa o nome. */
+  rename(accountId: string, displayName: string): Account;
 
   createSession(session: SessionRecord): void;
   getSession(tokenHash: string): SessionRecord | undefined;
@@ -131,6 +138,7 @@ export const nameKey = (n: string) => n.normalize('NFKC').toLocaleLowerCase();
 
 export class MemoryAccountStore implements AccountStore {
   readonly orgs = new OrgStore();
+  readonly bookings = new BookingStore();
   protected accounts = new Map<string, Account>();
   protected byEmail = new Map<string, Account>();
   protected byName = new Map<string, Account>();
@@ -199,6 +207,17 @@ export class MemoryAccountStore implements AccountStore {
     this.index(account);
   }
 
+  rename(accountId: string, displayName: string): Account {
+    const account = this.accounts.get(accountId);
+    if (!account) throw new Error('unknown account');
+    const owner = this.byName.get(nameKey(displayName));
+    if (owner && owner.id !== accountId) throw new DuplicateAccountError('displayName');
+    if (this.byName.get(nameKey(account.displayName)) === account) this.byName.delete(nameKey(account.displayName));
+    account.displayName = displayName;
+    this.save(account);
+    return account;
+  }
+
   createSession(session: SessionRecord): void {
     this.sessions.set(session.tokenHash, session);
   }
@@ -235,7 +254,7 @@ export class MemoryAccountStore implements AccountStore {
 }
 
 /** v2: accounts and sessions. v3 adds organizations, members, teams and invites. */
-interface FileShape extends Partial<OrgData> {
+interface FileShape extends Partial<OrgData>, BookingData {
   version: 2 | 3;
   accounts: Account[];
   sessions: SessionRecord[];
@@ -264,6 +283,7 @@ export class JsonFileAccountStore extends MemoryAccountStore {
         if (Array.isArray(data.audit)) this.audit = data.audit.slice(-AUDIT_CAP);
         this.deleteExpiredSessions(Date.now());
         this.orgs.load(data);
+        this.bookings.load(data);
         if ((data.version ?? 2) < 3) {
           // Keep the untouched v2 file next to the new one (never overwritten, so the first backup survives reruns).
           const backup = `${file}.bak-v2`;
@@ -282,6 +302,7 @@ export class JsonFileAccountStore extends MemoryAccountStore {
       if (migrated) this.flush();
     }
     this.orgs.onOp = () => this.schedule();
+    this.bookings.onOp = () => this.schedule();
   }
 
   override create(input: NewAccount): Account {
@@ -336,7 +357,7 @@ export class JsonFileAccountStore extends MemoryAccountStore {
     }
     mkdirSync(dirname(this.file), { recursive: true });
     const tmp = `${this.file}.tmp`;
-    const data: FileShape = { version: 3, accounts: [...this.accounts.values()], sessions: [...this.sessions.values()], audit: this.audit, ...this.orgs.snapshot() };
+    const data: FileShape = { version: 3, accounts: [...this.accounts.values()], sessions: [...this.sessions.values()], audit: this.audit, ...this.orgs.snapshot(), ...this.bookings.snapshot() };
     // The file holds password hashes and session hashes: keep it private to the server user.
     writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 });
     renameSync(tmp, this.file);

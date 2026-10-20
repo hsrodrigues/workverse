@@ -3,6 +3,7 @@ import { AUDIT_CAP, MemoryAccountStore, nameKey, type Account, type NewAccount, 
 import { OrgService } from '../org';
 import type { AuditRecord } from '@workverse/shared';
 import { opToSql, orgDataFromRows, type OrgRows } from './orgMapping';
+import { bookingDataFromRows, bookingOpToSql, type BookingRows } from './bookingMapping';
 import {
   accountFromRow,
   accountParams,
@@ -117,7 +118,16 @@ export class PgAccountStore extends MemoryAccountStore {
         roomInvites: await q<NonNullable<OrgRows['roomInvites']>[number]>('room_invites'),
       }),
     );
+    // Reservas de sala (migracao 0008).
+    store.bookings.load(
+      bookingDataFromRows({
+        bookings: await q<BookingRows['bookings'][number]>('room_bookings'),
+        rooms: await q<BookingRows['rooms'][number]>('booking_room_settings'),
+        limits: await q<BookingRows['limits'][number]>('booking_limits'),
+      }),
+    );
     store.orgs.onOp = (op) => store.enqueue(opToSql(op));
+    store.bookings.onOp = (op) => store.enqueue(bookingOpToSql(op));
     // Idempotente: contas que ja passaram pela migracao (extra.orgsInit) sao puladas.
     new OrgService(store.orgs, {
       bootstrapOwnerEmail: opts.bootstrapOwnerEmail ?? process.env.BOOTSTRAP_OWNER_EMAIL,

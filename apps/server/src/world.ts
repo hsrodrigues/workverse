@@ -26,6 +26,10 @@ import {
   type Emote,
   type Point,
   type ServerMessage,
+  IT_ONLY_MESSAGE,
+  MAX_HOST_ID_LENGTH,
+  isInventoryAction,
+  parseClimateSet,
 } from '@workverse/shared';
 import { isAvatarClientMessage, type AvatarClientMessage } from '@workverse/shared';
 import { DEV_UNLOCK_ALL, handleWardrobeMessage, parseUnlockKey, setUnlock } from './wardrobe';
@@ -34,15 +38,20 @@ import { StageManager, isStageMessage, type PermissionSync } from './stage';
 import type { Account, AccountStore } from './store';
 import { DEFAULT_ORG_ID, deptUnlockKeyOf, permissionsOf, type Role } from '@workverse/shared';
 import { MESSAGE_POLICY, can, type Actor, type Decision, type Resource } from './authz';
-import { RoomConfig } from './roomConfig';
+import { DEFAULT_PASS_TEAM_NAMES, RoomConfig, normTeamName } from './roomConfig';
+import { buildInventory, runInventoryAction, type InventoryContext } from './inventory';
 import { RoomAdmin, isRoomAdminMessage } from './roomAdmin';
+import { BookingService, isBookingMessage } from './bookings';
 import { OrgService } from './org';
 import { OrgWorld } from './orgWorld';
+import { PetManager } from './pet';
 import { StaffService, applyBootstrapStaff, isStaffMessage, parseStaffEmails } from './staff';
 import { EventsService, parseCompanyDate, parseOptionalEvents, type EventsConfig } from './eventsService';
 import { setActiveEventsProvider, setDeptKeysProvider } from './wardrobe';
 import { accessBlock, isBanned, isDisabled } from './accountState';
 import { roomAccessOf, type RoomAdminEntry, type RoomListEntry, type RoomOp } from '@workverse/shared';
+import { cleanDisplayName, isBirthdayToday, localDate, prefsOf } from '@workverse/shared';
+import { cardOf, stripOptionalProfile } from './profileService';
 
 export interface Connection {
   send(msg: ServerMessage): void;
@@ -74,15 +83,15 @@ export interface WorldOptions {
   removeMediaParticipant?: (orgId: string, roomId: string, identity: string) => void;
   /** Eventos/comemoracoes: data do aniversario da empresa e eventos opcionais (padrao: WORKVERSE_COMPANY_DATE / WORKVERSE_OPTIONAL_EVENTS). */
   events?: EventsConfig;
+  /** Liga o pet do escritorio (Byte). Padrao: ligado, exceto com PET=off. */
+  pet?: boolean;
 }
 
 const MAX_STRIKES = 20;
 
 export function normalizeName(raw: unknown): string | null {
-  if (typeof raw !== 'string') return null;
-  const name = raw.normalize('NFKC').replace(/\s+/g, ' ').trim();
-  if (name.length < MIN_NAME_LENGTH || name.length > MAX_NAME_LENGTH) return null;
-  if (!NAME_PATTERN.test(name)) return null;
+  const name = cleanDisplayName(raw); // regra unica no shared (profile.ts), usada tambem pelo formulario do cliente
+  if (name === null) return null;
   // Homoglyph spoofing ("Аdmin" with a Cyrillic A): Latin letters may not be mixed with Cyrillic or Greek ones.
   if (/\p{Script=Latin}/u.test(name) && /[\p{Script=Cyrillic}\p{Script=Greek}]/u.test(name)) return null;
   return name;
@@ -112,7 +121,11 @@ export class World {
   readonly roomConfig: RoomConfig;
   /** Room editor and access control (see roomAdmin.ts). */
   readonly roomAdmin: RoomAdmin;
+  /** Reserva de sala com fila (ver bookings.ts e docs/bookings.md). */
+  readonly bookings: BookingService;
   private readonly removeMedia?: WorldOptions['removeMediaParticipant'];
+  /** Byte, o pet do escritorio (nao e jogador; ver pet.ts). */
+  readonly pets: PetManager;
   private readonly store: AccountStore;
   private readonly allowDevLogin: boolean;
   private readonly clock: () => number;
@@ -144,7 +157,7 @@ export class World {
       players: (orgId) => this.playersOfOrg(orgId),
       isStaffAdmin: (p) => this.isStaffAdmin(p),
       actorOf: (p) => this.actorOf(p),
-      canEnter: (p, roomId) => this.canEnter(p, roomId),
+      canEnter: (p, roomId) => this.canEnter(p, roomId, { stay: true }),
       evict: (p, roomId, message) => this.evict(p, roomId, message),
       sendRooms: (p) => this.sendRooms(p),
       findOnline: (actor, target) => {
@@ -152,6 +165,21 @@ export class World {
         return e ? { player: e.player, send: (m) => e.conn.send(m) } : undefined;
       },
       mutedFor: (id, now) => this.staff.mutedFor(id, now),
+    });
+    this.bookings = new BookingService({
+      store: opts.store,
+      orgService: this.orgService,
+      clock: this.clock,
+      log: this.log,
+      org: (id) => this.org(id),
+      orgWorlds: () => this.orgWorlds.values(),
+      players: (orgId) => this.playersOfOrg(orgId),
+      playerOf: (accountId) => this.online.get(accountId)?.player,
+      isStaffAdmin: (p) => this.isStaffAdmin(p),
+      actorOf: (p) => this.actorOf(p),
+      canEnter: (p, roomId, o) => this.canEnter(p, roomId, o),
+      evict: (p, roomId, message) => this.evict(p, roomId, message),
+      sendRooms: (p) => this.sendRooms(p),
     });
     this.events = new EventsService(this.clock, opts.events ?? { companyDate: parseCompanyDate(process.env.WORKVERSE_COMPANY_DATE), optional: parseOptionalEvents(process.env.WORKVERSE_OPTIONAL_EVENTS) });
     // itens de avatar `event:<id>` ficam liberados enquanto o evento estiver ativo (wardrobe.ts)
@@ -167,6 +195,17 @@ export class World {
       return [...out];
     });
     this.org(DEFAULT_ORG_ID);
+    this.pets = new PetManager(
+      {
+        rooms: (orgId) => this.orgWorlds.get(orgId)?.rooms,
+        roomState: (orgId, roomId) => this.roomState(orgId, roomId),
+        stageActive: (orgId, roomId) => this.orgWorlds.get(orgId)?.stage.view(roomId)?.speakerId != null,
+        orgName: (orgId) => this.store.orgs.getOrg(orgId)?.name ?? orgId,
+        orgs: () => this.store.orgs.listOrgs().map((o) => ({ id: o.id, name: o.name })),
+        log: this.log,
+      },
+      { enabled: opts.pet ?? process.env.PET?.trim().toLowerCase() !== 'off' },
+    );
     const staffEmails = parseStaffEmails(opts.bootstrapStaffEmails ?? process.env.BOOTSTRAP_STAFF_EMAILS);
     applyBootstrapStaff(this.store, staffEmails, this.log);
     this.staff = new StaffService(
@@ -192,6 +231,12 @@ export class World {
         roomsOverview: () => this.roomsOverview(),
         roomControl: (orgId, roomId, op) => this.roomControl(orgId, roomId, op),
         roomExists: (orgId, roomId) => !!this.store.orgs.getOrg(orgId) && this.org(orgId).rooms.has(roomId),
+        pets: {
+          list: () => this.pets.list(),
+          setEnabled: (orgId, on) => this.pets.setEnabled(orgId, on, this.clock()),
+          rename: (orgId, name) => this.pets.rename(orgId, name, this.clock()),
+          bring: (orgId, roomId, at) => this.pets.bring(orgId, roomId, at, this.clock()),
+        },
         setEvent: (id, mode) => {
           const changed = this.events.setMode(id, mode);
           if (changed) this.broadcastEvents();
@@ -208,6 +253,7 @@ export class World {
     if (!w) {
       w = new OrgWorld(orgId, {
         onPortal: (player, toRoom, x, y) => this.enterRoom(player, toRoom, { x, y, dir: 2 as Dir8 }),
+        onTerminal: (player, furniId) => this.terminal(player, furniId),
         log: this.log,
         clock: this.clock,
         permissionSync: this.permissionSync,
@@ -259,11 +305,18 @@ export class World {
    * May this person be in this room right now? One answer for every way in: join, portal, reconnect, media token, and the
    * periodic check that throws out whoever lost access. Org owners/admins and platform staff admins on duty always pass.
    */
-  canEnter(player: Player, roomId: string): Decision {
+  canEnter(player: Player, roomId: string, opts?: { stay?: boolean }): Decision {
     const room = this.roomOf(player, roomId);
     if (!room) return { allow: false, reason: 'no_room' };
     if (this.isStaffAdmin(player)) return { allow: true, reason: 'staff_admin' };
     const def = room.built.def;
+    // Reserva em curso: durante a janela a sala so aceita o dono, os convidados e donos/admins da organizacao (como uma sala por
+    // convite, sem mexer na configuracao permanente). Fora de reservas valem as regras normais da sala.
+    const booked = this.bookings.restriction(player, roomId, this.clock(), opts?.stay === true);
+    if (booked === 'blocked') return { allow: false, reason: 'room_booked' };
+    if (booked === 'participant') {
+      return can(this.actorOf(player), 'room.enter', { orgId: player.orgId, guestAllowed: def.guestAllowed === true, roomAccess: 'org' });
+    }
     return can(this.actorOf(player), 'room.enter', {
       orgId: player.orgId,
       guestAllowed: def.guestAllowed === true,
@@ -300,7 +353,7 @@ export class World {
         access,
         locked: !d.allow,
         ...(!d.allow
-          ? { lockReason: d.reason === 'guest_room' ? ('guest' as const) : d.reason === 'room_team' ? ('team' as const) : ('invite' as const) }
+          ? { lockReason: d.reason === 'guest_room' ? ('guest' as const) : d.reason === 'room_team' ? ('team' as const) : d.reason === 'room_booked' ? ('booked' as const) : ('invite' as const) }
           : { population: r.players.size }),
       });
     }
@@ -393,6 +446,7 @@ export class World {
   /** Called on a timer by the network layer (and directly by tests). */
   tick(now = this.clock()) {
     for (const org of this.orgWorlds.values()) for (const room of org.rooms.values()) room.tick(now);
+    this.pets.tick(now);
     for (const { player } of this.online.values()) {
       if (player.status !== 'away' && now - player.lastActive >= this.idleAwayMs) {
         // a "focus" that only came from sitting at a PC is not worth restoring
@@ -410,6 +464,7 @@ export class World {
       }
     }
     this.roomAdmin.sweep(now);
+    this.bookings.tick(now);
     // virada do dia / evento forcado: todos veem a mesma decoracao
     if (this.events.changed(now)) this.broadcastEvents();
   }
@@ -439,7 +494,7 @@ export class World {
     const action = MESSAGE_POLICY[msg.t];
     if (action === null || action === undefined) return { allow: true, reason: 'ok' };
     // The platform staff admin on duty can decorate and manage access in the organization they are in.
-    if ((action === 'room.furnish' || action === 'room.access.set') && this.isStaffAdmin(player)) return { allow: true, reason: 'staff_admin' };
+    if ((action === 'room.furnish' || action === 'room.access.set' || action === 'room.book.manage') && this.isStaffAdmin(player)) return { allow: true, reason: 'staff_admin' };
     return can(this.actorOf(player), action, this.resourceFor(player, msg));
   }
 
@@ -455,13 +510,72 @@ export class World {
     return changed;
   }
 
+  /** Copia o perfil opcional (sobre mim, pronomes, aniversario, preferencia de atividade) da conta. Devolve true se algo mudou. */
+  private syncCard(p: Player, account: Account): boolean {
+    const c = cardOf(account, this.clock());
+    const changed = p.about !== c.about || p.pronouns !== c.pronouns || p.bday !== c.bday || p.hideWorking !== c.hideWorking;
+    p.about = c.about;
+    p.pronouns = c.pronouns;
+    p.bday = c.bday;
+    p.hideWorking = c.hideWorking;
+    return changed;
+  }
+
+  /** Mensagem `profile` completa da pessoa (cargo, setor e, para membros, os campos opcionais). */
+  private profileMessage(p: Player) {
+    return {
+      t: 'profile' as const,
+      id: p.id,
+      name: p.name,
+      ...(p.title ? { title: p.title } : {}),
+      ...(p.dept ? { dept: p.dept, deptColor: p.deptColor } : {}),
+      ...(p.about ? { about: p.about } : {}),
+      ...(p.pronouns ? { pronouns: p.pronouns } : {}),
+      ...(p.bday ? { bday: true as const } : {}),
+    };
+  }
+
+  /**
+   * A conta mudou (nome, sobre mim, pronomes, aniversario, preferencias): quem esta online atualiza na hora. Visitantes
+   * recebem so o nome (ver stripOptionalProfile no envio).
+   */
+  applyProfile(accountId: string) {
+    const entry = this.online.get(accountId);
+    if (!entry) return;
+    const p = entry.player;
+    const hadHidden = p.hideWorking;
+    p.name = entry.account.displayName;
+    this.syncCard(p, entry.account);
+    const msg = this.profileMessage(p);
+    const room = p.roomId ? this.roomOf(p) : undefined;
+    if (room) {
+      room.broadcast(msg);
+      if (hadHidden !== p.hideWorking && p.activity === 'working') room.broadcast({ t: 'activity', id: p.id, activity: p.hideWorking ? 'idle' : 'working' });
+    } else p.send(msg);
+  }
+
+  /** Parabens no chat do sistema (opt-in da pessoa), uma vez por dia no fuso dela. */
+  private greetBirthday(player: Player, room: RoomInstance) {
+    const account = this.online.get(player.accountId)?.account;
+    const prof = account?.profile;
+    if (!account || !prof?.birthday || prof.birthdayChat !== true) return;
+    const now = this.clock();
+    const tz = prefsOf(prof).tz;
+    if (!isBirthdayToday(prof.birthday, now, tz)) return;
+    const day = localDate(now, tz).key;
+    if (prof.lastBdayGreet === day) return;
+    prof.lastBdayGreet = day;
+    this.store.save(account);
+    room.broadcast({ t: 'chat', id: null, name: '', text: `Hoje é aniversário de ${player.name}. Parabéns!`, kind: 'system' });
+  }
+
   /** Cargo ou setor de uma pessoa mudou: quem esta na sala dela (inclusive ela) ve a etiqueta nova na hora. */
   refreshProfile(accountId: string, orgId: string) {
     const entry = this.online.get(accountId);
     if (!entry || entry.player.orgId !== orgId) return;
     const p = entry.player;
     if (!this.syncProfile(p)) return;
-    const msg = { t: 'profile' as const, id: p.id, ...(p.title ? { title: p.title } : {}), ...(p.dept ? { dept: p.dept, deptColor: p.deptColor } : {}) };
+    const msg = this.profileMessage(p);
     if (p.roomId) this.roomOf(p)?.broadcast(msg);
     else p.send(msg);
   }
@@ -505,6 +619,7 @@ export class World {
         key: foldText(acc.displayName),
         name: acc.displayName,
         ...tag,
+        ...(acc.profile?.about ? { about: acc.profile.about } : {}),
         avatar: live?.avatar ?? acc.avatar,
         ...(live && live.staff && live.onDuty && !live.invisible ? { staff: live.staff } : {}),
         online: visible,
@@ -534,6 +649,64 @@ export class World {
     const deptOk = dept !== undefined && this.store.orgs.getTeam(dept)?.orgId === player.orgId;
     const res = this.searchDirectory(player, dept === undefined ? null : deptOk ? dept : '__none__', cleanQ);
     conn.send({ t: 'dir_result', ...res, dept: deptOk ? dept! : null });
+  }
+
+  // ---- inventario de PCs (servidores da Sala da TI) ----------------------------------------------------------------
+
+  /** Quem pode ver o inventario: equipe de TI da organizacao (mesma regra de passagem da Sala da TI), dono/admin e staff em servico. */
+  isIT(p: Player): boolean {
+    if (p.staff && p.onDuty) return true;
+    if (p.role === 'guest') return false;
+    if (p.role === 'owner' || p.role === 'admin') return true;
+    if (!p.teamId) return false;
+    if (this.roomConfig.passes(p.orgId, 'ti', p.teamId)) return true;
+    const team = this.store.orgs.getTeam(p.teamId);
+    return !!team && team.orgId === p.orgId && (DEFAULT_PASS_TEAM_NAMES.ti ?? []).includes(normTeamName(team.name));
+  }
+
+  private inventoryContext(player: Player, now: number): InventoryContext {
+    const rooms = this.org(player.orgId).rooms;
+    return {
+      rooms,
+      canEnter: (roomId) => this.canEnter(player, roomId).allow,
+      accountOk: (id) => {
+        const acc = this.store.getById(id);
+        return !!acc && !isDisabled(acc) && !isBanned(acc, now);
+      },
+      depts: this.deptsOf(player.orgId),
+      now,
+    };
+  }
+
+  /** Rack ou console usado na Sala da TI: quem e da TI abre o painel; os demais ouvem uma recusa simpatica. */
+  private terminal(player: Player, _furniId: string) {
+    if (this.isIT(player)) player.send({ t: 'inventory_open' });
+    else player.send({ t: 'chat', id: null, name: '', text: IT_ONLY_MESSAGE, kind: 'system' });
+  }
+
+  private inventoryQuery(conn: Connection, player: Player, now: number) {
+    if (!player.invBucket.take(now)) return conn.send({ t: 'error', code: 'rate_limited', message: 'Calma! Muitas consultas seguidas ao inventário.' });
+    if (!this.isIT(player)) return conn.send({ t: 'error', code: 'it_only', message: IT_ONLY_MESSAGE });
+    conn.send({ t: 'inventory_result', ...buildInventory(this.inventoryContext(player, now)) });
+  }
+
+  /** Reinicios por alvo: no maximo um a cada 20 s (chave organizacao + host), para ninguem encher o chat de uma pessoa. */
+  private readonly rebootAt = new Map<string, number>();
+
+  private inventoryAction(conn: Connection, player: Player, msg: Extract<ClientMessage, { t: 'inventory_action' }>, now: number) {
+    if (typeof msg.host !== 'string' || msg.host.length === 0 || msg.host.length > MAX_HOST_ID_LENGTH || !isInventoryAction(msg.action)) return this.strike(conn);
+    if (!player.invBucket.take(now)) return conn.send({ t: 'error', code: 'rate_limited', message: 'Calma! Muitas ações seguidas no inventário.' });
+    if (!this.isIT(player)) return conn.send({ t: 'error', code: 'it_only', message: IT_ONLY_MESSAGE });
+    if (msg.action === 'reboot') {
+      const key = `${player.orgId} ${msg.host}`;
+      const last = this.rebootAt.get(key) ?? 0;
+      if (now - last < 20_000) return conn.send({ t: 'inventory_action_result', host: msg.host, action: 'reboot', ok: false, message: 'Esse PC acabou de ser reiniciado. Aguarde um pouco.' });
+      this.rebootAt.set(key, now);
+      if (this.rebootAt.size > 500) for (const [k, t] of this.rebootAt) if (now - t > 60_000) this.rebootAt.delete(k);
+    }
+    const res = runInventoryAction(this.inventoryContext(player, now), msg.host, msg.action, (to, m) => to.send(m));
+    if (!res.ok && msg.action === 'reboot') this.rebootAt.delete(`${player.orgId} ${msg.host}`);
+    conn.send(res);
   }
 
   /** Called after a membership changed (role, team, removal): updates live sessions and tells the client. */
@@ -627,6 +800,23 @@ export class World {
         return this.teamMessage(conn, player, msg, now);
       case 'dir_search':
         return this.dirSearch(conn, player, msg, now);
+      case 'climate_set': {
+        if (!player.roomId) return this.strike(conn);
+        const req = parseClimateSet(msg);
+        if (!req) return this.strike(conn);
+        if (!player.miscBucket.take(now)) return;
+        if (!this.roomOf(player)!.applyClimateSet(req, now)) conn.send({ t: 'error', code: 'no_climate', message: 'Esta sala não tem ar-condicionado.' });
+        return;
+      }
+      case 'inventory_query':
+        return this.inventoryQuery(conn, player, now);
+      case 'inventory_action':
+        return this.inventoryAction(conn, player, msg, now);
+      case 'pet_do': {
+        if (!player.roomId) return this.strike(conn);
+        if (!this.pets.handle(player, msg, now)) this.strike(conn);
+        return;
+      }
       case 'join': {
         const id = typeof msg.roomId === 'string' && this.roomOf(player, msg.roomId) ? msg.roomId : undefined;
         const account = this.online.get(player.accountId)?.account;
@@ -669,6 +859,10 @@ export class World {
       default:
         if (isRoomAdminMessage(msg.t)) {
           if (!this.roomAdmin.handle(player, msg, now)) this.strike(conn);
+          return;
+        }
+        if (isBookingMessage(msg.t)) {
+          if (!this.bookings.handle(player, msg, now)) this.strike(conn);
           return;
         }
         if (isStaffMessage(msg.t)) {
@@ -880,12 +1074,14 @@ export class World {
       existing.conn.close(4000, 'replaced');
     }
 
-    const player = new Player(randomUUID().slice(0, 8), account.id, account.displayName, account.avatar, (m) => conn.send(m), this.clock());
+    // Visitantes (guest) nunca recebem os campos opcionais do perfil dos colegas: o filtro fica no unico ponto de envio.
+    const player: Player = new Player(randomUUID().slice(0, 8), account.id, account.displayName, account.avatar, (m) => conn.send(player.role === 'guest' ? stripOptionalProfile(m) : m), this.clock());
     player.status = isPresenceStatus(account.status) ? account.status : 'available';
     player.orgId = org.id;
     player.role = chosen.role;
     player.teamId = chosen.teamId;
     this.syncProfile(player);
+    this.syncCard(player, account);
     this.org(org.id);
     if (account.lastOrg !== org.id) {
       account.lastOrg = org.id;
@@ -914,6 +1110,7 @@ export class World {
     });
     this.staff.onSession(player);
     this.sendRooms(player);
+    this.bookings.sendDoors(player);
     conn.send({ t: 'events', ...this.events.view() });
   }
 
@@ -958,6 +1155,7 @@ export class World {
       this.stageOf(player).onLeave(roomId, player);
     }
     this.online.delete(player.accountId);
+    this.bookings.forget(player.accountId);
   }
 
   enterRoom(player: Player, roomId: string, at?: Point & { dir: Dir8 }) {
@@ -967,8 +1165,8 @@ export class World {
     // and a restricted room only admits its team, its invited people and the organization's owners and admins.
     const verdict = this.canEnter(player, roomId);
     if (!verdict.allow) {
-      const restricted = verdict.reason === 'room_team' || verdict.reason === 'room_invite';
-      const why = verdict.reason === 'room_team' ? 'Essa sala é restrita a uma equipe.' : verdict.reason === 'room_invite' ? 'Essa sala é só para convidados.' : 'Você não tem acesso a essa sala.';
+      const restricted = verdict.reason === 'room_team' || verdict.reason === 'room_invite' || verdict.reason === 'room_booked';
+      const why = verdict.reason === 'room_team' ? 'Essa sala é restrita a uma equipe.' : verdict.reason === 'room_invite' ? 'Essa sala é só para convidados.' : verdict.reason === 'room_booked' ? 'Essa sala está reservada neste horário.' : 'Você não tem acesso a essa sala.';
       player.send({ t: 'error', code: restricted ? 'room_denied' : 'forbidden', message: why });
       this.log('room.denied', { player: player.id, org: player.orgId, room: roomId, reason: verdict.reason });
       // First entry (reconnecting into a room that is no longer allowed): land somewhere that is.
@@ -998,12 +1196,15 @@ export class World {
     }
     const now = this.clock();
     room.add(player, at ?? room.built.def.spawn, now, this.visiblePopulation(player));
+    this.bookings.onEnter(player, roomId, now);
     this.stageOf(player).onEnter(roomId, player);
+    this.pets.onEnter(player, roomId, now);
     const entry = this.online.get(player.accountId);
     if (entry) {
       entry.account.lastRoom = roomId;
       this.store.save(entry.account);
     }
+    this.greetBirthday(player, room);
     this.log('room.enter', { player: player.id, room: roomId });
   }
 }

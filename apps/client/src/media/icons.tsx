@@ -18,6 +18,20 @@ const PATHS = {
   pencil: 'M3 17.3V21h3.7L17.8 9.9l-3.7-3.7zM20.7 7a1 1 0 0 0 0-1.4l-2.3-2.3a1 1 0 0 0-1.4 0l-1.8 1.8 3.7 3.7z',
   tv: 'M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-5l1 3H8l1-3H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm1 2v8h14V7z',
   list: 'M4 5h16v3H4zm0 5.5h16v3H4zM4 16h16v3H4z',
+  chevron: 'M7 10l5 5 5-5z',
+  /** Cracha (Meu perfil): cartao com cordao, cabeca e ombros vazados (enrolamento invertido). */
+  user: 'M9 2h6v3H9zM4 7h16v14H4zM12 10.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 1 0 0-5zM16.5 19c0-2-3-2.7-4.5-2.7s-4.5.7-4.5 2.7z',
+  /** Bolo de aniversario (ficha, no dia). */
+  cake: 'M11 2h2v3h-2zM4 12h16v3c-1.3 0-1.7-1-2.7-1s-1.4 1-2.7 1-1.7-1-2.6-1-1.4 1-2.6 1-1.7-1-2.6-1-1.4 1-2.7 1zm0 4.5c1 0 1.5.8 2.7.8s1.7-.8 2.6-.8 1.5.8 2.6.8 1.7-.8 2.6-.8 1.5.8 2.7.8V21H4zM6 8h12v3H6z',
+  up: 'M12 6l9 11H3z',
+  down: 'M12 18 3 7h18z',
+  snow: 'M11 2h2v20h-2zM2.7 7l1-1.7 17.6 10.2-1 1.7zM2.7 17 20.3 6.800l1 1.700L3.700 18.700z',
+  leaf: 'M20 3C10 3 4.500 8.500 4.500 15c0 1.500.4 2.800 1.100 3.900C7 14.500 11 11 15.500 9.800 11 12 8 16 6.800 20.500c1.100.4 2.300.6 3.500.6C17 21 20.500 15 20 3z',
+  wind: 'M3 8h11a2.500 2.500 0 1 0-2.500-2.500h2A.5.5 0 1 1 14 6H3zm0 4h16a3 3 0 1 1-3 3h2a1 1 0 1 0 1-1H3zm0 4h8v2H3z',
+  auto: 'M12 3 4 21h3l1.600-4h6.800l1.600 4h3zm-2.600 11L12 7.500 14.600 14z',
+  timer: 'M9 2h6v2H9zm3 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm1 3v4.600l3 1.800-1 1.600-4-2.400V9z',
+  calendar: 'M7 2h2v2h6V2h2v2h3a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h3zM5 9v10h14V9zm2 2h3v3H7zm5 0h3v3h-3z',
+  swing: 'M3 5h18v2.500H3zm0 5.500 18 3.500v2.500L3 13zM3 18h18v2.500H3z',
 } as const;
 
 export function Icon({ name, off = false, size = 18 }: { name: keyof typeof PATHS; off?: boolean; size?: number }): ReactElement {

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { createApp } from './app';
 import { resolveBootConfig } from './bootConfig';
 import { resolveMediaConfig } from './media';
+import { resolveKeepaliveConfig, startKeepalive } from './keepalive';
 import { makeOriginList } from './origins';
 import { migrate } from './db/migrate';
 import { PgAccountStore } from './db/pgAccountStore';
@@ -44,7 +45,7 @@ if (pool) {
 } else {
   store = new JsonFileAccountStore(resolve(dataDir, 'accounts.json'));
 }
-const { app } = await createApp({
+const { app, world } = await createApp({
   store,
   allowedOrigins,
   allowDevLogin,
@@ -66,8 +67,18 @@ if (existsSync(legacy)) {
 }
 if (allowDevLogin) app.log.warn('ALLOW_DEV_LOGIN=1: name-only login is enabled. Use only for development.');
 
+// Autoping: chama o proprio /health publico para o plano gratuito nao dormir por falta de trafego (docs/deploy.md).
+// Cada ping bem-sucedido faz o Byte dar uma batidinha de coracao (so visual).
+const keepaliveCfg = resolveKeepaliveConfig(process.env);
+const keepalive = startKeepalive(keepaliveCfg, {
+  log: (m) => app.log.info(m),
+  onBeat: () => world.pets.heartbeat(),
+});
+app.log.info({ keepalive: keepaliveCfg.enabled, reason: keepaliveCfg.reason, everyMs: keepaliveCfg.intervalMs || undefined }, 'autoping');
+
 const shutdown = async (signal: string) => {
   app.log.info({ signal }, 'shutting down');
+  keepalive?.stop();
   setTimeout(() => process.exit(1), 10_000).unref(); // nao fica preso se alguem segurar a conexao
   await app.close();
   let code = 0;

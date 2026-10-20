@@ -24,6 +24,9 @@ export const PERMISSIONS = [
   'room.edit',
   'room.furnish',
   'room.access.set',
+  // reserva de sala: pedir (membros) e administrar (aprovar, configurar salas e limites)
+  'room.book',
+  'room.book.manage',
   // announcements, work tools
   'announce.team',
   'announce.org',
@@ -47,7 +50,7 @@ export type Permission = (typeof PERMISSIONS)[number];
 export const isPermission = (v: unknown): v is Permission => typeof v === 'string' && (PERMISSIONS as readonly string[]).includes(v);
 
 const DAILY: Permission[] = ['room.enter', 'chat.say', 'dm.send', 'presence.set', 'avatar.edit', 'media.use', 'stage.attend'];
-const MEMBER: Permission[] = [...DAILY, 'dir.search', 'chat.team', 'stage.host', 'file.upload', 'task.manage', 'event.create'];
+const MEMBER: Permission[] = [...DAILY, 'room.book', 'dir.search', 'chat.team', 'stage.host', 'file.upload', 'task.manage', 'event.create'];
 const ADMIN: Permission[] = [
   ...MEMBER,
   'member.invite',
@@ -59,6 +62,7 @@ const ADMIN: Permission[] = [
   'room.edit',
   'room.furnish',
   'room.access.set',
+  'room.book.manage',
   'announce.team',
   'announce.org',
 ];

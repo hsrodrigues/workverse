@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { MAX_CHAT_LENGTH, ROOM_DEFS, STATUS_LABELS, badgeTextColor, deptShort, safeDeptColor } from '@workverse/shared';
+import { MAX_CHAT_LENGTH, ROOM_DEFS, STATUS_LABELS, badgeTextColor, deptShort, safeDeptColor, tempDigits } from '@workverse/shared';
+import { InventoryPanel } from './inventory/InventoryPanel';
+import { RemoteControl } from './climate/RemoteControl';
+import './climate.css';
 import { BadgeCard } from './BadgeCard';
 import { ReceptionPanel } from './Reception';
+import { PetMenu } from './PetMenu';
 import { net } from '../net';
 import { listen } from '../bus';
 import { useNetStatus, useWorld, worldStore } from '../worldStore';
@@ -17,6 +21,9 @@ import { DayModeButton } from './DayModeButton';
 import { FurnishBarButton, FurnishPanel } from './furnish/FurnishPanel';
 import { InviteBanner } from './furnish/InviteBanner';
 import { furnishStore, useFurnish } from './furnish/furnishStore';
+import { ProfileBarButton, ProfilePanel } from './profile/ProfilePanel';
+import { profileStore } from './profile/profileStore';
+import { pronounLabel, type PronounId } from '@workverse/shared';
 
 interface Props {
   onEditAvatar(): void;
@@ -40,6 +47,18 @@ export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onRec
   const indicators = useMediaIndicators();
   const [text, setText] = useState('');
   const input = useRef<HTMLInputElement>(null);
+  // altura real da barra inferior (no celular ela quebra em linhas): o chat e o enquadramento da camera usam esse valor
+  const barRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const apply = () => document.documentElement.style.setProperty('--bar-h', `${Math.ceil(el.getBoundingClientRect().height)}px`);
+    apply();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const log = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -119,8 +138,22 @@ export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onRec
           <strong>{world.room?.name ?? 'Entrando…'}</strong>
           <span>{world.room?.description}</span>
         </div>
+        <div className="hud-status-row">
         <div className={`conn conn-${status}`} title="Estado da conexão com o servidor">
           <i /> {online ? `Conectado · ${latency}ms` : status === 'connecting' ? 'Conectando…' : status === 'reconnecting' ? 'Reconectando…' : 'Desconectado'}
+        </div>
+        {world.climate && (
+          <div
+            className={`temp-chip ${world.climate.overheat ? 'hot' : world.climate.on ? 'cooling' : ''}`}
+            title={`Temperatura da sala: ${tempDigits(world.climate.temp)} °C. ${world.climate.on ? `Ar-condicionado ligado (meta ${world.climate.target} °C).` : 'Ar-condicionado desligado.'}${world.climate.overheat ? ' Superaquecimento!' : ''}`}
+            role="status"
+            data-testid="temp-chip"
+            data-overheat={world.climate.overheat}
+          >
+            <span aria-hidden="true">🌡</span> {tempDigits(world.climate.temp)}°C{world.climate.on && <span className="ac" aria-label="ar-condicionado ligado"> ❄ {world.climate.target}°</span>}
+            {world.climate.overheat && <b> superaquecendo!</b>}
+          </div>
+        )}
         </div>
       </div>
 
@@ -175,6 +208,11 @@ export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onRec
                     </span>
                   )}
                   {p.id === world.youId && <em> (você)</em>}
+                  {p.about && (
+                    <span className="people-about" title={p.about} data-testid={`people-about-${p.name}`}>
+                      {p.about}
+                    </span>
+                  )}
                   {world.stage?.speakerId === p.id && <em title="Está no palco"> 🎤</em>}
                   {indicators.get(p.id) && (indicators.get(p.id)!.micPublished || indicators.get(p.id)!.camPublished) && (
                     <span className="mi" data-testid={`people-media-${p.id}`}>
@@ -203,7 +241,12 @@ export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onRec
                   )}
                   {cardId === p.id && (
                     <div className="people-card">
-                      <BadgeCard compact name={p.name} avatar={p.avatar} title={p.title} dept={p.dept} deptColor={p.deptColor} staff={p.staff} />
+                      <BadgeCard compact name={p.name} avatar={p.avatar} title={p.title} dept={p.dept} deptColor={p.deptColor} staff={p.staff} about={p.about} pronouns={pronounLabel(p.pronouns as PronounId | undefined)} birthday={p.bday} />
+                      {p.id === world.youId && (
+                        <button type="button" className="mini" onClick={() => profileStore.open()} data-testid="card-edit-profile">
+                          Editar meu perfil
+                        </button>
+                      )}
                     </div>
                   )}
                 </li>
@@ -216,7 +259,19 @@ export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onRec
       {menu && (
         <div className="ctx" style={{ left: Math.min(menu.x, window.innerWidth - 290), top: Math.min(menu.y, window.innerHeight - 190) }} role="menu">
           <div className="ctx-title">{menu.name}</div>
-          {menuPerson && <BadgeCard compact onClose={() => setMenu(null)} name={menuPerson.name} avatar={menuPerson.avatar} title={menuPerson.title} dept={menuPerson.dept} deptColor={menuPerson.deptColor} staff={menuPerson.staff} />}
+          {menuPerson && <BadgeCard compact onClose={() => setMenu(null)} name={menuPerson.name} avatar={menuPerson.avatar} title={menuPerson.title} dept={menuPerson.dept} deptColor={menuPerson.deptColor} staff={menuPerson.staff} about={menuPerson.about} pronouns={pronounLabel(menuPerson.pronouns as PronounId | undefined)} birthday={menuPerson.bday} />}
+          {menu.id === world.youId && (
+            <button
+              role="menuitem"
+              onClick={() => {
+                profileStore.open();
+                setMenu(null);
+              }}
+              data-testid="ctx-edit-profile"
+            >
+              Meu perfil
+            </button>
+          )}
           {menuPerson && (
             <div className="ctx-status">
               <StatusDot status={menuPerson.status} /> {STATUS_LABELS[menuPerson.status]}
@@ -271,7 +326,11 @@ export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onRec
       )}
 
       <ChatWindow />
+      <ProfilePanel onEditAvatar={onEditAvatar} onChangePassword={onChangePassword} />
       <ReceptionPanel onWalkNear={onWalkNear} />
+      <PetMenu />
+      <InventoryPanel />
+      <RemoteControl />
       <StaffPanel />
       <AnnounceBanner />
       <VideoDock />
@@ -293,16 +352,16 @@ export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onRec
         ))}
       </div>
 
-      <form className="bar" onSubmit={send}>
+      <form ref={barRef} className="bar" onSubmit={send}>
         <button type="button" className="tool" onClick={() => setPanel(panel === 'rooms' ? null : 'rooms')} title="Navegador de salas">
-          <span className="ico"><Icon name="rooms" /></span> Salas
+          <span className="ico"><Icon name="rooms" /></span> <span className="lbl">Salas</span>
         </button>
         <button type="button" className="tool" onClick={() => setPanel(panel === 'people' ? null : 'people')} title="Quem está na sala">
-          <span className="ico"><Icon name="people" /></span> Pessoas
+          <span className="ico"><Icon name="people" /></span> <span className="lbl">Pessoas</span>
         </button>
         <StatusSelect />
         <button type="button" className="tool" onClick={() => worldStore.setChatOpen(!world.chatOpen)} title="Mensagens privadas e chat de equipe">
-          <span className="ico"><Icon name="chat" /></span> Conversas{unread > 0 && <span className="badge">{unread}</span>}
+          <span className="ico"><Icon name="chat" /></span> <span className="lbl">Conversas</span>{unread > 0 && <span className="badge">{unread}</span>}
         </button>
         <StageBarButton />
         <FurnishBarButton />
@@ -322,6 +381,7 @@ export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onRec
           <span className="ico"><Icon name="hand" /></span>
         </button>
         <DayModeButton />
+        <ProfileBarButton />
         <button type="button" className="tool" onClick={onEditAvatar} title="Mudar visual">
           <span className="ico"><Icon name="shirt" /></span>
         </button>

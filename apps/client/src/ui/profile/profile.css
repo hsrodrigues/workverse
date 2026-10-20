@@ -1,0 +1,195 @@
+/* "Meu perfil": painel de edicao com previa ao vivo do cracha. Reaproveita .win, .btn e .mini de styles.css. */
+.panel-profile {
+  width: min(760px, calc(100vw - 24px));
+  top: 12px;
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.panel-profile .pf-body {
+  max-height: calc(100vh - 140px);
+  overflow: auto;
+}
+.pf {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.pf-preview {
+  position: sticky;
+  top: 0;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+}
+.pf-hint,
+.pf small {
+  display: block;
+  font-size: 10px;
+  line-height: 1.4;
+  color: #5b5668;
+  margin: 0;
+}
+.pf-shortcuts {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+.pf-shortcuts .mini {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+}
+.pf-fields {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.pf fieldset {
+  margin: 0;
+  padding: 8px 10px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 4px;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.pf legend {
+  font-weight: 700;
+  padding: 0 4px;
+}
+.pf-field {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.pf-field label {
+  font-size: 11px;
+  font-weight: 700;
+}
+.pf-field input,
+.pf-field select {
+  font: inherit;
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  background: #fff;
+  color: var(--ink);
+  min-width: 0;
+}
+.pf-field input:focus-visible,
+.pf-field select:focus-visible,
+.pf-check input:focus-visible {
+  outline: 3px solid #5b8def;
+  outline-offset: 1px;
+}
+.pf-field [aria-invalid='true'] {
+  border-color: #b3261e;
+}
+.pf-row {
+  display: flex;
+  gap: 10px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+.pf-row .pf-field {
+  flex: 1 1 120px;
+}
+.pf-check {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  cursor: pointer;
+  min-height: 28px;
+}
+.pf-check.off {
+  opacity: 0.55;
+  cursor: default;
+}
+.pf-check input {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  flex: none;
+}
+.pf-err {
+  color: #b3261e !important;
+  font-weight: 700;
+}
+.pf-ok {
+  color: #1d6b32;
+  font-weight: 700;
+  margin: 0;
+}
+.pf-status {
+  padding: 8px;
+}
+.pf-readonly dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+}
+.pf-readonly dt {
+  font-weight: 700;
+}
+.pf-readonly dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.pf-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  position: sticky;
+  bottom: 0;
+  background: #f4f1ea;
+  padding: 6px 0 2px;
+}
+.pf-actions p {
+  flex: 1 0 100%;
+  margin: 0;
+}
+@media (max-width: 640px) {
+  .panel-profile {
+    top: 6px;
+    left: 6px;
+    right: 6px;
+    width: auto;
+    transform: none;
+  }
+  .panel-profile .pf-body {
+    max-height: calc(100dvh - 80px);
+  }
+  .pf {
+    grid-template-columns: 1fr;
+  }
+  .pf-preview {
+    position: static;
+  }
+  /* 16px evita o zoom automatico dos campos no iOS; a barra de acoes fica sticky acima do teclado virtual */
+  .pf-field input,
+  .pf-field select {
+    font-size: 16px;
+  }
+}
+
+/* lista de Pessoas: "sobre mim" curto ao lado do nome */
+.people .people-about {
+  flex: 1 1 100%;
+  order: 9;
+  font-size: 10px;
+  font-style: italic;
+  color: #5b5668;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.people .people-card .mini {
+  margin-top: 6px;
+}

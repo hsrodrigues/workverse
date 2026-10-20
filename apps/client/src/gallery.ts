@@ -146,6 +146,29 @@ const modernos: Furniture[] = [
 ];
 for (const f of modernos) show(trimmed(renderFurniture(f).canvas), 3, `fu-${f.id}`);
 
+section('Clima (ar-condicionado, termostato) e console NOC');
+const clima: Array<[Furniture, boolean, number]> = [
+  [{ id: 'ac1', kind: 'ac_split', x: 0, y: 0, dir: 0 }, false, 23],
+  [{ id: 'ac2', kind: 'ac_split', x: 0, y: 0, dir: 0 }, true, 22],
+  [{ id: 'ac3', kind: 'ac_split', x: 0, y: 0, dir: 1 }, true, 18],
+  // LED por modo (opt = indice do modo * 100 + meta): Eco verde, Ventilar branco, Auto ambar
+  [{ id: 'ac2e', kind: 'ac_split', x: 0, y: 0, dir: 0 }, true, 124],
+  [{ id: 'ac2f', kind: 'ac_split', x: 0, y: 0, dir: 0 }, true, 223],
+  [{ id: 'ac2a', kind: 'ac_split', x: 0, y: 0, dir: 0 }, true, 322],
+  [{ id: 'ac5e', kind: 'ac_floor', x: 0, y: 0, dir: 1 }, true, 124],
+  [{ id: 'ac4', kind: 'ac_floor', x: 0, y: 0, dir: 1 }, false, 23],
+  [{ id: 'ac5', kind: 'ac_floor', x: 0, y: 0, dir: 1 }, true, 20],
+  [{ id: 'ac6', kind: 'ac_floor', x: 0, y: 0, dir: 0 }, true, 20],
+  [{ id: 'th1', kind: 'thermostat', x: 0, y: 0, dir: 0 }, false, 2423],
+  [{ id: 'th2', kind: 'thermostat', x: 0, y: 0, dir: 1 }, false, 3122],
+  [{ id: 'noc1', kind: 'noc_console', x: 0, y: 0, dir: 0 }, false, 0],
+  [{ id: 'noc2', kind: 'noc_console', x: 0, y: 0, dir: 0 }, true, 0],
+  [{ id: 'noc3', kind: 'noc_console', x: 0, y: 0, dir: 1 }, false, 0],
+  [{ id: 'hot1', kind: 'server_rack', x: 0, y: 0, dir: 1 }, true, 1],
+  [{ id: 'hot2', kind: 'server_rack', x: 0, y: 0, dir: 1 }, false, 1],
+];
+for (const [f, on, opt] of clima) show(trimmed(renderFurniture(f, on, opt).canvas), 3, `fu-${f.id}`);
+
 section('Salas (piso, paredes e sala completa)');
 for (const def of ROOM_DEFS) {
   const room = buildRoom(def);

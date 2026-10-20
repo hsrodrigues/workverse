@@ -305,6 +305,18 @@ export function Sheet({ d, onClose, embedded = false }: { d: StaffAccountDetail;
         <dd>{fmtDateTime(d.createdAt)}{d.createdBy ? ` · por ${d.createdBy}` : ''}</dd>
         <dt>Último login</dt>
         <dd>{fmtDateTime(d.lastLoginAt)}</dd>
+        {d.nameHistory && d.nameHistory.length > 0 && (
+          <>
+            <dt>Trocas de nome</dt>
+            <dd data-testid="staff-sheet-names">
+              {d.nameHistory.map((h) => (
+                <div key={h.at}>
+                  {fmtDateTime(h.at)} · {h.from} → {h.to}
+                </div>
+              ))}
+            </dd>
+          </>
+        )}
         <dt>Situação</dt>
         <dd>
           {d.online ? <Chip tone="ok">online</Chip> : <Chip>offline</Chip>} {d.staff && <Chip tone="gold">staff: {d.staff}</Chip>} {d.banned && <Chip tone="bad">banida</Chip>}{' '}

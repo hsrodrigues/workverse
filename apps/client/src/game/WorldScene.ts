@@ -26,10 +26,14 @@ import {
   type RoomSnapshot,
   type StaffLevel,
   type ServerMessage,
+  type ClimateView,
+  AC_MODE_LIST,
+  isAcUnit,
 } from '@workverse/shared';
 import { net } from '../net';
 import { stageUi } from '../stage/stageUi';
-import { emit } from '../bus';
+import { emit, listen } from '../bus';
+import { ClimateFx } from './climateFx';
 import { FurnishLayer } from './furnishLayer';
 import { ANCHOR_X, ANCHOR_Y, FH, FRAMES_DRINK, FRAMES_IDLE, FRAMES_SIT, FRAMES_TYPE, FRAMES_WALK, FRAMES_WAVE, FRAME_COUNT, FW, SIT_LIFT, VIEWS, buildAvatarSheet, type View } from './avatarRenderer';
 import { renderFurniture } from './furniture';
@@ -41,6 +45,8 @@ import { StageScreen } from './stageScreen';
 import { DoorSigns } from './doorSigns';
 import { DayLighting } from './dayLighting';
 import { EventDecor } from './eventDecor';
+import { PetActor } from './petActor';
+import { shouldSendPlay } from './petLogic';
 
 import { DEPT_PX, NAME_PX, STAFF_PX, TEXT_FONT as FONT, buildBubble, buildTag, crisp, snap, texelOf } from './text';
 import { RECEPTIONIST, badgeTextColor, deptShort, safeDeptColor, type ProfileTag } from '@workverse/shared';
@@ -57,9 +63,12 @@ const VIEW_FOR_DIR: ReadonlyArray<{ view: View; flip: boolean }> = [
 ];
 /** Key-press rhythm while typing: index of the typing frame (0 = left hand down, 1 = right hand down). */
 const TYPING = [0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1];
-const ZOOMS = [1, 1.5, 2, 3];
+// 0.5 and 0.75 only appear on small screens (fitCamera), so a whole room fits a phone; wheel/pinch steps through them too
+const ZOOMS = [0.375, 0.5, 0.75, 1, 1.5, 2, 3];
 const UI_DEPTH = 1_000_000;
 const BUBBLE_MS = 8000;
+/** Pieces picked by their drawn pixels (they are tall or hang on the wall, so the floor tile under the pointer is the wrong one). */
+const SPRITE_PICK: ReadonlySet<string> = new Set(['tv_stand', 'ac_split', 'ac_floor', 'thermostat', 'light_switch', 'server_rack', 'noc_console']);
 const MAX_BUBBLES = 4;
 
 interface Box3 {
@@ -593,6 +602,11 @@ export class WorldScene extends Phaser.Scene {
   private actors = new Map<string, Actor>();
   /** Atendente NPC (so na recepcao). */
   private receptionist: Receptionist | null = null;
+  /** Byte, o pet do escritorio (NPC do servidor; ver petActor.ts). */
+  private pet: PetActor | null = null;
+  /** "Brincar": ate quando o ponteiro e enviado ao servidor, e o ultimo envio. */
+  private playUntil = 0;
+  private playSent: { at: number; x: number; y: number } | null = null;
   private furni: FurniActor[] = [];
   private roomObjects: Phaser.GameObjects.GameObject[] = [];
   private sortables: Sortable[] = [];
@@ -600,7 +614,7 @@ export class WorldScene extends Phaser.Scene {
   private hover!: Phaser.GameObjects.Graphics;
   private marker!: Phaser.GameObjects.Graphics;
   private markerAt: { x: number; y: number; born: number } | null = null;
-  private zoomIndex = 2;
+  private zoomIndex = 5;
   private userMoved = false;
   private downAt: { x: number; y: number } | null = null;
   private dragged = false;
@@ -615,6 +629,12 @@ export class WorldScene extends Phaser.Scene {
   private eventDecor!: EventDecor;
   /** Pieces with LEDs and live screens (IT room): two sprites each, swapped every few hundred ms (`on` = phase). */
   private blinkers: Array<{ fa: FurniActor; period: number; offset: number; last: number }> = [];
+  /** Ar-condicionado e temperatura da sala atual (servidor), brisa e aletas animadas, e o marcador de "Localizar". */
+  private climate: ClimateView | null = null;
+  private climateFx!: ClimateFx;
+  private locator!: Phaser.GameObjects.Graphics;
+  private locateAt: { x: number; y: number; until: number; label: string } | null = null;
+  private pendingLocate: { roomId: string; x: number; y: number; label: string; until: number } | null = null;
   /** Room editor (ghost, selection, pointer capture); idle unless the UI turns the decorate mode on. */
   private furn!: FurnishLayer;
   /** Lit/unlit state of the furniture of the current room (the layout can be rebuilt without a new snapshot). */
@@ -629,6 +649,8 @@ export class WorldScene extends Phaser.Scene {
   create() {
     this.hover = this.add.graphics().setDepth(5);
     this.marker = this.add.graphics().setDepth(6);
+    this.locator = this.add.graphics().setDepth(UI_DEPTH - 1);
+    this.climateFx = new ClimateFx(this);
     this.cameras.main.setBackgroundColor('#1b1830');
     this.badges = new MediaBadges(this);
     this.dayLight = new DayLighting(this);
@@ -662,6 +684,13 @@ export class WorldScene extends Phaser.Scene {
     });
 
     this.unsubscribe = net.on((m) => this.onNet(m));
+    const offLocate = listen('locateHost', (d) => d && this.requestLocate(d.roomId, d.x, d.y, d.label));
+    const offPlay = listen('petPlay', () => {
+      this.playUntil = performance.now() + 5200;
+      this.playSent = null;
+    });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, offPlay);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, offLocate);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.unsubscribe?.());
     this.events.once(Phaser.Scenes.Events.DESTROY, () => this.unsubscribe?.());
     if (import.meta.env?.DEV) {
@@ -682,6 +711,8 @@ export class WorldScene extends Phaser.Scene {
           this.userMoved = true;
           this.cameras.main.setZoom(ZOOMS[this.zoomIndex]);
         },
+        // Dev-only: state of Byte, the office pet (tile, pose, sprite position on screen).
+        pet: () => this.pet?.debug() ?? null,
         // Dev-only: tile and facing of your own avatar.
         you: () => {
           const a = this.actors.get(this.youId);
@@ -757,10 +788,38 @@ export class WorldScene extends Phaser.Scene {
       case 'furni':
         this.setFurniState(m.id, m.on);
         break;
+      case 'climate':
+        this.setClimate({ on: m.on, target: m.target, temp: m.temp, overheat: m.overheat, mode: m.mode, fan: m.fan, swing: m.swing, timerLeftMs: m.timerLeftMs });
+        break;
       case 'furniture_changed':
         this.applyFurniture(m.furniture);
         break;
+      case 'pet':
+        this.setPet(m.pet);
+        break;
+      case 'pet_path':
+        this.pet?.setPath(m.from, m.path);
+        break;
+      case 'pet_act':
+        this.pet?.act(m);
+        break;
     }
+  }
+
+  /** O servidor mostra (ou tira) o Byte desta sala. */
+  private setPet(view: Extract<ServerMessage, { t: 'pet' }>['pet']) {
+    if (!view) {
+      this.pet?.destroy();
+      this.pet = null;
+      return;
+    }
+    if (this.pet) {
+      // mesmo pet (ex.: renomeado): so atualiza o nome
+      this.pet.rename(view.name);
+      return;
+    }
+    const g = this.built?.grid;
+    this.pet = new PetActor(this, view, UI_DEPTH, (x, y) => !!g && (this.built!.furniAt.get(y * g.width + x) ?? []).some((f) => FURNI_KINDS[f.kind].seat));
   }
 
   private addActor(p: PlayerView) {
@@ -790,13 +849,21 @@ export class WorldScene extends Phaser.Scene {
     this.doorSigns.build(snap.def, this.cameras?.main?.zoom ?? 1);
     this.youId = snap.youId;
     this.furniOn = { ...snap.furniState };
+    this.climate = snap.climate ?? null;
     this.buildStatic(snap.def, this.furniOn);
 
+    this.pet?.destroy();
+    this.pet = null;
     this.receptionist?.destroy();
     this.receptionist = snap.def.id === RECEPTIONIST.roomId ? new Receptionist(this) : null;
     for (const p of snap.players) this.addActor(p);
     this.userMoved = false;
     this.fitCamera();
+    const pend = this.pendingLocate;
+    if (pend && pend.roomId === snap.def.id && performance.now() < pend.until) {
+      this.pendingLocate = null;
+      this.locate(pend.x, pend.y, pend.label);
+    }
   }
 
   /** Floor, walls, furniture and lighting of a room definition. People, camera and media badges are not touched. */
@@ -806,6 +873,7 @@ export class WorldScene extends Phaser.Scene {
     this.furni = [];
     this.screens.forEach((s) => s.destroy());
     this.screens = [];
+    this.climateFx.clear();
     const built = buildRoom(def);
     this.built = built;
     const theme = THEMES[def.id] ?? THEMES.office;
@@ -825,7 +893,7 @@ export class WorldScene extends Phaser.Scene {
 
     for (const f of def.furniture) {
       const on = furniState[f.id] === true;
-      const s = renderFurniture(f, on);
+      const s = renderFurniture(f, on, this.optOf(f));
       const tkey = this.canvasTexture(s.key, s.canvas);
       const o = tileToScreen(f.x, f.y);
       const img = this.add.image(o.x - s.ax, o.y - s.ay, tkey).setOrigin(0, 0);
@@ -857,11 +925,16 @@ export class WorldScene extends Phaser.Scene {
       this.furni.push(fa);
       if (f.kind === 'screen' || f.kind === 'tv_stand') this.screens.push(new StageScreen(this, f, () => img.depth + 1));
     }
-    const BLINK: Partial<Record<Furniture['kind'], number>> = { server_rack: 520, videowall: 1500, command_desk: 1100, snack_machine: 1100, soda_machine: 1500 };
+    const BLINK: Partial<Record<Furniture['kind'], number>> = { server_rack: 520, videowall: 1500, command_desk: 1100, snack_machine: 1100, soda_machine: 1500, noc_console: 700 };
     this.blinkers = this.furni
       .filter((fa) => BLINK[fa.f.kind])
       .map((fa) => ({ fa, period: BLINK[fa.f.kind]!, offset: Math.floor(hashStr(fa.f.id) * 1000), last: 0 }));
     this.rebuildSortables();
+    this.climateFx.load(
+      this.furni.filter((fa) => isAcUnit(fa.f.kind)).map((fa) => ({ f: fa.f, sprite: fa.sprite })),
+      (id) => furniState[id] === true,
+    );
+    if (this.climate) this.climateFx.setClimate(this.climate);
     this.dayLight.load(built, theme, def.furniture, furniState, floor, walls, key);
     this.eventDecor.load(built, def.furniture, this.furniOn);
   }
@@ -878,9 +951,48 @@ export class WorldScene extends Phaser.Scene {
       const phase = Math.floor((now + b.offset) / b.period) % 2;
       if (phase === b.last) continue;
       b.last = phase;
-      const s = renderFurniture(b.fa.f, phase === 1);
+      const s = renderFurniture(b.fa.f, phase === 1, this.optOf(b.fa.f));
       b.fa.sprite.setTexture(this.canvasTexture(s.key, s.canvas));
     }
+  }
+
+  /** Estado extra do desenho de uma peca (ver Builder em furniture.ts): alvo do ar, leitura do termostato, alerta dos racks. */
+  private optOf(f: Furniture): number {
+    const c = this.climate;
+    if (!c) return 0;
+    if (f.kind === 'ac_split' || f.kind === 'ac_floor') return AC_MODE_LIST.indexOf(c.mode) * 100 + c.target;
+    if (f.kind === 'thermostat') return Math.round(c.temp) * 100 + c.target;
+    if (f.kind === 'server_rack') return c.overheat ? 1 : 0;
+    return 0;
+  }
+
+  /** O servidor mandou um clima novo: redesenha so as pecas que o mostram (display, termostato, racks). */
+  private setClimate(c: ClimateView) {
+    const before = this.climate;
+    this.climate = c;
+    this.climateFx.setClimate(c);
+    for (const fa of this.furni) {
+      const k = fa.f.kind;
+      if (k !== 'ac_split' && k !== 'ac_floor' && k !== 'thermostat' && k !== 'server_rack') continue;
+      if (before && this.optOf(fa.f) === this.optWith(before, fa.f)) continue;
+      const s = renderFurniture(fa.f, this.blinkOn(fa) ?? this.furniOn[fa.f.id] === true, this.optOf(fa.f));
+      const o = tileToScreen(fa.f.x, fa.f.y);
+      fa.sprite.setTexture(this.canvasTexture(s.key, s.canvas)).setPosition(o.x - s.ax, o.y - s.ay);
+    }
+  }
+
+  private optWith(c: ClimateView, f: Furniture): number {
+    const now = this.climate;
+    this.climate = c;
+    const v = this.optOf(f);
+    this.climate = now;
+    return v;
+  }
+
+  /** Fase atual de uma peca que pisca (racks): para o redesenho de clima manter o mesmo quadro. */
+  private blinkOn(fa: FurniActor): boolean | undefined {
+    const b = this.blinkers.find((x) => x.fa === fa);
+    return b ? b.last === 1 : undefined;
   }
 
   private rebuildSortables() {
@@ -896,8 +1008,9 @@ export class WorldScene extends Phaser.Scene {
     this.furniOn[id] = on;
     const fa = this.furni.find((x) => x.f.id === id);
     if (!fa) return;
-    const s = renderFurniture(fa.f, on);
+    const s = renderFurniture(fa.f, on, this.optOf(fa.f));
     const tkey = this.canvasTexture(s.key, s.canvas);
+    this.climateFx.setOn(id, on);
     // the lit sprite can have a different size/anchor than the dark one: place it like loadRoom does
     const o = tileToScreen(fa.f.x, fa.f.y);
     fa.sprite.setTexture(tkey).setPosition(o.x - s.ax, o.y - s.ay);
@@ -910,8 +1023,12 @@ export class WorldScene extends Phaser.Scene {
     const { width: W, height: H } = this.built.grid;
     const bw = (W + H) * (TILE_W / 2);
     const bh = (W + H) * (TILE_H / 2) + WALL_H + 12;
-    const availW = this.scale.width - 40;
-    const availH = this.scale.height - 190;
+    // phones: the bottom bar wraps into several rows and the top cards take room, so measure instead of guessing
+    const bar = typeof document !== 'undefined' ? document.querySelector('.bar') : null;
+    const barH = bar ? Math.ceil(bar.getBoundingClientRect().height) : 52;
+    const small = this.scale.width <= 640;
+    const availW = this.scale.width - (small ? 12 : 40);
+    const availH = this.scale.height - barH - (small ? 64 : 138);
     let idx = 0;
     ZOOMS.forEach((z, i) => {
       if (bw * z <= availW && bh * z <= availH) idx = i;
@@ -951,13 +1068,25 @@ export class WorldScene extends Phaser.Scene {
     if (!built) return;
     const t = this.tileAt(p);
     const overActor = this.pickActor(p);
-    const npc = !overActor && this.receptionist && (this.receptionist.hit(p.worldX, p.worldY) || this.receptionist.atTile(t.x, t.y));
-    const furni = npc ? undefined : interactiveAt(built, t.x, t.y);
-    this.input.setDefaultCursor(overActor || furni || npc ? 'pointer' : 'default');
-    if (npc) {
+    const overPet = !!this.pet?.hit(p.worldX, p.worldY);
+    if (this.playUntil > performance.now() && isWalkable(built.grid, t.x, t.y)) {
+      const now = performance.now();
+      if (shouldSendPlay(this.playSent, now, t.x, t.y)) {
+        this.playSent = { at: now, x: t.x, y: t.y };
+        net.send({ t: 'pet_do', act: 'play', x: t.x, y: t.y });
+      }
+    }
+    const npc = !overActor && !overPet && this.receptionist && (this.receptionist.hit(p.worldX, p.worldY) || this.receptionist.atTile(t.x, t.y));
+    const sprite = npc || overActor || overPet ? undefined : this.spriteUnder(p);
+    const furni = npc ? undefined : (sprite ?? interactiveAt(built, t.x, t.y));
+    this.input.setDefaultCursor(overActor || overPet || furni || npc ? 'pointer' : 'default');
+    if (overPet && this.pet) {
+      const pt = this.pet.tile();
+      this.drawDiamond(this.hover, pt.x, pt.y, 0x9fe8ff, 0.9);
+    } else if (npc) {
       this.drawDiamond(this.hover, RECEPTIONIST.x, RECEPTIONIST.y, 0xffe27a, 0.9);
     } else if (furni) {
-      this.drawDiamond(this.hover, t.x, t.y, 0xffe27a, 0.9);
+      this.drawDiamond(this.hover, sprite ? sprite.x : t.x, sprite ? sprite.y : t.y, 0xffe27a, 0.9);
     } else if (isWalkable(built.grid, t.x, t.y)) {
       this.drawDiamond(this.hover, t.x, t.y, 0xffffff, 0.8);
     }
@@ -975,6 +1104,12 @@ export class WorldScene extends Phaser.Scene {
     const built = this.built;
     if (!built) return;
     const actor = this.pickActor(p);
+    if (this.pet?.hit(p.worldX, p.worldY) && (!actor || this.pet.sprite.depth > actor.sprite.depth)) {
+      const pt = this.pet.tile();
+      emit('petClick', { name: this.pet.name, x: p.event instanceof MouseEvent ? p.event.clientX : p.x, y: p.event instanceof MouseEvent ? p.event.clientY : p.y });
+      this.markerAt = { x: pt.x, y: pt.y, born: performance.now() };
+      return;
+    }
     if (actor?.isYou && actor.isHolding()) {
       // clicking yourself puts the cup down (the server confirms with an `activity` message)
       net.send({ t: 'activity', activity: 'idle' });
@@ -991,12 +1126,13 @@ export class WorldScene extends Phaser.Scene {
       this.markerAt = { x: RECEPTIONIST.x, y: RECEPTIONIST.y, born: performance.now() };
       return;
     }
-    // the TV is tall: a click on its screen lands on a floor tile behind it, so test the drawn sprite first
-    const tv = this.tvUnder(p);
-    if (tv) {
-      net.send({ t: 'interact', furniId: tv.id, x: tv.x, y: tv.y });
-      stageUi.set('open');
-      this.markerAt = { x: tv.x, y: tv.y, born: performance.now() };
+    // tall and wall-mounted pieces (TV, air conditioning, thermostat, switch, racks): a click on the drawn pixels lands on a floor
+    // tile behind them, so test the sprites first
+    const hit = this.spriteUnder(p);
+    if (hit) {
+      net.send({ t: 'interact', furniId: hit.id, x: hit.x, y: hit.y });
+      if (hit.kind === 'tv_stand') stageUi.set('open');
+      this.markerAt = { x: hit.x, y: hit.y, born: performance.now() };
       return;
     }
     const t = this.tileAt(p);
@@ -1013,16 +1149,66 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  /** The presentation TV whose drawn pixels are under the pointer, if any. */
-  private tvUnder(p: Phaser.Input.Pointer) {
+  /** The usable piece (of the ones that are drawn tall or on the wall) whose drawn pixels are under the pointer; the nearest one wins. */
+  private spriteUnder(p: Phaser.Input.Pointer): Furniture | undefined {
+    let best: FurniActor | undefined;
     for (const fa of this.furni) {
-      if (fa.f.kind !== 'tv_stand') continue;
+      if (!SPRITE_PICK.has(fa.f.kind)) continue;
       const b = fa.sprite.getBounds();
       if (!b.contains(p.worldX, p.worldY)) continue;
       const alpha = this.textures.getPixelAlpha(Math.floor(p.worldX - b.x), Math.floor(p.worldY - b.y), fa.sprite.texture.key);
-      if (alpha && alpha > 0) return fa.f;
+      if (alpha && alpha > 0 && (!best || fa.sprite.depth > best.sprite.depth)) best = fa;
     }
-    return undefined;
+    return best?.f;
+  }
+
+  // ---- "Localizar" (inventario de PCs): camera e marcador piscante ----------------------------------------------------
+
+  /** Pede para localizar uma estacao; se for de outra sala espera a entrada nela (ate 20 s). */
+  private requestLocate(roomId: string, x: number, y: number, label: string) {
+    if (this.built?.def.id === roomId) this.locate(x, y, label);
+    else this.pendingLocate = { roomId, x, y, label, until: performance.now() + 20000 };
+  }
+
+  private locate(x: number, y: number, label: string) {
+    const c = tileToScreen(x + 0.5, y + 0.5);
+    this.userMoved = true;
+    this.cameras.main.pan(c.x, c.y - 20, 650, 'Sine.easeInOut');
+    this.locateAt = { x, y, until: performance.now() + 7000, label };
+  }
+
+  private drawLocator(now: number) {
+    const g = this.locator;
+    g.clear();
+    const l = this.locateAt;
+    if (!l) return;
+    if (now > l.until) {
+      this.locateAt = null;
+      return;
+    }
+    const blink = Math.floor(now / 260) % 2 === 0;
+    const color = blink ? 0xffe27a : 0x6fe0ff;
+    const n = tileToScreen(l.x, l.y);
+    for (const [grow, w] of [[0, 3], [5, 2]] as const) {
+      g.lineStyle(w, color, blink ? 1 : 0.85);
+      g.strokePoints(
+        [
+          new Phaser.Math.Vector2(n.x, n.y - grow / 2),
+          new Phaser.Math.Vector2(n.x + TILE_W / 2 + grow, n.y + TILE_H / 2),
+          new Phaser.Math.Vector2(n.x, n.y + TILE_H + grow / 2),
+          new Phaser.Math.Vector2(n.x - TILE_W / 2 - grow, n.y + TILE_H / 2),
+        ],
+        true,
+      );
+    }
+    // seta que quica acima da estacao
+    const bob = Math.round(Math.sin(now / 160) * 4);
+    const ax = Math.round(n.x);
+    const ay = Math.round(n.y - 46 + bob);
+    g.fillStyle(0x1d1a24, 1);
+    g.fillTriangle(ax - 9, ay - 1, ax + 9, ay - 1, ax, ay + 12);
+    g.fillStyle(color, 1);
+    g.fillTriangle(ax - 7, ay, ax + 7, ay, ax, ay + 9);
   }
 
   /** Logical tile of any avatar in the room, including your own (proximity audio reads it ~5 times a second). */
@@ -1069,14 +1255,17 @@ export class WorldScene extends Phaser.Scene {
     const dt = Math.min(delta, 100);
     for (const a of this.actors.values()) a.update(dt);
     this.receptionist?.update(dt);
-    if (this.sortables.length || this.actors.size || this.receptionist) {
-      assignDepths([...this.sortables, ...this.eventDecor.sortables, ...this.actors.values(), ...(this.receptionist ? [this.receptionist] : [])]);
+    this.pet?.update(dt);
+    if (this.sortables.length || this.actors.size || this.receptionist || this.pet) {
+      assignDepths([...this.sortables, ...this.eventDecor.sortables, ...this.actors.values(), ...(this.receptionist ? [this.receptionist] : []), ...(this.pet ? [this.pet] : [])]);
     }
     this.badges.update(this.actors.values(), performance.now());
     for (const s of this.screens) s.tick(performance.now());
     this.dayLight.tick(performance.now());
     this.eventDecor.tick(performance.now());
     this.blinkTick(performance.now());
+    this.climateFx.tick(performance.now());
+    this.drawLocator(performance.now());
     this.marker.clear();
     if (this.markerAt) {
       const age = performance.now() - this.markerAt.born;

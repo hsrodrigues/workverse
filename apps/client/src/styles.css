@@ -414,7 +414,8 @@ input {
 .chat-log {
   position: absolute;
   left: 12px;
-  bottom: 64px;
+  /* --bar-h e medida em Hud.tsx: no celular a barra quebra em varias linhas e o chat ficava escondido atras dela */
+  bottom: calc(var(--bar-h, 52px) + 10px);
   width: min(440px, calc(100vw - 24px));
   max-height: 168px;
   overflow-y: auto;
@@ -677,8 +678,33 @@ input {
     left: 0;
     right: auto;
   }
+}
+
+/* Celular: cards do topo enxutos, barra so com icones e painel de video recolhido para a sala caber na tela */
+.video-dock-chev {
+  display: inline-flex;
+  transform: rotate(-90deg);
+}
+.video-dock-chev.open {
+  transform: none;
+}
+@media (max-width: 640px) {
+  .room-card span {
+    display: none;
+  }
+  .room-card {
+    padding: 5px 8px;
+  }
+  .bar .tool .lbl {
+    display: none;
+  }
+  .bar .tool:not(.tool-send) {
+    padding: 7px 9px;
+  }
   .chat-log {
-    bottom: 112px;
-    max-height: 120px;
+    max-height: 96px;
+    font-size: 12px;
+    left: 6px;
+    width: calc(100vw - 12px);
   }
 }

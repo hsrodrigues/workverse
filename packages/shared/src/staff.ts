@@ -27,6 +27,7 @@ export type StaffAction =
   | 'rooms.view'
   | 'rooms.control'
   | 'events.control'
+  | 'pet.control'
   | 'accounts.view'
   | 'accounts.create'
   | 'accounts.reset'
@@ -55,6 +56,7 @@ export const STAFF_MIN_LEVEL: Readonly<Record<StaffAction, StaffLevel>> = {
   'rooms.view': 'helper',
   'rooms.control': 'moderator',
   'events.control': 'moderator',
+  'pet.control': 'moderator',
   'accounts.view': 'helper',
   'accounts.create': 'moderator',
   'accounts.reset': 'moderator',
@@ -132,6 +134,8 @@ export interface StaffAccountDetail extends StaffAccountRow {
   unlocks: string[];
   createdBy: string | null;
   passwordChangedAt: number | null;
+  /** Trocas recentes do nome de exibicao feitas pela propria pessoa (mais recentes primeiro). */
+  nameHistory?: { at: number; from: string; to: string }[];
 }
 
 export interface StaffMemberRow {

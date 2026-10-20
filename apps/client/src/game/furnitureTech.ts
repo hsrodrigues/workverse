@@ -153,9 +153,11 @@ function monitor(l0: number, l1: number, s0: number, s1: number, alongX: boolean
 }
 
 export const TECH_BUILDERS: Record<Extract<FurniKind, 'server_rack' | 'command_desk' | 'videowall' | 'arch_board' | 'hardware_bench'>, Builder> = {
-  server_rack: (_fw, _fd, f, on): Parts => {
+  server_rack: (_fw, _fd, f, on, opt): Parts => {
     const side: 'n' | 'w' = f.dir % 2 === 0 ? 'w' : 'n';
     const ph = on ? 1 : 0;
+    // superaquecimento (opt = 1): os LEDs piscam em vermelho e a faixa do topo fica vermelha
+    const hot = opt === 1;
     const H = 78;
     const body = withDetail({ x: 0.08, y: 0.1, z: 0, w: 0.84, d: 0.8, h: H, top: '#1d2336', left: '#151a2a', right: '#0d101b' }, (ctx, ox, oy, b) => {
       const p = boxPlane(ctx, ox, oy, b, side);
@@ -172,7 +174,7 @@ export const TECH_BUILDERS: Record<Extract<FurniKind, 'server_rack' | 'command_d
       p.rect(W - 2, W, 0, H, t('#0b0e18'));
       // cyan accent line on the cap and a base plinth
       p.rect(0, W, H - 3, H, t('#1a2036'));
-      p.rect(2, W - 2, H - 3, H - 2, t(CYAN));
+      p.rect(2, W - 2, H - 3, H - 2, t(hot ? '#ff4a4a' : CYAN));
       p.rect(0, W, 0, 3, t('#0b0e18'));
       // 9 server units, each with vents, a drive bay and blinking LEDs
       for (let u = 0; u < 9; u++) {
@@ -186,6 +188,12 @@ export const TECH_BUILDERS: Record<Extract<FurniKind, 'server_rack' | 'command_d
         for (let k = 0; k < 3; k++) {
           const a = W - 10 + k * 3;
           const r = hash2(u * 3 + k, f.x + f.y * 7, 6 + ph * 5);
+          if (hot) {
+            // alerta: todos os LEDs piscam juntos em vermelho (a fase `on` alterna aceso/apagado)
+            p.px(a, z0 + 4, ph ? '#ff3b3b' : '#4a1a22');
+            p.px(a, z0 + 3, ph ? 'rgba(255,59,59,0.4)' : 'rgba(255,59,59,0.08)');
+            continue;
+          }
           p.px(a, z0 + 4, r < 0.55 ? GREEN : r < 0.78 ? AMBER : r < 0.9 ? CYAN : '#2a3350');
           p.px(a, z0 + 3, r < 0.55 ? 'rgba(88,224,138,0.35)' : 'rgba(53,216,255,0.2)');
         }

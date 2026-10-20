@@ -11,6 +11,7 @@ import { LogTab } from './LogTab';
 import { ModeTab } from './ModeTab';
 import { NoticesTab } from './NoticesTab';
 import { OnlineTab } from './OnlineTab';
+import { PetTab } from './PetTab';
 import { RoomsTab } from './RoomsTab';
 import { StaffPanelProvider } from './staffUi';
 import { TeamTab } from './TeamTab';
@@ -57,7 +58,7 @@ export function StaffBarButton() {
   );
 }
 
-type TabId = 'online' | 'rooms' | 'notices' | 'accounts' | 'depts' | 'events' | 'team' | 'mode' | 'log';
+type TabId = 'online' | 'rooms' | 'notices' | 'accounts' | 'depts' | 'events' | 'pet' | 'team' | 'mode' | 'log';
 const TABS: { id: TabId; label: string }[] = [
   { id: 'online', label: 'Online' },
   { id: 'rooms', label: 'Salas' },
@@ -65,6 +66,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'accounts', label: 'Contas' },
   { id: 'depts', label: 'Setores' },
   { id: 'events', label: 'Eventos' },
+  { id: 'pet', label: 'Byte' },
   { id: 'team', label: 'Equipe staff' },
   { id: 'mode', label: 'Modo' },
   { id: 'log', label: 'Log' },
@@ -156,6 +158,7 @@ export function StaffPanel() {
             {tab === 'accounts' && (staffCan(level, 'accounts.view') ? <AccountsTab /> : null)}
             {tab === 'depts' && (staffCan(level, 'accounts.view') ? <DeptsTab /> : null)}
             {tab === 'events' && <EventsTab />}
+            {tab === 'pet' && <PetTab />}
             {tab === 'team' && <TeamTab />}
             {tab === 'mode' && <ModeTab />}
             {tab === 'log' && <LogTab />}

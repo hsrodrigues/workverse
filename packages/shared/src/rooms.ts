@@ -53,7 +53,11 @@ export type FurniKind =
   | 'espresso'
   | 'snack_machine'
   | 'soda_machine'
-  | 'microwave';
+  | 'microwave'
+  | 'ac_split'
+  | 'ac_floor'
+  | 'thermostat'
+  | 'noc_console';
 
 export interface FurniKindDef {
   label: string;
@@ -103,7 +107,7 @@ export const FURNI_KINDS: Record<FurniKind, FurniKindDef> = {
   /** Interruptor na parede: alterna as luzes artificiais da sala. Estado `true` = luzes APAGADAS (o padrao `false` = acesas). */
   light_switch: { label: 'Interruptor de luz', w: 1, d: 1, blocks: false, seat: false, usable: true, wall: true },
   /** Sala da TI: rack de servidor alto, com portas de vidro e LEDs que piscam (vale por 1 tile; fileiras formam o corredor de racks). */
-  server_rack: { label: 'Rack de servidor', w: 1, d: 1, blocks: true, seat: false, usable: false },
+  server_rack: { label: 'Rack de servidor', w: 1, d: 1, blocks: true, seat: false, usable: true },
   /** Segmento da mesa de comando (3 tiles) com monitores; três peças em U formam a ferradura. A frente (monitores virados para quem senta) segue `furniFront`. */
   command_desk: { label: 'Mesa de comando', w: 3, d: 1, blocks: true, seat: false, usable: false },
   ergo_chair: { label: 'Poltrona ergonômica', w: 1, d: 1, blocks: true, seat: true, usable: false },
@@ -121,6 +125,14 @@ export const FURNI_KINDS: Record<FurniKind, FurniKindDef> = {
   soda_machine: { label: 'Máquina de refrigerantes', w: 1, d: 1, blocks: true, seat: false, usable: true },
   /** Micro-ondas sobre um gabinete: esquenta a marmita (a luz acende por alguns segundos) e entrega uma marmita. */
   microwave: { label: 'Micro-ondas', w: 1, d: 1, blocks: true, seat: false, usable: true },
+  /** Ar-condicionado split de parede (alto, 2 tiles): liga/desliga o ar da sala e mostra a temperatura-alvo (ver climate.ts). */
+  ac_split: { label: 'Ar-condicionado split', w: 2, d: 1, blocks: false, seat: false, usable: true, wall: true },
+  /** Ar-condicionado de piso (torre) para salas de servidores. Faz o mesmo que o split. */
+  ac_floor: { label: 'Ar-condicionado de piso', w: 1, d: 1, blocks: true, seat: false, usable: true },
+  /** Termostato de parede com tela: cada clique baixa a temperatura-alvo em 1 grau (de 26 a 18, e volta ao 26). */
+  thermostat: { label: 'Termostato', w: 1, d: 1, blocks: false, seat: false, usable: true, wall: true },
+  /** Console de monitoramento (NOC) da Sala da TI: abre o inventario de PCs conectados (so equipe de TI). */
+  noc_console: { label: 'Console de monitoramento', w: 2, d: 1, blocks: true, seat: false, usable: true },
   auditorium_seat: { label: 'Poltrona', w: 1, d: 1, blocks: true, seat: true, usable: false },
   /** Raised platform, drawn flat: avatars walk on it. */
   stage: { label: 'Palco', w: 8, d: 3, blocks: false, seat: false, usable: false },
@@ -207,7 +219,7 @@ export interface RoomListEntry {
   /** The viewer cannot enter: padlock in the UI. */
   locked: boolean;
   /** Why it is locked (for the tooltip): 'team' | 'invite' | 'guest'. */
-  lockReason?: 'team' | 'invite' | 'guest';
+  lockReason?: 'team' | 'invite' | 'guest' | 'booked';
   /** Present only when the viewer may enter; never reveals how many people are in a room one cannot access. */
   population?: number;
 }
@@ -297,7 +309,7 @@ export function furniFront(f: Furniture): 0 | 1 | 2 | 3 {
 }
 
 /** Pieces that belong against the north or west wall with their front toward the room (see furniFront). */
-export const WALL_BACKED_KINDS: readonly FurniKind[] = ['bookshelf', 'fridge', 'cooler', 'coffee', 'printer', 'rack', 'counter', 'espresso', 'hardware_bench', 'snack_machine', 'soda_machine', 'microwave'];
+export const WALL_BACKED_KINDS: readonly FurniKind[] = ['bookshelf', 'fridge', 'cooler', 'coffee', 'printer', 'rack', 'counter', 'espresso', 'hardware_bench', 'snack_machine', 'soda_machine', 'microwave', 'ac_floor'];
 
 const rect = (w: number, h: number) => Array.from({ length: h }, () => '.'.repeat(w));
 
@@ -383,10 +395,13 @@ const OFFICE: RoomDef = {
     { id: fid('lamp'), kind: 'lamp', x: 15, y: 3, dir: 0 },
     { id: fid('lamp'), kind: 'lamp', x: 1, y: 5, dir: 0 },
     // Wall decor
-    { id: fid('frame'), kind: 'frame', x: 4, y: 0, dir: 0 },
-    { id: fid('clock'), kind: 'clock', x: 5, y: 0, dir: 0 },
+    { id: fid('ac'), kind: 'ac_split', x: 4, y: 0, dir: 0 },
+    { id: fid('frame'), kind: 'frame', x: 6, y: 0, dir: 0 },
+    { id: fid('clock'), kind: 'clock', x: 1, y: 0, dir: 0 },
     { id: fid('board'), kind: 'whiteboard', x: 9, y: 0, dir: 0 },
-    { id: fid('frame'), kind: 'frame', x: 12, y: 0, dir: 0 },
+    { id: fid('ac'), kind: 'ac_split', x: 11, y: 0, dir: 0 },
+    { id: fid('frame'), kind: 'frame', x: 13, y: 0, dir: 0 },
+    { id: fid('ac'), kind: 'ac_split', x: 0, y: 0, dir: 1 },
     { id: fid('frame'), kind: 'frame', x: 0, y: 5, dir: 1 },
     { id: fid('clock'), kind: 'clock', x: 0, y: 8, dir: 1 },
     { id: fid('frame'), kind: 'frame', x: 0, y: 10, dir: 1 },
@@ -455,8 +470,9 @@ const LOUNGE: RoomDef = {
     { id: fid('vend'), kind: 'soda_machine', x: 0, y: 6, dir: 0 },
     // Wall decor
     { id: fid('tv'), kind: 'tv', x: 2, y: 0, dir: 0 },
-    { id: fid('frame'), kind: 'frame', x: 4, y: 0, dir: 0 },
-    { id: fid('clock'), kind: 'clock', x: 5, y: 0, dir: 0 },
+    { id: fid('ac'), kind: 'ac_split', x: 4, y: 0, dir: 0 },
+    { id: fid('frame'), kind: 'frame', x: 1, y: 0, dir: 0 },
+    { id: fid('clock'), kind: 'clock', x: 0, y: 2, dir: 1 },
     { id: fid('frame'), kind: 'frame', x: 0, y: 3, dir: 1 },
   ],
 };
@@ -512,6 +528,7 @@ const AUDITORIUM: RoomDef = {
     { id: fid('tv'), kind: 'tv', x: 1, y: 0, dir: 0 },
     { id: fid('clock'), kind: 'clock', x: 3, y: 0, dir: 0 },
     { id: fid('router'), kind: 'router', x: 15, y: 0, dir: 0 },
+    { id: fid('ac'), kind: 'ac_split', x: 12, y: 0, dir: 0 },
   ],
 };
 
@@ -600,7 +617,8 @@ const RECEPTION: RoomDef = {
     // Máquina de lanches no canto noroeste do hall
     { id: fid('vend'), kind: 'snack_machine', x: 0, y: 1, dir: 0 },
     // Wall: logo above the desk, TV, clock and frames
-    { id: fid('frame'), kind: 'frame', x: 8, y: 0, dir: 0 },
+    { id: fid('frame'), kind: 'frame', x: 7, y: 0, dir: 0 },
+    { id: fid('ac'), kind: 'ac_split', x: 8, y: 0, dir: 0 },
     { id: fid('logo'), kind: 'logo', x: 10, y: 0, dir: 0 },
     { id: fid('clock'), kind: 'clock', x: 13, y: 0, dir: 0 },
     { id: fid('tv'), kind: 'tv', x: 14, y: 0, dir: 0 },
@@ -640,6 +658,7 @@ const TEAM: RoomDef = {
     { id: fid('plant'), kind: 'plant', x: 0, y: 6, dir: 0 },
     { id: fid('plant'), kind: 'plant', x: 13, y: 0, dir: 0 },
     // Wall
+    { id: fid('ac'), kind: 'ac_split', x: 0, y: 0, dir: 0 },
     { id: fid('board'), kind: 'whiteboard', x: 2, y: 0, dir: 0 },
     { id: fid('frame'), kind: 'frame', x: 5, y: 0, dir: 0 },
     { id: fid('tv'), kind: 'tv', x: 7, y: 0, dir: 0 },
@@ -674,6 +693,7 @@ const MEETING1: RoomDef = {
     { id: fid('cooler'), kind: 'cooler', x: 4, y: 0, dir: 1 },
     { id: fid('bin'), kind: 'bin', x: 10, y: 9, dir: 0 },
     { id: fid('lamp'), kind: 'lamp', x: 10, y: 8, dir: 0 },
+    { id: fid('ac'), kind: 'ac_split', x: 0, y: 0, dir: 0 },
     { id: fid('tv'), kind: 'tv', x: 5, y: 0, dir: 0 },
     { id: 'tvstand-meeting1', kind: 'tv_stand', x: 6, y: 1, dir: 0 },
     { id: fid('board'), kind: 'whiteboard', x: 8, y: 0, dir: 0 },
@@ -703,6 +723,7 @@ const MEETING2: RoomDef = {
     { id: fid('plant'), kind: 'plant', x: 1, y: 7, dir: 0 },
     { id: fid('bin'), kind: 'bin', x: 9, y: 8, dir: 0 },
     { id: fid('lamp'), kind: 'lamp', x: 9, y: 1, dir: 0 },
+    { id: fid('ac'), kind: 'ac_split', x: 0, y: 0, dir: 0 },
     { id: fid('board'), kind: 'whiteboard', x: 4, y: 0, dir: 0 },
     { id: fid('tv'), kind: 'tv', x: 7, y: 0, dir: 0 },
     { id: 'tvstand-meeting2', kind: 'tv_stand', x: 5, y: 1, dir: 0 },
@@ -842,6 +863,13 @@ const TI: RoomDef = {
     { id: fid('wall'), kind: 'videowall', x: 4, y: 0, dir: 0 },
     { id: fid('arch'), kind: 'arch_board', x: 0, y: 1, dir: 1 },
     { id: fid('clock'), kind: 'clock', x: 0, y: 4, dir: 1 },
+    // Climatizacao: split acima do cafe e da bancada, torre de piso entre as maquinas e os racks, termostato na parede oeste
+    { id: fid('ac'), kind: 'ac_split', x: 1, y: 0, dir: 0 },
+    { id: fid('ac'), kind: 'ac_split', x: 0, y: 7, dir: 1 },
+    { id: fid('acf'), kind: 'ac_floor', x: 12, y: 0, dir: 1 },
+    { id: fid('thermo'), kind: 'thermostat', x: 0, y: 10, dir: 1 },
+    // Console de monitoramento: inventario dos PCs do escritorio (so equipe de TI)
+    { id: fid('noc'), kind: 'noc_console', x: 4, y: 9, dir: 0 },
   ],
 };
 

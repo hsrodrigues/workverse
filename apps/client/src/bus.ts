@@ -3,8 +3,14 @@ import type { Furniture } from '@workverse/shared';
 export interface BusEvents {
   avatarClick: { id: string; name: string; x: number; y: number };
   closeMenus: undefined;
+  /** UI -> scene: shows where a PC is (inventory "Localizar"): the camera goes there and a marker blinks. The scene waits for the room when it is another one. */
+  locateHost: { roomId: string; x: number; y: number; label: string };
   /** scene -> UI: the player clicked the receptionist NPC (opens the "Atendimento" panel). */
   receptionistClick: undefined;
+  /** scene -> UI: the player clicked Byte, the office pet (opens the small action menu at the click). */
+  petClick: { name: string; x: number; y: number };
+  /** UI -> scene: "Brincar" was chosen: for a few seconds the pointer position is sent to the server so Byte chases it. */
+  petPlay: undefined;
   // ---- room editor ("Modo decoração"): the scene only reports pointers and draws what the UI asks for
   /** UI -> scene: decorate mode on/off (while on, clicks never walk, sit or open avatar menus). */
   furnishActive: boolean;

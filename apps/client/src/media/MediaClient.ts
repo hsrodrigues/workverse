@@ -3,11 +3,13 @@ import {
   Room,
   RoomEvent,
   Track,
+  VideoPresets,
   type LocalParticipant,
   type Participant,
   type RemoteParticipant,
   type RemoteTrack,
 } from 'livekit-client';
+import { dataSaverOn } from '../clientPrefs';
 import {
   DEFAULT_PROXIMITY,
   isProximityMode,
@@ -342,7 +344,8 @@ export class MediaClient {
       adaptiveStream: true,
       dynacast: true,
       audioCaptureDefaults: { deviceId: sel.audioInput, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      videoCaptureDefaults: { deviceId: sel.videoInput },
+      // Modo economia de dados (Meu perfil): camera em 360p.
+      videoCaptureDefaults: { deviceId: sel.videoInput, ...(dataSaverOn() ? { resolution: VideoPresets.h360.resolution } : {}) },
       audioOutput: { deviceId: sel.audioOutput },
     });
     this.room = room;

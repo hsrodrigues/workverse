@@ -6,6 +6,8 @@ import { StageManager, type PermissionSync } from './stage';
 export interface OrgWorldHooks {
   /** A player walked into a portal. */
   onPortal(player: Player, toRoom: string, x: number, y: number): void;
+  /** A player used a rack or the monitoring console of the IT room (see World.terminal). */
+  onTerminal?(player: Player, furniId: string): void;
   log?: (event: string, data?: Record<string, unknown>) => void;
   clock?: () => number;
   /** Pushes publish-permission changes to LiveKit (see media.ts); the org id travels as the 4th argument. */
@@ -39,6 +41,7 @@ export class OrgWorld {
           this.populationDirty = true;
         },
         onPodium: (player) => this.stage.takeStage(player),
+        onTerminal: (player, furniId) => hooks.onTerminal?.(player, furniId),
       });
       room.version = resolved.version;
       room.customized = resolved.customized;

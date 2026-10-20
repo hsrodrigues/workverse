@@ -169,7 +169,23 @@ export const MESSAGE_POLICY: Readonly<Record<string, Permission | null>> = {
   room_invite_add: 'room.access.set',
   room_invite_remove: 'room.access.set',
   meeting_invite: 'dm.send',
+  // reserva de sala (app Reservas): pedir e gerir as proprias; aprovar e configurar e da administracao (a staff admin em servico passa, ver World.authorize)
+  booking_sync: 'room.book',
+  booking_request: 'room.book',
+  booking_cancel: 'room.book',
+  booking_end: 'room.book',
+  booking_extend: 'room.book',
+  booking_edit: 'room.book',
+  booking_decide: 'room.book.manage',
+  booking_room_set: 'room.book.manage',
+  booking_limits_set: 'room.book.manage',
   dir_search: 'dir.search',
+  // inventario de PCs: o mundo checa se a pessoa e da TI (ou staff/admin/dono)
+  climate_set: 'room.enter',
+  inventory_query: 'dir.search',
+  inventory_action: 'dir.search',
+  // pet do escritorio (Byte): qualquer pessoa na sala; o servidor limita distancia, taxa e petiscos
+  pet_do: 'room.enter',
 
   // staff da plataforma: a checagem real (nível, serviço, alvo, taxa) fica em staff.ts; sem sessão nada chega até lá
   staff_duty: null,
@@ -185,5 +201,6 @@ export const MESSAGE_POLICY: Readonly<Record<string, Permission | null>> = {
   staff_rooms: null,
   staff_room: null,
   staff_event: null,
+  staff_pet: null,
 };
 

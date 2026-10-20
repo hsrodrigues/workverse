@@ -1,0 +1,147 @@
+/* Controle remoto do ar-condicionado */
+.rm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: grid;
+  place-items: center;
+  background: rgba(12, 10, 24, 0.35);
+  padding: 12px;
+}
+.rm {
+  width: min(310px, 100%);
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  background: #3a4052;
+  color: #eef1f6;
+  border: 3px solid var(--ink);
+  border-radius: 22px;
+  padding: 12px 14px 14px;
+  box-shadow:
+    inset 0 0 0 2px #59606e,
+    inset 0 -6px 0 rgba(0, 0, 0, 0.25),
+    5px 5px 0 rgba(0, 0, 0, 0.5);
+  display: grid;
+  gap: 8px;
+}
+.rm-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+.rm-x {
+  width: 28px;
+  height: 28px;
+  background: var(--red);
+  color: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  cursor: pointer;
+  line-height: 1;
+  font-size: 16px;
+}
+.rm-lcd {
+  background: #0f2a30;
+  border: 3px solid #1d1a24;
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: #7ff3ff;
+  box-shadow: inset 0 0 0 2px #1a4a54;
+  background-image: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, 0.18) 2px 3px);
+}
+.rm.off .rm-lcd {
+  color: #35505a;
+}
+.rm-lcd-main {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+.rm-target {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 54px;
+  line-height: 0.95;
+  font-weight: 700;
+  letter-spacing: -2px;
+}
+.rm-unit {
+  font-size: 18px;
+  padding-bottom: 6px;
+}
+.rm-lcd-side {
+  margin-left: auto;
+  display: grid;
+  gap: 1px;
+  text-align: right;
+  font-size: 10px;
+  line-height: 1.3;
+}
+.rm-lcd-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 2px solid rgba(127, 243, 255, 0.25);
+  font-size: 10px;
+}
+.rm-row {
+  display: flex;
+  gap: 6px;
+}
+.rm-main {
+  align-items: stretch;
+}
+.rm-btn {
+  flex: 1;
+  min-height: 44px;
+  background: #59606e;
+  color: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  box-shadow: 0 3px 0 var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 4px 6px;
+  font-size: 11px;
+}
+.rm-btn:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--ink);
+}
+.rm-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.rm-btn:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+.rm-power {
+  flex: 2;
+  background: #8a3030;
+}
+.rm-power.lit {
+  background: #2f8f4e;
+}
+.rm-chip {
+  min-height: 38px;
+}
+.rm-chip[aria-pressed='true'] {
+  background: #2a8fd0;
+  border-color: #fff;
+}
+.rm-label {
+  font-size: 10px;
+  color: #c3c9d6;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.rm-split .rm-chip {
+  flex: 1;
+}

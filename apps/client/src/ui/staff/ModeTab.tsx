@@ -12,6 +12,7 @@ const POWERS: [StaffAction, string][] = [
   ['dm', 'Mensagem privada de staff'],
   ['rooms.control', 'Trancar, fechar e esvaziar salas'],
   ['events.control', 'Ligar e desligar eventos (Halloween, Natal...)'],
+  ['pet.control', 'Ligar, renomear e chamar o Byte (pet do escritório)'],
   ['kick.session', 'Expulsar da sessão'],
   ['announce.all', 'Aviso global e por organização'],
   ['accounts.create', 'Criar contas e redefinir senhas'],

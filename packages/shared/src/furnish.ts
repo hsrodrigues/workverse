@@ -51,6 +51,8 @@ export const KIND_ROOM_TYPES: Readonly<Partial<Record<FurniKind, readonly RoomTy
   reception_desk: ['reception', 'office', 'lounge'],
   // the presentation TV: meeting-like rooms (the auditorium has its own stage and screen)
   tv_stand: ['meeting', 'team', 'private', 'office', 'lounge', 'focus'],
+  // o console de monitoramento mostra o inventario de PCs: so faz sentido na Sala da TI
+  noc_console: ['it'],
 };
 
 /** At most this many of a kind per room (the auditorium logic assumes a single stage and podium). */
@@ -62,7 +64,7 @@ export const SURFACE_KINDS: readonly FurniKind[] = ['desk', 'table', 'high_table
 /** Wall pieces that may overlap another wall piece (the router sits on the cable tray). */
 const WALL_MOUNTS: ReadonlyArray<readonly [FurniKind, FurniKind]> = [['router', 'cable_tray']];
 
-export type FurniCategory = 'work' | 'meeting' | 'lounge' | 'kitchen' | 'decor' | 'wall' | 'network' | 'auditorium';
+export type FurniCategory = 'work' | 'meeting' | 'lounge' | 'kitchen' | 'decor' | 'wall' | 'network' | 'climate' | 'auditorium';
 export const FURNI_CATEGORY_LABELS: Readonly<Record<FurniCategory, string>> = {
   work: 'Trabalho',
   meeting: 'Reunião',
@@ -71,6 +73,7 @@ export const FURNI_CATEGORY_LABELS: Readonly<Record<FurniCategory, string>> = {
   decor: 'Decoração',
   wall: 'Parede',
   network: 'Rede',
+  climate: 'Clima',
   auditorium: 'Auditório',
 };
 /** Category of each piece in the palette; a kind missing here (a new piece) falls under `decor` until it is listed. */
@@ -118,6 +121,10 @@ const CATEGORY_TABLE: Readonly<Partial<Record<FurniKind, FurniCategory>>> = {
   snack_machine: 'kitchen',
   soda_machine: 'kitchen',
   microwave: 'kitchen',
+  ac_split: 'climate',
+  ac_floor: 'climate',
+  thermostat: 'climate',
+  noc_console: 'network',
   auditorium_seat: 'auditorium',
   stage: 'auditorium',
   podium: 'auditorium',

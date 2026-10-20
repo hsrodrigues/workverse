@@ -358,3 +358,22 @@
   line-height: 12px;
   font-size: 14px;
 }
+.bcard-pron {
+  font-size: 10px;
+  color: #5b5668;
+}
+.bcard-about {
+  margin: 0;
+  padding: 4px 8px 6px;
+  font-size: 11px;
+  line-height: 1.35;
+  font-style: italic;
+  overflow-wrap: anywhere;
+  border-top: 2px dotted rgba(42, 34, 48, 0.35);
+}
+.bcard-bday {
+  display: inline-flex;
+  vertical-align: -2px;
+  margin-left: 4px;
+  color: #c2410c;
+}

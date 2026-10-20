@@ -27,13 +27,16 @@ const ACCENT: Record<string, [string, 'acute' | 'tilde' | 'circ' | 'cedil']> = {
 export const textWidth = (s: string, scale = 1): number => (s.length * 4 - 1) * scale;
 
 /** Texto em pixel art numa parede (`z` = base das letras). */
-export function wallText(p: Plane, a: number, z: number, s: string, color: string, scale = 1) {
+export function wallText(p: Plane, a: number, z: number, s: string, color: string, scale = 1, mirror = false) {
   let x = a;
-  for (const ch of s.toUpperCase()) {
+  const chars = [...s.toUpperCase()];
+  for (const [i, ch] of chars.entries()) {
+    // `mirror`: west-wall planes run right to left on screen, so the glyphs and their order are reversed to read normally
+    if (mirror) x = a + (chars.length - 1 - i) * 4 * scale;
     const acc = ACCENT[ch];
     const rows = (G[acc ? acc[0] : ch] ?? G[' ']!).split('|');
     rows.forEach((row, r) => {
-      for (let c = 0; c < 3; c++) if (row[c] === '#') p.rect(x + c * scale, x + (c + 1) * scale, z + (4 - r) * scale, z + (5 - r) * scale, color);
+      for (let c = 0; c < 3; c++) if (row[c] === '#') p.rect(x + (mirror ? 2 - c : c) * scale, x + (mirror ? 3 - c : c + 1) * scale, z + (4 - r) * scale, z + (5 - r) * scale, color);
     });
     if (acc) {
       const top = z + 5 * scale;
@@ -42,7 +45,7 @@ export function wallText(p: Plane, a: number, z: number, s: string, color: strin
       else if (acc[1] === 'circ') p.rect(x + scale, x + 2 * scale, top, top + scale, color);
       else p.rect(x + scale, x + 2 * scale, z - scale, z, color);
     }
-    x += 4 * scale;
+    if (!mirror) x += 4 * scale;
   }
 }
 

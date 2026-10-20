@@ -5,6 +5,7 @@ import { afterAll } from 'vitest';
 import { JsonFileAccountStore, MemoryAccountStore } from '../src/store';
 import { accountStoreContract } from './helpers/storeContract';
 import { roomsStoreContract } from './helpers/roomsContract';
+import { profileStoreContract } from './helpers/profileContract';
 
 const dirs: string[] = [];
 afterAll(() => {
@@ -31,4 +32,25 @@ roomsStoreContract('JsonFileAccountStore', async () => {
   const file = join(dir, 'accounts.json');
   const store = new JsonFileAccountStore(file);
   return { store, settle: async () => store.flush(), reopen: async () => new JsonFileAccountStore(file) };
+});
+
+profileStoreContract('MemoryAccountStore', async () => {
+  const store = new MemoryAccountStore();
+  return { store, settle: async () => undefined, reopen: async () => store };
+});
+
+profileStoreContract('JsonFileAccountStore', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'wv-json-profile-'));
+  dirs.push(dir);
+  const file = join(dir, 'accounts.json');
+  let current = new JsonFileAccountStore(file);
+  return {
+    store: current,
+    settle: async () => current.flush(),
+    reopen: async () => {
+      current.flush();
+      current = new JsonFileAccountStore(file);
+      return current;
+    },
+  };
 });

@@ -102,7 +102,7 @@ export function ReceptionPanel({ onWalkNear }: { onWalkNear(id: string): void })
         <ul className="rc-results" data-testid="reception-results">
           {results.map((e) => (
             <li key={e.name} data-testid={`reception-result-${e.name}`}>
-              {e.avatar ? <BadgeCard compact name={e.name} avatar={e.avatar} title={e.title} dept={e.dept} deptColor={e.deptColor} staff={e.staff} /> : <strong>{e.name}</strong>}
+              {e.avatar ? <BadgeCard compact name={e.name} avatar={e.avatar} title={e.title} dept={e.dept} deptColor={e.deptColor} staff={e.staff} about={e.about} /> : <strong>{e.name}</strong>}
               <div className="rc-where">
                 <span className={`rc-dot ${e.online ? 'on' : ''}`} aria-hidden="true" />
                 <span data-testid="reception-where">{where(e, w.room?.id)}</span>

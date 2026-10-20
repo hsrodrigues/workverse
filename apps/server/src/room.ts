@@ -7,6 +7,15 @@ import {
   HELD_CHAT,
   HOLD_MS,
   heldOf,
+  isAcUnit,
+  isCooling,
+  defaultClimate,
+  type ClimateSet,
+  stepTemperature,
+  overheating,
+  roundTemp,
+  CLIMATE_STEP_MS,
+  type ClimateView,
   MAX_CHAT_LENGTH,
   STEP_MS,
   dirFromDelta,
@@ -48,6 +57,13 @@ export class Player {
   title: string | undefined;
   dept: string | undefined;
   deptColor: string | undefined;
+  /** Perfil opcional (profile.ts): copiado da conta pelo servidor; so membros da organizacao o recebem. */
+  about: string | undefined;
+  pronouns: string | undefined;
+  /** Hoje e o aniversario e a pessoa permitiu mostrar. */
+  bday = false;
+  /** Preferencia "mostrar que estou trabalhando" desligada: os colegas veem a atividade como parada. */
+  hideWorking = false;
   /** Organization of the live session; everything this player can see or reach is inside it. Set by World.hello. */
   orgId = '';
   role: Role = 'member';
@@ -79,6 +95,8 @@ export class Player {
   pendingHold: { item: HeldItem; at: number; furniId: string } | null = null;
   /** Computer this player is working at, while `activity` is `working`. */
   workingAt: string | null = null;
+  /** Clock value when the current work session began (inventory uptime); 0 when not working. */
+  workSince = 0;
   /** `status` was set to `focus` by working (not chosen by the player), so leaving the desk may undo it. */
   autoFocus = false;
   readonly moveBucket: TokenBucket;
@@ -91,6 +109,8 @@ export class Player {
   readonly adminBucket: TokenBucket;
   /** Buscas no diretorio da recepcao. */
   readonly dirBucket: TokenBucket;
+  /** Inventario de PCs da TI (consultas e acoes). */
+  readonly invBucket: TokenBucket;
 
   constructor(
     readonly id: string,
@@ -108,6 +128,7 @@ export class Player {
     this.deckBucket = new TokenBucket(10, 1, now);
     this.adminBucket = new TokenBucket(12, 3, now);
     this.dirBucket = new TokenBucket(6, 1, now);
+    this.invBucket = new TokenBucket(6, 1, now);
   }
 }
 
@@ -116,6 +137,8 @@ export interface RoomHooks {
   onChange(): void;
   /** A player used the podium. */
   onPodium?(player: Player): void;
+  /** A player used a server rack or the monitoring console of the IT room (opens the PC inventory for IT people). */
+  onTerminal?(player: Player, furniId: string): void;
 }
 
 /** Strips forbidden characters and collapses whitespace. Rendering is always as plain text. */
@@ -137,6 +160,13 @@ export class RoomInstance {
   private lastNow = 0;
   /** Appliances with their light on while they heat something (furniture id -> when the light goes off). */
   private heatUntil = new Map<string, number>();
+  /** Air conditioning and ambient temperature of the room (authoritative; a server restart goes back to the defaults). */
+  readonly climate: ClimateView = defaultClimate();
+  private climateAt = 0;
+  private climateSent: ClimateView = { ...this.climate };
+  /** When the sleep timer switches the air off (clock value); 0 = no timer. */
+  private timerEndsAt = 0;
+  private climateNowMs = 0;
 
   constructor(
     def: RoomDef,
@@ -189,6 +219,10 @@ export class RoomInstance {
     this.version = meta.version;
     this.customized = meta.customized;
     for (const id of Object.keys(this.furniState)) if (!next.furniById.has(id)) delete this.furniState[id];
+    // new air-conditioning units start in the state of the room, and the overheating alert follows the new racks
+    for (const f of def.furniture) if (isAcUnit(f.kind) && (this.furniState[f.id] ?? false) !== this.climate.on) this.furniState[f.id] = this.climate.on;
+    if (this.climate.on && !def.furniture.some((f) => isAcUnit(f.kind))) this.climate.on = false;
+    this.climate.overheat = overheating(this.climate.overheat, this.climate.temp, this.rackCount(), isCooling(this.climate.on, this.climate.mode));
     this.broadcast({ t: 'furniture_changed', roomId: this.id, version: meta.version, customized: meta.customized, furniture: def.furniture, ...(meta.by ? { by: meta.by } : {}) });
 
     const g = next.grid;
@@ -261,6 +295,7 @@ export class RoomInstance {
         youId: p.id,
         players: [...this.players.values()].filter((o) => !o.invisible || o.id === p.id).map((o) => this.view(o, now)),
         furniState: { ...this.furniState },
+        climate: this.climateView(),
         population,
         furnishVersion: this.version,
         customized: this.customized,
@@ -324,12 +359,15 @@ export class RoomInstance {
       dir: p.dir,
       sitting: p.sitting,
       status: p.status,
-      activity: p.activity,
+      activity: p.hideWorking && p.activity === 'working' ? 'idle' : p.activity,
       path: p.path.slice(i + 1),
       stepRemainingMs: this.stepRemaining(p, now),
       ...(p.staff && p.onDuty ? { staff: p.staff } : {}),
       ...(p.title ? { title: p.title } : {}),
       ...(p.dept ? { dept: p.dept, deptColor: p.deptColor } : {}),
+      ...(p.about ? { about: p.about } : {}),
+      ...(p.pronouns ? { pronouns: p.pronouns } : {}),
+      ...(p.bday ? { bday: true as const } : {}),
     };
   }
 
@@ -366,6 +404,7 @@ export class RoomInstance {
         this.broadcast({ t: 'chat', id: null, name: '', text: `${p.name} ${HELD_CHAT[item]}`, kind: 'system' });
       }
     }
+    this.stepClimate(now);
     // appliances that were heating switch their light off once the time is over and nobody is still waiting for them
     for (const [id, until] of this.heatUntil) {
       if (now < until) continue;
@@ -506,6 +545,11 @@ export class RoomInstance {
     } else if (f.kind === 'light_switch') {
       // estado true = luzes apagadas; visivel para todos na sala (mensagem 'furni')
       this.setFurni(f.id, !this.furniState[f.id]);
+    } else if (isAcUnit(f.kind) || f.kind === 'thermostat') {
+      // the remote control opens on the client of whoever used the unit (changes come back as `climate_set`)
+      p.send({ t: 'climate_open' });
+    } else if (f.kind === 'server_rack' || f.kind === 'noc_console') {
+      this.hooks.onTerminal?.(p, f.id);
     } else if (f.kind === 'podium' || f.kind === 'tv_stand') {
       // the podium takes the stage, the TV on its stand takes the presentation of the room (see StageManager)
       this.hooks.onPodium?.(p);
@@ -533,6 +577,85 @@ export class RoomInstance {
     if (this.built.furniById.has(id)) this.setFurni(id, on);
   }
 
+  // ---- climate (air conditioning and ambient temperature) ----------------------------------------------------------
+
+  private acUnits(): Furniture[] {
+    return this.built.def.furniture.filter((f) => isAcUnit(f.kind));
+  }
+
+  private rackCount(): number {
+    return this.built.def.furniture.filter((f) => f.kind === 'server_rack').length;
+  }
+
+  /** The room climate as clients receive it (the timer is relative to now). */
+  climateView(): ClimateView {
+    const c = this.climate;
+    return { ...c, temp: roundTemp(c.temp), timerLeftMs: this.timerEndsAt > 0 ? Math.max(0, this.timerEndsAt - this.climateNowMs) : 0 };
+  }
+
+  /**
+   * The remote control (`climate_set`, already validated by parseClimateSet): power, target, mode, fan, swing and sleep timer.
+   * Every unit of the room follows and everybody is told. Returns false when the room has no air conditioning to control.
+   */
+  applyClimateSet(req: ClimateSet, now: number): boolean {
+    const units = this.acUnits();
+    const hasControl = units.length > 0 || this.built.def.furniture.some((f) => f.kind === 'thermostat');
+    if (!hasControl) return false;
+    this.climateNowMs = now;
+    const c = this.climate;
+    const wasOn = c.on;
+    if (req.target !== undefined) c.target = req.target;
+    if (req.mode !== undefined) c.mode = req.mode;
+    if (req.fan !== undefined) c.fan = req.fan;
+    if (req.swing !== undefined) c.swing = req.swing;
+    if (req.power !== undefined) c.on = req.power && units.length > 0;
+    if (!c.on) this.timerEndsAt = 0;
+    else if (req.timerMin !== undefined) this.timerEndsAt = req.timerMin > 0 ? now + req.timerMin * 60_000 : 0;
+    if (wasOn !== c.on) for (const u of units) this.setFurni(u.id, c.on);
+    c.overheat = overheating(c.overheat, c.temp, this.rackCount(), isCooling(c.on, c.mode));
+    this.sendClimate(true);
+    return true;
+  }
+
+  private sendClimate(force: boolean) {
+    const c = this.climate;
+    const s = this.climateSent;
+    if (!force && c.on === s.on && c.target === s.target && c.overheat === s.overheat && c.mode === s.mode && c.fan === s.fan && c.swing === s.swing && Math.abs(c.temp - s.temp) < 0.2) return;
+    this.climateSent = { ...c, temp: roundTemp(c.temp) };
+    this.broadcast({ t: 'climate', ...this.climateView() });
+  }
+
+  /** One step of the room temperature every CLIMATE_STEP_MS (cheap: a handful of numbers per room). */
+  private stepClimate(now: number) {
+    this.climateNowMs = now;
+    // the sleep timer switches the air off on the server clock
+    if (this.timerEndsAt > 0 && now >= this.timerEndsAt) {
+      this.timerEndsAt = 0;
+      this.climate.on = false;
+      for (const u of this.acUnits()) this.setFurni(u.id, false);
+      this.climate.overheat = overheating(this.climate.overheat, this.climate.temp, this.rackCount(), false);
+      this.broadcast({ t: 'chat', id: null, name: '', text: 'O timer desligou o ar-condicionado.', kind: 'system' });
+      this.sendClimate(true);
+    }
+    if (this.climateAt === 0) this.climateAt = now;
+    if (now - this.climateAt < CLIMATE_STEP_MS) return;
+    this.climateAt = now;
+    const c = this.climate;
+    const units: Record<string, number> = {};
+    for (const u of this.acUnits()) units[u.kind] = (units[u.kind] ?? 0) + 1;
+    let people = 0;
+    for (const o of this.players.values()) if (!o.invisible) people++;
+    const racks = this.rackCount();
+    c.temp = stepTemperature({ temp: c.temp, people, racks, on: c.on, target: c.target, mode: c.mode, fan: c.fan, units });
+    const was = c.overheat;
+    c.overheat = overheating(was, c.temp, racks, isCooling(c.on, c.mode));
+    if (c.overheat !== was) {
+      const name = this.built.def.name;
+      this.broadcast({ t: 'chat', id: null, name: '', text: c.overheat ? `${name} superaquecendo!` : `${name} voltou à temperatura normal.`, kind: 'system' });
+    }
+    this.sendClimate(false);
+  }
+
   private setFurni(id: string, on: boolean) {
     if ((this.furniState[id] ?? false) === on) return;
     this.furniState[id] = on;
@@ -558,6 +681,7 @@ export class RoomInstance {
     // a PC has one user; the command desk and the bench have several seats
     if (pc.kind === 'computer' && this.isWorkedAt(pc.id)) return;
     p.workingAt = pc.id;
+    p.workSince = this.lastNow;
     this.setFurni(pc.id, true);
     this.setActivity(p, 'working');
     // suggest "focus" only over the default status: a choice of the player (busy, meeting...) is never overwritten
@@ -571,6 +695,7 @@ export class RoomInstance {
   private stopWork(p: Player) {
     const pc = p.workingAt;
     p.workingAt = null;
+    p.workSince = 0;
     if (pc && !this.isWorkedAt(pc)) this.setFurni(pc, false);
     if (p.autoFocus) {
       p.autoFocus = false;
@@ -585,7 +710,7 @@ export class RoomInstance {
     p.activity = activity;
     if (wasWorking && activity !== 'working') this.stopWork(p);
     if (heldOf(activity)) p.holdUntil = this.lastNow + HOLD_MS;
-    this.broadcast({ t: 'activity', id: p.id, activity });
+    this.broadcast({ t: 'activity', id: p.id, activity: p.hideWorking && activity === 'working' ? 'idle' : activity });
   }
 
   /** The client asked to put down what it holds. Returns false when there was nothing to drop. */

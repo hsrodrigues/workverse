@@ -12,6 +12,7 @@ import { registerStageRoutes } from './stageRoutes';
 import { registerOrgRoutes } from './orgRoutes';
 import { registerAdminRoutes } from './adminRoutes';
 import { registerPasswordRoutes } from './passwordRoutes';
+import { registerProfileRoutes } from './profileRoutes';
 import { registerStaffRoutes } from './staffRoutes';
 import type { PermissionSync } from './stage';
 import { ServerMetrics, registerMetricsRoute } from './metrics';
@@ -134,6 +135,7 @@ export async function createApp(opts: AppOptions): Promise<{ app: FastifyInstanc
   const authDeps = { store: opts.store, world, guard, clock, secureCookies: production, allowDevLogin, allowedOrigins: allowed, registrationMode: opts.registrationMode };
   registerAuthRoutes(app, authDeps);
   registerPasswordRoutes(app, authDeps);
+  registerProfileRoutes(app, authDeps);
   registerStaffRoutes(app, authDeps);
   registerMediaRoutes(app, authDeps, { config: mediaConfig });
   registerStageRoutes(app, authDeps);

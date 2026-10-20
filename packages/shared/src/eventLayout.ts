@@ -87,7 +87,7 @@ function wallBusy(room: BuiltRoom): { n: Set<number>; w: Set<number> } {
   const n = new Set<number>();
   const w = new Set<number>();
   for (const f of room.def.furniture) {
-    const tall = f.kind === 'bookshelf' || f.kind === 'rack' || f.kind === 'fridge' || f.kind === 'snack_machine' || f.kind === 'soda_machine' || f.kind === 'server_rack';
+    const tall = f.kind === 'bookshelf' || f.kind === 'rack' || f.kind === 'fridge' || f.kind === 'snack_machine' || f.kind === 'soda_machine' || f.kind === 'server_rack' || f.kind === 'ac_floor';
     const hangs = !!FURNI_KINDS[f.kind].wall;
     if (!hangs && !tall) continue;
     const north = hangs ? f.dir % 2 === 0 : furniFront(f) === 1;

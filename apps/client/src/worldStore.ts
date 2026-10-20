@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { DEFAULT_TEAM, presentationOf, type DirResult, type ProfileTag, type AvatarConfig, type Deck, type OnlineEntry, type PresenceStatus, type RoomAdminEntry, type RoomDef, type ServerMessage, type SlideState, type StaffLevel, type StaffLogEntry, type StaffSelf, type StageView } from '@workverse/shared';
+import { DEFAULT_TEAM, presentationOf, type ClimateView, type ClimateSet, type InventoryAction, type InventoryResult, type DirResult, type ProfileTag, type AvatarConfig, type Deck, type OnlineEntry, type PresenceStatus, type RoomAdminEntry, type RoomDef, type ServerMessage, type SlideState, type StaffLevel, type StaffLogEntry, type StaffSelf, type StageView } from '@workverse/shared';
 import { net } from './net';
 
 export interface RosterEntry extends ProfileTag {
@@ -10,6 +10,10 @@ export interface RosterEntry extends ProfileTag {
   status: PresenceStatus;
   /** Selo de staff: so vale o que o SERVIDOR mandou (PlayerView.staff / staff_flag). */
   staff?: StaffLevel;
+  /** Perfil opcional (so membros da organizacao recebem): sobre mim, pronomes e aniversario de hoje. */
+  about?: string;
+  pronouns?: string;
+  bday?: boolean;
 }
 
 /** Atendimento da recepcao (a NPC): painel aberto, ultima resposta do servidor e se ha uma busca em andamento. */
@@ -19,6 +23,19 @@ export interface DirState {
   result: DirResult | null;
   /** Mensagem da atendente (recusa, limite de pedidos...). */
   notice: string | null;
+}
+
+/** Painel "Servidores · Inventario de PCs" (so aparece para a equipe de TI, staff e admins; o servidor decide). */
+export interface InventoryState {
+  open: boolean;
+  busy: boolean;
+  result: InventoryResult | null;
+  /** Recusa ou aviso do servidor (acesso restrito, limite de pedidos...). */
+  notice: string | null;
+  /** Host -> acao em andamento (animacao do ping / reinicio). */
+  pending: Record<string, InventoryAction>;
+  /** Linhas do terminal com as respostas das acoes (as mais novas no fim). */
+  log: Array<{ key: number; ok: boolean; text: string }>;
 }
 
 export interface StaffAnnounce {
@@ -90,6 +107,13 @@ export interface WorldState {
   /** Ultimo anuncio de staff (faixa dourada no topo). */
   announce: StaffAnnounce | null;
   dir: DirState;
+  /** Ar-condicionado e temperatura da sala atual (chip do HUD e controle remoto). */
+  climate: ClimateView | null;
+  /** Quando o timer desliga o ar (relogio do navegador, ms); 0 = sem timer. */
+  climateEndsAt: number;
+  /** Controle remoto do ar-condicionado aberto. */
+  remoteOpen: boolean;
+  inventory: InventoryState;
 }
 
 const MAX_LINES = 120;
@@ -118,6 +142,10 @@ const initial = (): WorldState => ({
   staffRooms: [],
   announce: null,
   dir: { open: false, busy: false, result: null, notice: null },
+  climate: null,
+  climateEndsAt: 0,
+  remoteOpen: false,
+  inventory: { open: false, busy: false, result: null, notice: null, pending: {}, log: [] },
 });
 
 /** Error codes of the auditorium: shown in the presentation panel and in the chat log. */
@@ -138,6 +166,8 @@ const STAGE_ERRORS = new Set([
   'not_live',
   'bad_slide',
 ]);
+/** When each inventory action was requested (minimum duration of the ping animation). */
+const actionStart = new Map<string, number>();
 let state: WorldState = initial();
 const listeners = new Set<() => void>();
 
@@ -174,19 +204,22 @@ net.on((msg: ServerMessage) => {
       set({
         room: msg.room.def,
         youId: msg.room.youId,
-        roster: msg.room.players.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, status: p.status ?? 'available', staff: p.staff, title: p.title, dept: p.dept, deptColor: p.deptColor })),
+        roster: msg.room.players.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, status: p.status ?? 'available', staff: p.staff, title: p.title, dept: p.dept, deptColor: p.deptColor, about: p.about, pronouns: p.pronouns, bday: p.bday })),
         population: msg.room.population,
         stage: null,
         deck: null,
         slide: { live: false, index: 0 },
         stageNotice: null,
         dir: { ...state.dir, open: false },
+        climate: msg.room.climate ?? null,
+        climateEndsAt: msg.room.climate?.timerLeftMs ? Date.now() + msg.room.climate.timerLeftMs : 0,
+        remoteOpen: false,
       });
       addLine('system', '', `Você entrou em: ${msg.room.def.name}`);
 
       break;
     case 'joined':
-      set({ roster: [...state.roster.filter((p) => p.id !== msg.player.id), { id: msg.player.id, name: msg.player.name, avatar: msg.player.avatar, status: msg.player.status ?? 'available', staff: msg.player.staff, title: msg.player.title, dept: msg.player.dept, deptColor: msg.player.deptColor }] });
+      set({ roster: [...state.roster.filter((p) => p.id !== msg.player.id), { id: msg.player.id, name: msg.player.name, avatar: msg.player.avatar, status: msg.player.status ?? 'available', staff: msg.player.staff, title: msg.player.title, dept: msg.player.dept, deptColor: msg.player.deptColor, about: msg.player.about, pronouns: msg.player.pronouns, bday: msg.player.bday }] });
       addLine('system', '', `${msg.player.name} entrou na sala.`);
       break;
     case 'left': {
@@ -228,8 +261,35 @@ net.on((msg: ServerMessage) => {
       set({ slide: msg.state });
       break;
     case 'profile':
-      set({ roster: state.roster.map((p) => (p.id === msg.id ? { ...p, title: msg.title, dept: msg.dept, deptColor: msg.deptColor } : p)) });
+      set({ roster: state.roster.map((p) => (p.id === msg.id ? { ...p, ...(msg.name ? { name: msg.name } : {}), title: msg.title, dept: msg.dept, deptColor: msg.deptColor, about: msg.about, pronouns: msg.pronouns, bday: msg.bday } : p)) });
       break;
+    case 'climate':
+      set({ climate: { on: msg.on, target: msg.target, temp: msg.temp, overheat: msg.overheat, mode: msg.mode, fan: msg.fan, swing: msg.swing, timerLeftMs: msg.timerLeftMs }, climateEndsAt: msg.timerLeftMs ? Date.now() + msg.timerLeftMs : 0 });
+      break;
+    case 'climate_open':
+      set({ remoteOpen: true });
+      break;
+    case 'inventory_open':
+      set({ inventory: { ...state.inventory, open: true, busy: true, notice: null } });
+      net.send({ t: 'inventory_query' });
+      break;
+    case 'inventory_result':
+      set({ inventory: { ...state.inventory, busy: false, notice: null, result: msg } });
+      break;
+    case 'inventory_action_result': {
+      // the answer shows up after a short "pinging..." animation, even when the server is quick
+      const started = actionStart.get(msg.host) ?? 0;
+      actionStart.delete(msg.host);
+      const apply = () => {
+        const { [msg.host]: _done, ...pending } = state.inventory.pending;
+        const log = [...state.inventory.log, { key: ++lineKey, ok: msg.ok, text: msg.message }].slice(-8);
+        set({ inventory: { ...state.inventory, pending, log } });
+      };
+      const wait = Math.max(0, 800 - (Date.now() - started));
+      if (wait > 0) setTimeout(apply, wait);
+      else apply();
+      break;
+    }
     case 'dir_result':
       set({ dir: { ...state.dir, busy: false, notice: null, result: msg } });
       break;
@@ -258,6 +318,8 @@ net.on((msg: ServerMessage) => {
       break;
     case 'error':
       if (state.dir.busy && (msg.code === 'rate_limited' || msg.code === 'forbidden')) set({ dir: { ...state.dir, busy: false, notice: msg.message } });
+      if (state.inventory.open && (msg.code === 'rate_limited' || msg.code === 'it_only' || msg.code === 'forbidden')) set({ inventory: { ...state.inventory, busy: false, pending: {}, notice: msg.message } });
+      if (msg.code === 'it_only') addLine('system', '', msg.message);
       if (['rate_limited', 'room_full', 'room_locked', 'room_denied', 'forbidden', 'muted', 'unmuted', 'kicked_room', 'off_duty'].includes(msg.code)) addLine('system', '', msg.message);
       if (msg.code === 'dm_offline' || msg.code === 'dm_self') set({ socialNotice: msg.message });
       if (STAGE_ERRORS.has(msg.code)) {
@@ -303,6 +365,31 @@ export const worldStore = {
   dirSearch(dept: string | null, q: string) {
     set({ dir: { ...state.dir, busy: true, notice: null } });
     net.send({ t: 'dir_search', ...(dept ? { dept } : {}), ...(q.trim() ? { q: q.trim() } : {}) });
+  },
+  /** Inventario de PCs: abre/fecha o painel, atualiza a lista e manda ping/reinicio (o servidor valida e limita a taxa). */
+  openInventory() {
+    set({ inventory: { ...state.inventory, open: true, busy: true, notice: null } });
+    net.send({ t: 'inventory_query' });
+  },
+  closeInventory() {
+    set({ inventory: { ...state.inventory, open: false, pending: {} } });
+  },
+  refreshInventory() {
+    if (!state.inventory.open) return;
+    net.send({ t: 'inventory_query' });
+  },
+  inventoryAction(host: string, action: InventoryAction) {
+    if (state.inventory.pending[host]) return;
+    actionStart.set(host, Date.now());
+    set({ inventory: { ...state.inventory, pending: { ...state.inventory.pending, [host]: action } } });
+    net.send({ t: 'inventory_action', host, action });
+  },
+  /** Controle remoto do ar-condicionado: fecha e manda pedidos (o servidor valida, limita e responde com `climate`). */
+  closeRemote() {
+    set({ remoteOpen: false });
+  },
+  climateSet(req: ClimateSet) {
+    net.send({ t: 'climate_set', ...req });
   },
   clearAnnounce(key: number) {
     if (state.announce?.key === key) set({ announce: null });

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { VideoTiles, useMedia } from '../media';
 import { isStageRoomDef, useWorld } from '../worldStore';
 import { useStageMode } from '../stage/stageUi';
+import { Icon } from '../media/icons';
 import { Window } from './Window';
 
 /** Collapsible column of video tiles on the left of the HUD; never takes the whole screen. */
@@ -9,7 +10,8 @@ export function VideoDock() {
   const { state } = useMedia();
   const world = useWorld();
   const stageMode = useStageMode();
-  const [open, setOpen] = useState(true);
+  // on a phone the open dock would cover the room: start collapsed there
+  const [open, setOpen] = useState(() => typeof window === 'undefined' || window.innerWidth > 640);
   if (state.status === 'idle' || state.status === 'unavailable') return null;
 
   const inStage = isStageRoomDef(world.room);
@@ -25,7 +27,9 @@ export function VideoDock() {
           {active > 0 ? `${active} transmitindo · ` : ''}
           {total} na chamada
         </span>
-        <span aria-hidden="true">{open ? '▾' : '▸'}</span>
+        <span aria-hidden="true" className={`video-dock-chev ${open ? 'open' : ''}`}>
+          <Icon name="chevron" size={14} />
+        </span>
       </button>
       {open && (
         <div className="video-dock-body">
