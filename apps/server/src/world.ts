@@ -46,6 +46,7 @@ import { OrgService } from './org';
 import { OrgWorld } from './orgWorld';
 import { PetManager } from './pet';
 import { StaffService, applyBootstrapStaff, isStaffMessage, parseStaffEmails } from './staff';
+import { MediaEconomy, publishRights, resolveEconomyConfig, type EconomyConfig, type UsageStore } from './mediaEconomy';
 import { EventsService, parseCompanyDate, parseOptionalEvents, type EventsConfig } from './eventsService';
 import { setActiveEventsProvider, setDeptKeysProvider } from './wardrobe';
 import { accessBlock, isBanned, isDisabled } from './accountState';
@@ -85,6 +86,10 @@ export interface WorldOptions {
   events?: EventsConfig;
   /** Liga o pet do escritorio (Byte). Padrao: ligado, exceto com PET=off. */
   pet?: boolean;
+  /** Economia de midia (padrao: variaveis MEDIA_*; veja mediaEconomy.ts e docs/media-economy.md). */
+  mediaEconomy?: Partial<EconomyConfig>;
+  /** Onde o contador mensal de minutos de participante e guardado (padrao: so em memoria). */
+  mediaUsageStore?: UsageStore;
 }
 
 const MAX_STRIKES = 20;
@@ -114,6 +119,8 @@ export class World {
   readonly staff: StaffService;
   /** Eventos e comemoracoes ativos (data do relogio + controle manual da staff): ver eventsService.ts. */
   readonly events: EventsService;
+  /** Economia de midia: quem esta conectado/publicando, limites do token e contador mensal (mediaEconomy.ts). */
+  readonly media: MediaEconomy;
   private readonly online = new Map<string, { player: Player; conn: Connection; account: Account }>();
   /** Salas trancadas / fechadas pela staff (chave `org\0sala`). Em memoria: voltam abertas ao reiniciar o servidor. */
   private readonly roomLocks = new Map<string, 'locked' | 'closed'>();
@@ -194,6 +201,25 @@ export class World {
       }
       return [...out];
     });
+    this.media = new MediaEconomy(
+      {
+        clock: this.clock,
+        log: this.log,
+        everyone: () => [...this.online.values()].map((e) => e.player),
+        roomPlayers: (orgId, roomId) => this.orgWorlds.get(orgId)?.rooms.get(roomId)?.players.values() ?? [],
+        rightsOf: (player, kind) => {
+          const stage = this.org(player.orgId).stage;
+          const roomId = player.roomId ?? '';
+          const presentation = stage.hasPresentation(roomId);
+          return { rights: publishRights(roomId, player, kind, stage), presentation, presenter: presentation && stage.roleOf(roomId, player) === 'speaker' };
+        },
+        syncRights: (roomId, identity, rights, orgId) => this.permissionSync?.(roomId, identity, rights, orgId),
+        removeMedia: (orgId, roomId, identity) => this.removeMedia?.(orgId, roomId, identity),
+        audit: (action, detail) => this.staff.record({ id: 'system', name: 'Sistema', level: null }, action, null, detail),
+      },
+      opts.mediaEconomy ?? resolveEconomyConfig(process.env),
+      opts.mediaUsageStore,
+    );
     this.org(DEFAULT_ORG_ID);
     this.pets = new PetManager(
       {
@@ -237,6 +263,8 @@ export class World {
           rename: (orgId, name) => this.pets.rename(orgId, name, this.clock()),
           bring: (orgId, roomId, at) => this.pets.bring(orgId, roomId, at, this.clock()),
         },
+        mediaUsage: () => this.media.usage(),
+        setMediaStrict: (on) => this.media.setStrict(on),
         setEvent: (id, mode) => {
           const changed = this.events.setMode(id, mode);
           if (changed) this.broadcastEvents();
@@ -284,6 +312,11 @@ export class World {
 
   get onlineCount() {
     return this.online.size;
+  }
+
+  /** Numeros da economia de midia para o /metrics. */
+  mediaStats() {
+    return this.media.metrics();
   }
 
   /** Occupants per room of one organization (the default one when omitted). Never mixes organizations. */
@@ -465,6 +498,7 @@ export class World {
     }
     this.roomAdmin.sweep(now);
     this.bookings.tick(now);
+    this.media.sweepIfDue(now);
     // virada do dia / evento forcado: todos veem a mesma decoracao
     if (this.events.changed(now)) this.broadcastEvents();
   }
@@ -769,6 +803,9 @@ export class World {
       return conn.send({ t: 'error', code: 'forbidden', message: 'Você não tem permissão para isso.' });
     }
 
+    // O relato de midia e um batimento automatico do cliente (a cada ~30 s): nao conta como atividade da pessoa (ausencia automatica).
+    if (msg.t === 'media_report') return this.mediaReport(conn, player, msg, now);
+
     this.touch(player, now);
 
     switch (msg.t) {
@@ -876,6 +913,12 @@ export class World {
         }
         return this.strike(conn);
     }
+  }
+
+  private mediaReport(conn: Connection, player: Player, msg: Extract<ClientMessage, { t: 'media_report' }>, now: number) {
+    if (typeof msg.connected !== 'boolean' || typeof msg.mic !== 'boolean' || typeof msg.cam !== 'boolean' || typeof msg.screen !== 'boolean') return this.strike(conn);
+    if (!player.roomId || !player.miscBucket.take(now)) return;
+    this.media.report(player, { connected: msg.connected, mic: msg.mic, cam: msg.cam, screen: msg.screen }, now);
   }
 
   /** Development only (ALLOW_DEV_LOGIN): `/desbloquear <chave|todos>` grants unlock keys to yourself, for testing. */
@@ -1112,6 +1155,7 @@ export class World {
     this.sendRooms(player);
     this.bookings.sendDoors(player);
     conn.send({ t: 'events', ...this.events.view() });
+    conn.send({ t: 'media_policy', ...this.media.policy() });
   }
 
   /** Ends the live session of an account (logout or revoked cookie). */
@@ -1154,6 +1198,8 @@ export class World {
       room?.remove(player);
       this.stageOf(player).onLeave(roomId, player);
     }
+    // a sessao acabou: para de contar minutos e derruba a conexao dela ao LiveKit, se houver
+    this.media.leave(player, { evict: true });
     this.online.delete(player.accountId);
     this.bookings.forget(player.accountId);
   }
@@ -1193,12 +1239,15 @@ export class World {
     if (previous) {
       this.roomOf(player, previous)?.remove(player);
       this.stageOf(player).onLeave(previous, player);
+      // o cliente sai da chamada da sala antiga sozinho; aqui so para a contagem (sem chamar o LiveKit: evita derrubar quem volta na hora)
+      this.media.leave(player);
     }
     const now = this.clock();
     room.add(player, at ?? room.built.def.spawn, now, this.visiblePopulation(player));
     this.bookings.onEnter(player, roomId, now);
     this.stageOf(player).onEnter(roomId, player);
     this.pets.onEnter(player, roomId, now);
+    this.media.sendActive(player, now);
     const entry = this.online.get(player.accountId);
     if (entry) {
       entry.account.lastRoom = roomId;

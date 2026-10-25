@@ -13,6 +13,7 @@ import type { ClimateSet, ClimateView } from './climate';
 import type { InventoryAction, InventoryResult } from './inventory';
 import type { BookingClientMessage, BookingServerMessage } from './bookingProtocol';
 import type { PetAct, PetAdminEntry, PetFx, PetStaffOp, PetState, PetView } from './pet';
+import type { MediaActive, MediaPolicy, MediaReport, MediaUsageView } from './mediaEconomy';
 
 /** Time an avatar takes to cross one tile. Shared so client animation matches the server clock. */
 export const STEP_MS = 380;
@@ -162,6 +163,8 @@ export type ClientMessage =
   /** Interacao com o Byte, o pet do escritorio (carinho, petisco, chamar, brincar; `x`/`y` = ponteiro do brincar). */
   | { t: 'pet_do'; act: PetAct; x?: number; y?: number }
   | BookingClientMessage
+  /** O que a pessoa transmite (e se esta conectada a chamada): o servidor avisa a sala quem publica e conta os minutos de participante. Reenviado a cada ~30 s. */
+  | ({ t: 'media_report' } & MediaReport)
   | StaffClientMessage;
 
 export type ServerMessage =
@@ -237,6 +240,10 @@ export type ServerMessage =
   /** Events (Halloween, Natal...) active now for everybody, plus the staff's manual overrides. Sent on login and on every change. */
   | ({ t: 'events' } & EventsView)
   | BookingServerMessage
+  /** Politica de midia (economia, cota): no login e a cada mudanca. */
+  | ({ t: 'media_policy' } & MediaPolicy)
+  /** Quem esta publicando audio/video na sala da pessoa: ao entrar e a cada mudanca. Nao depende de a pessoa estar conectada ao LiveKit. */
+  | ({ t: 'media_active' } & MediaActive)
   | StaffServerMessage;
 
 /** Shape of the HTTP auth API (`/api/*`). */
@@ -291,7 +298,11 @@ export type StaffClientMessage =
   /** Forca um evento (Halloween, Natal...) ligado ('on'), desligado ('off') ou volta a seguir a data ('auto'). */
   | { t: 'staff_event'; id: string; mode: EventMode }
   /** Controle do pet (Byte) de uma organizacao: ligar/desligar, renomear, trazer ate a staff. */
-  | { t: 'staff_pet'; op: PetStaffOp; orgId?: string; name?: string };
+  | { t: 'staff_pet'; op: PetStaffOp; orgId?: string; name?: string }
+  /** Pede o contador de uso de midia do mes. */
+  | { t: 'staff_media' }
+  /** Liga/desliga o modo economia global (video so no palco/TV, salas comuns so audio). */
+  | { t: 'staff_media_economy'; on: boolean };
 
 export type StaffServerMessage =
   | ({ t: 'staff_self' } & StaffSelf)
@@ -301,6 +312,7 @@ export type StaffServerMessage =
   | { t: 'staff_flag'; id: string; staff: StaffLevel | null }
   | { t: 'staff_rooms'; rooms: RoomAdminEntry[] }
   | { t: 'staff_pet'; pets: PetAdminEntry[] }
+  | { t: 'staff_media'; usage: MediaUsageView }
   /** O nivel de staff desta conta foi removido (efeito imediato): esconda o painel. */
   | { t: 'staff_revoked' }
   /** Anúncio de staff: sala, organização, todos os online ou mensagem privada; `highlight` = destaque. */

@@ -1,6 +1,8 @@
 import { STAFF_LABELS, STAFF_MIN_LEVEL, staffCan, type StaffAction } from '@workverse/shared';
 import { net } from '../../net';
 import { useWorld } from '../../worldStore';
+import { MEDIA_TEXT } from '@workverse/shared';
+import { useMediaState } from '../../media/mediaState';
 import { Chip, usePanel } from './staffUi';
 
 const POWERS: [StaffAction, string][] = [
@@ -19,6 +21,8 @@ const POWERS: [StaffAction, string][] = [
   ['accounts.disable', 'Desativar / reativar contas'],
   ['ban', 'Banir contas (até 30 dias)'],
   ['audit.read', 'Ver e exportar o log de auditoria'],
+  ['media.view', 'Ver o contador mensal de áudio e vídeo'],
+  ['media.control', 'Ligar o modo economia de áudio e vídeo'],
   ['item.grant', 'Conceder / revogar itens'],
   ['staff.manage', 'Gerenciar a equipe de staff e banir permanentemente'],
 ];
@@ -72,6 +76,8 @@ export function ModeTab() {
         </div>
       </div>
 
+      <MediaCard />
+
       <h3 className="sf-h">
         O que o seu nível permite <Chip tone="gold">{STAFF_LABELS[s.level]}</Chip>
       </h3>
@@ -89,6 +95,41 @@ export function ModeTab() {
       <p className="sf-hint">
         Comandos de chat continuam valendo: /staff on|off, /invis, /online, /goto, /bring, /mute, /unmute, /kick, /kickroom, /aviso, /avisosala, /dar, /tirar.
       </p>
+    </div>
+  );
+}
+
+/** Contador estimado do mes (minutos de participante do LiveKit) e o interruptor do modo economia. */
+function MediaCard() {
+  const w = useWorld();
+  const p = usePanel();
+  const { usage } = useMediaState();
+  const level = w.staff?.level;
+  if (!usage || !staffCan(level, 'media.view')) return null;
+  const tone = usage.level === 'exceeded' ? 'bad' : usage.level === 'ok' ? 'ok' : 'warn';
+  return (
+    <div className="sf-card" data-testid="staff-media">
+      <h3 className="sf-card-title">Áudio e vídeo (LiveKit)</h3>
+      <p data-testid="staff-media-counter">
+        <b>{usage.usedMinutes.toLocaleString('pt-BR')} de {usage.limitMinutes.toLocaleString('pt-BR')} min ({usage.percent}%)</b> em {usage.month}{' '}
+        <Chip tone={tone}>{usage.level === 'exceeded' ? 'cota atingida' : usage.level === 'ok' ? 'normal' : usage.level === 'warn90' ? 'acima de 90%' : 'acima de 70%'}</Chip>
+      </p>
+      <p className="sf-hint">{usage.activeSessions} pessoa(s) na chamada agora. {MEDIA_TEXT.estimateNote}</p>
+      <div className="sf-mode">
+        <button
+          type="button"
+          className={`sf-switch ${usage.strict ? 'on' : ''}`}
+          role="switch"
+          aria-checked={usage.strict}
+          disabled={!p.online || !staffCan(level, 'media.control')}
+          onClick={() => net.send({ t: 'staff_media_economy', on: !usage.strict })}
+          data-testid="staff-media-strict"
+        >
+          <span className="sf-switch-knob" aria-hidden />
+          <span className="sf-switch-label">{usage.strict ? 'Modo economia ligado' : 'Modo economia desligado'}</span>
+        </button>
+        <p className="sf-hint">Ligado: câmera e tela só no palco e na TV; nas salas comuns só áudio, com qualidade mínima. Fica registrado na auditoria.</p>
+      </div>
     </div>
   );
 }

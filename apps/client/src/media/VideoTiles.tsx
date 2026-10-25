@@ -29,7 +29,7 @@ export function Video({ p, source, className }: { p: MediaParticipant; source: V
 function Tile({ p }: { p: MediaParticipant }) {
   return (
     <figure className={`wvm-tile ${p.speaking ? 'speaking' : ''}`} data-testid={`tile-${p.identity}`} data-speaking={p.speaking}>
-      {p.camOn ? <Video p={p} source="camera" className="wvm-video" /> : <div className="wvm-avatar" aria-hidden="true">{p.name.slice(0, 1).toUpperCase()}</div>}
+      {p.camOn && (p.isLocal || p.camTrackSid) ? <Video p={p} source="camera" className="wvm-video" /> : <div className="wvm-avatar" aria-hidden="true">{p.name.slice(0, 1).toUpperCase()}</div>}
       <figcaption className="wvm-name">
         <span className="wvm-label">{p.isLocal ? `${p.name} (você)` : p.name}</span>
         <span className={`wvm-flag ${p.micOn ? '' : 'off'}`} title={p.micOn ? 'Microfone ligado' : 'Microfone desligado'} data-testid={`mic-${p.identity}`} data-on={p.micOn}>

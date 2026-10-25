@@ -52,6 +52,7 @@ const { app, world } = await createApp({
   production,
   trustProxy,
   registrationMode: cfg.registration,
+  mediaUsageFile: resolve(dataDir, 'media-usage.json'),
   web: { webRoot, production, livekitUrl: mediaCfg.enabled ? mediaCfg.url : undefined },
   logger: true,
 });

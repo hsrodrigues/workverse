@@ -441,3 +441,28 @@ describe('poderes', () => {
     expect(obs.last('staff_flag')).toMatchObject({ staff: null });
   });
 });
+
+describe('staff: modo economia de midia e contador', () => {
+  beforeEach(() => mkWorld());
+  it('so staff admin liga o modo economia; moderador ve o contador; tudo auditado', () => {
+    const adm = login('Adm', 'adm@x.com');
+    const mod = login('Moda', 'mod@x.com');
+    const helper = login('Help', 'helper@x.com');
+    const reg = login('Comum');
+    expect(adm.last('staff_media')?.usage.limitMinutes).toBeGreaterThan(0);
+    expect(mod.last('staff_media')).toBeTruthy();
+    expect(helper.last('staff_media')).toBeUndefined();
+    send(mod, { t: 'staff_media_economy', on: true });
+    expect(mod.errors()).toContain('forbidden');
+    send(reg, { t: 'staff_media_economy', on: true });
+    expect(reg.errors()).toContain('forbidden');
+    expect(world.media.strict).toBe(false);
+    send(adm, { t: 'staff_media_economy', on: true });
+    expect(world.media.strict).toBe(true);
+    expect(reg.last('media_policy')?.strict).toBe(true);
+    expect(adm.last('staff_media')?.usage.strict).toBe(true);
+    expect(logs.some((l) => l.event === 'staff.action' && l.data?.action === 'media.economy.on')).toBe(true);
+    send(adm, { t: 'staff_media_economy', on: false });
+    expect(world.media.strict).toBe(false);
+  });
+});

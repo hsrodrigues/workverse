@@ -3,6 +3,7 @@ import { Icon } from './icons';
 import { useMedia } from './MediaContext';
 import { PROXIMITY_MODES, type ProximityMode } from './proximity';
 import type { PermissionState } from './MediaClient';
+import { MEDIA_TEXT } from '@workverse/shared';
 import { Window } from '../ui/Window';
 
 const MODE_LABEL: Record<ProximityMode, string> = {
@@ -19,7 +20,8 @@ export function MediaBar({ panelPlacement = 'above' }: { /** Where the settings 
   const { client, state } = useMedia();
   const [open, setOpen] = useState(false);
   const me = state.participants.find((p) => p.isLocal);
-  const off = state.status === 'idle' || state.status === 'unavailable';
+  // Em espera (economia) os botoes seguem ativos: ligar o mic conecta a chamada na hora.
+  const off = state.status === 'unavailable' || (state.status === 'idle' && !state.standby && !state.suspended) || (state.quotaExceeded && state.status === 'idle');
   const connected = state.status === 'connected';
   const micBlocked = state.micPermission === 'denied' || state.micPermission === 'unavailable';
   const camBlocked = state.camPermission === 'denied' || state.camPermission === 'unavailable';
@@ -42,6 +44,10 @@ export function MediaBar({ panelPlacement = 'above' }: { /** Where the settings 
       {(state.status === 'connecting' || state.status === 'reconnecting') && (
         <div className="wvm-banner" role="status">{state.status === 'connecting' ? 'Conectando à chamada...' : 'Reconectando à chamada...'}</div>
       )}
+      {state.suspended && state.suspended !== 'quota' && (
+        <div className="wvm-banner" role="status" data-testid="media-suspended">{state.suspended === 'hidden' ? MEDIA_TEXT.suspendedHidden : MEDIA_TEXT.suspendedAway}</div>
+      )}
+      {state.quotaExceeded && <div className="wvm-banner wvm-warn" role="status" data-testid="media-quota">{MEDIA_TEXT.quotaShort}</div>}
       {state.status === 'error' && <div className="wvm-banner wvm-warn" role="status">{state.statusMessage}</div>}
       {state.audioBlocked && connected && (
         <button type="button" className="wvm-banner wvm-action" data-testid="enable-audio" onClick={() => void client.enableAudio()}>
@@ -55,6 +61,9 @@ export function MediaBar({ panelPlacement = 'above' }: { /** Where the settings 
         </div>
       )}
 
+      {state.economy && state.standby && !state.suspended && !state.quotaExceeded && (
+        <div className="wvm-standby" title={MEDIA_TEXT.standby} data-testid="media-standby">Chamada em espera</div>
+      )}
       <div className="wvm-buttons">
         <button
           type="button"
@@ -160,6 +169,10 @@ export function MediaBar({ panelPlacement = 'above' }: { /** Where the settings 
               </select>
             </label>
           )}
+          <label className="wvm-field wvm-check">
+            <input type="checkbox" data-testid="media-lowdata" checked={state.lowData} onChange={(e) => client.setLowData(e.target.checked)} />
+            Economia de dados (câmera mínima e sem vídeo dos outros)
+          </label>
           {(state.micPermission === 'denied' || state.camPermission === 'denied') && (
             <p className="wvm-hint">
               O acesso foi bloqueado no navegador. Clique no cadeado ao lado do endereço, libere microfone/câmera e tente de novo. Você continua ouvindo,

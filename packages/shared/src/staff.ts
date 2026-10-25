@@ -37,6 +37,8 @@ export type StaffAction =
   | 'ban'
   | 'unban'
   | 'audit.read'
+  | 'media.view'
+  | 'media.control'
   | 'staff.manage';
 
 export const STAFF_MIN_LEVEL: Readonly<Record<StaffAction, StaffLevel>> = {
@@ -66,6 +68,8 @@ export const STAFF_MIN_LEVEL: Readonly<Record<StaffAction, StaffLevel>> = {
   ban: 'moderator',
   unban: 'moderator',
   'audit.read': 'moderator',
+  'media.view': 'moderator',
+  'media.control': 'admin',
   'staff.manage': 'admin',
 };
 

@@ -125,6 +125,8 @@ const safeLabel = (s: unknown) => (typeof s === 'string' && /^[a-z_]{1,24}$/.tes
 export interface MetricsSource {
   onlineCount: number;
   population(): Record<string, number>;
+  /** Economia de midia (opcional): contador mensal estimado e sessoes de chamada. */
+  mediaStats?(): { usedMinutes: number; limitMinutes: number; sessions: number; strict: boolean; publishers: number };
 }
 
 export class ServerMetrics {
@@ -143,6 +145,7 @@ export class ServerMetrics {
   readonly sessions = this.add(new Counter('workverse_sessions_total', 'Session events (start/end).'));
   readonly roomEnters = this.add(new Counter('workverse_room_enters_total', 'Room entries, by room.'));
   readonly tickMs = this.add(new Histogram('workverse_tick_duration_ms', 'World tick duration in milliseconds.', MS_BUCKETS));
+  readonly mediaTokens = this.add(new Counter('workverse_media_tokens_total', 'Media (LiveKit) token requests, by result (issued, quota, room_full).'));
   readonly handlerMs = this.add(new Histogram('workverse_handler_duration_ms', 'World.handle duration in milliseconds, by message type.', MS_BUCKETS));
 
   constructor(source: MetricsSource) {
@@ -152,6 +155,18 @@ export class ServerMetrics {
         Object.entries(source.population()).map(([room, v]) => ({ labels: { room }, v })),
       ),
     );
+    if (source.mediaStats) {
+      const stats = source.mediaStats.bind(source);
+      this.add(new Gauge('workverse_media_minutes_month', 'Estimated LiveKit participant-minutes used this month (local estimate).', () => stats().usedMinutes));
+      this.add(new Gauge('workverse_media_minutes_limit', 'Monthly participant-minutes limit (MEDIA_MONTHLY_MINUTES; 0 = no quota).', () => stats().limitMinutes));
+      this.add(new Gauge('workverse_media_quota_ratio', 'Used / limit of the monthly media quota (0 when there is no quota).', () => {
+        const s = stats();
+        return s.limitMinutes > 0 ? Math.round((s.usedMinutes / s.limitMinutes) * 1000) / 1000 : 0;
+      }));
+      this.add(new Gauge('workverse_media_sessions_active', 'People with an open media (LiveKit) session.', () => stats().sessions));
+      this.add(new Gauge('workverse_media_publishers_active', 'People publishing audio/video right now.', () => stats().publishers));
+      this.add(new Gauge('workverse_media_economy_strict', '1 while the staff economy mode is on.', () => (stats().strict ? 1 : 0)));
+    }
     this.add(new Gauge('workverse_uptime_seconds', 'Seconds since the app started.', () => (Date.now() - this.startedAt) / 1000));
     this.add(new Gauge('process_cpu_seconds_total', 'User + system CPU time of the process in seconds (monotonic).', () => {
       const u = process.cpuUsage();
@@ -208,6 +223,7 @@ export class ServerMetrics {
   audit(event: string, data?: Record<string, unknown>) {
     if (event === 'session.start') this.sessions.inc({ event: 'start' });
     else if (event === 'session.end') this.sessions.inc({ event: 'end' });
+    else if (event === 'media.token' && typeof data?.result === 'string') this.mediaTokens.inc({ result: safeLabel(data.result) });
     else if (event === 'room.enter' && typeof data?.room === 'string') this.roomEnters.inc({ room: safeLabel(data.room.replace(/[^a-z]/g, '_')) });
   }
 

@@ -15,6 +15,7 @@ import { registerPasswordRoutes } from './passwordRoutes';
 import { registerProfileRoutes } from './profileRoutes';
 import { registerStaffRoutes } from './staffRoutes';
 import type { PermissionSync } from './stage';
+import { JsonFileUsageStore, type EconomyConfig, type UsageStore } from './mediaEconomy';
 import { ServerMetrics, registerMetricsRoute } from './metrics';
 import type { RegistrationMode } from './registration';
 import { registerWeb, type WebOptions } from './webServer';
@@ -40,6 +41,12 @@ export interface AppOptions {
   tickMs?: number;
   /** LiveKit settings; defaults to the LIVEKIT_* variables (and the `livekit-server --dev` keys outside production). */
   media?: MediaConfig;
+  /** Economia de midia: sobrescreve as variaveis MEDIA_* (testes). */
+  mediaEconomy?: Partial<EconomyConfig>;
+  /** Onde o contador mensal de minutos fica (testes: MemoryUsageStore). */
+  mediaUsageStore?: UsageStore;
+  /** Arquivo JSON do contador mensal (padrao em producao: DATA_DIR/media-usage.json). Ausente = so memoria. */
+  mediaUsageFile?: string;
   /** Overrides how publish-permission changes reach LiveKit (tests). */
   permissionSync?: PermissionSync;
   /** Bearer token for GET /metrics; defaults to METRICS_TOKEN. In production without a token /metrics is disabled. */
@@ -96,6 +103,8 @@ export async function createApp(opts: AppOptions): Promise<{ app: FastifyInstanc
     allowDevLogin,
     log,
     permissionSync: opts.permissionSync ?? createLiveKitSync(mediaConfig, log),
+    mediaEconomy: opts.mediaEconomy,
+    mediaUsageStore: opts.mediaUsageStore ?? (opts.mediaUsageFile ? new JsonFileUsageStore(opts.mediaUsageFile, (err) => app.log.warn({ err }, 'nao foi possivel gravar o contador de midia')) : undefined),
     // A test that replaces the permission sync never talks to a LiveKit server, and neither does the remover.
     removeMediaParticipant: opts.permissionSync ? undefined : createLiveKitRemover(mediaConfig, log),
   });
@@ -278,6 +287,7 @@ export async function createApp(opts: AppOptions): Promise<{ app: FastifyInstanc
   app.addHook('onClose', async () => {
     clearInterval(timer);
     clearInterval(sweeper);
+    world.media.flush();
     m.stop();
   });
 

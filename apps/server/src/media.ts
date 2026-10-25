@@ -6,11 +6,11 @@ import { KeyedLimiter } from './limiter';
 import { authenticate, type AuthDeps } from './authRoutes';
 import { normalizeName } from './world';
 import type { Player } from './room';
-import type { PermissionSync, PublishRights, StageManager } from './stage';
+import type { PermissionSync, PublishRights } from './stage';
+import { publishRights, resolveEconomyConfig, type MediaKind } from './mediaEconomy';
 
 export type { PublishRights } from './stage';
-
-export type MediaKind = 'room' | 'stage';
+export { publishRights, type MediaKind };
 
 export interface MediaConfig {
   enabled: boolean;
@@ -22,6 +22,7 @@ export interface MediaConfig {
   ttlSeconds: number;
 }
 
+/** Padrao sem a economia (MEDIA_ECONOMY=off). Com a economia ligada o token dura 30 min (MEDIA_TOKEN_TTL_SECONDS). */
 export const MEDIA_TOKEN_TTL_SECONDS = 600;
 /** LiveKit room of an (organization, room) pair: `wv:${orgId}:${roomId}`. Without an org (legacy callers): `wv:${roomId}`. */
 export const livekitRoomName = (roomId: string, orgId?: string) => (orgId ? `wv:${orgId}:${roomId}` : `wv:${roomId}`);
@@ -36,7 +37,7 @@ export function resolveMediaConfig(env: NodeJS.ProcessEnv = process.env, product
   const url = (env.PUBLIC_LIVEKIT_URL || env.LIVEKIT_URL || (dev ? 'ws://localhost:7880' : '')).trim();
   const apiKey = (env.LIVEKIT_API_KEY || (dev ? 'devkey' : '')).trim();
   const apiSecret = (env.LIVEKIT_API_SECRET || (dev ? 'secret' : '')).trim();
-  return { enabled: Boolean(url && apiKey && apiSecret), url, apiKey, apiSecret, ttlSeconds: MEDIA_TOKEN_TTL_SECONDS };
+  return { enabled: Boolean(url && apiKey && apiSecret), url, apiKey, apiSecret, ttlSeconds: resolveEconomyConfig(env).tokenTtlSeconds };
 }
 
 /** Sources a participant may publish for each level of rights. */
@@ -47,20 +48,7 @@ export function sourcesFor(rights: PublishRights): TrackSource[] {
   return [];
 }
 
-type StageLookup = Pick<StageManager, 'hasPresentation' | 'rightsOf'>;
-
-/**
- * Who may publish audio/video/screen in a room. Normal rooms allow everyone; in an auditorium only the speaker
- * publishes everything and an audience member the speaker called on publishes the microphone only; in a room with
- * a presentation TV only the presenter shares the screen and the others keep microphone and camera.
- * `kind: 'stage'` only makes sense where there is a stage (or a TV).
- */
-export function publishRights(roomId: string, player: Player, kind: MediaKind = 'room', stage?: StageLookup): PublishRights {
-  if (stage?.hasPresentation(roomId)) return stage.rightsOf(roomId, player);
-  return kind === 'stage' ? 'none' : 'all';
-}
-
-export function canPublishIn(roomId: string, player: Player, kind: MediaKind = 'room', stage?: StageLookup): boolean {
+export function canPublishIn(roomId: string, player: Player, kind: MediaKind = 'room', stage?: Parameters<typeof publishRights>[3]): boolean {
   return publishRights(roomId, player, kind, stage) !== 'none';
 }
 
@@ -190,7 +178,15 @@ export function registerMediaRoutes(app: FastifyInstance, deps: AuthDeps, opts: 
           ? 'all'
           : 'none'
         : publishRights(roomId, player, kind, orgWorld.stage);
-    const rights: PublishRights = body.canPublish === false ? 'none' : decided;
+    const asked: PublishRights = body.canPublish === false ? 'none' : decided;
+    // Economia de midia (mediaEconomy.ts): cota mensal, sala cheia, modo economia e limite de video, tudo decidido aqui.
+    const eco = deps.world.media;
+    const presentation = orgWorld.stage.hasPresentation(roomId);
+    const presenter = presentation && orgWorld.stage.roleOf(roomId, player) === 'speaker';
+    const gate = eco.gate(player, orgWorld.id, roomId, { presenter });
+    if (!gate.ok) return fail(reply, gate.status, gate.code, gate.message, gate.retryAfterSeconds);
+    const granted = eco.grant(player, orgWorld.id, roomId, kind, asked, { presenter, presentation }, config.ttlSeconds);
+    const rights: PublishRights = granted.rights;
     const canPublish = rights !== 'none';
     const grant: VideoGrant = {
       roomJoin: true,
@@ -211,6 +207,8 @@ export function registerMediaRoutes(app: FastifyInstance, deps: AuthDeps, opts: 
       roomName: grant.room,
       canPublish,
       rights,
+      ...(granted.notice ? { notice: granted.notice } : {}),
+      strict: eco.strict,
       expiresAt: deps.clock() + config.ttlSeconds * 1000,
     };
   });

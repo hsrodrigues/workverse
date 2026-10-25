@@ -21,6 +21,7 @@ import {
   type PetAdminEntry,
   type PetStaffOp,
   type EventsView,
+  type MediaUsageView,
   type Point,
   type ServerMessage,
   type StaffAction,
@@ -56,6 +57,8 @@ export const STAFF_MESSAGE_TYPES: ReadonlySet<string> = new Set([
   'staff_room',
   'staff_event',
   'staff_pet',
+  'staff_media',
+  'staff_media_economy',
 ]);
 export const isStaffMessage = (t: string): boolean => STAFF_MESSAGE_TYPES.has(t);
 
@@ -103,6 +106,9 @@ export interface StaffHost {
     rename(orgId: string, name: unknown): string | null;
     bring(orgId: string, roomId: string, at: Point): { ok: true } | { ok: false; message: string };
   };
+  /** Contador mensal de midia (estimativa local) e o interruptor do modo economia. */
+  mediaUsage(): MediaUsageView;
+  setMediaStrict(on: boolean): boolean;
 }
 
 /** `email[:nivel],email2[:nivel]` (nivel padrao: admin). Linhas invalidas sao ignoradas. */
@@ -369,6 +375,7 @@ export class StaffService {
     }
     p.send({ t: 'staff_online', players });
     p.send({ t: 'staff_log', entries: this.ring.slice(-50), append: false });
+    if (staffCan(p.staff, 'media.view')) p.send({ t: 'staff_media', usage: this.host.mediaUsage() });
   }
 
   // ---- mensagens do protocolo ------------------------------------------------------------------------------------
@@ -619,6 +626,23 @@ export class StaffService {
           }
         }
         p.send({ t: 'staff_pet', pets: this.host.pets.list() });
+        return true;
+      }
+      case 'staff_media': {
+        const level = this.gate(p, 'media.view', now);
+        if (!level) return true;
+        p.send({ t: 'staff_media', usage: this.host.mediaUsage() });
+        return true;
+      }
+      case 'staff_media_economy': {
+        if (typeof m.on !== 'boolean') return this.malformedIfStaff(p);
+        const level = this.gate(p, 'media.control', now);
+        if (!level) return true;
+        const changed = this.host.setMediaStrict(m.on);
+        const u = this.host.mediaUsage();
+        this.say(p, changed ? `Modo economia de áudio e vídeo: ${m.on ? 'LIGADO (vídeo só no palco e na TV)' : 'desligado'}.` : `O modo economia já estava ${m.on ? 'ligado' : 'desligado'}.`);
+        if (changed) this.audit(p, level, m.on ? 'media.economy.on' : 'media.economy.off', null, `uso estimado ${u.usedMinutes} de ${u.limitMinutes} min (${u.percent}%)`);
+        p.send({ t: 'staff_media', usage: u });
         return true;
       }
       case 'staff_item': {

@@ -38,7 +38,7 @@ export function MediaProvider({ roomId, kind = 'room', getTilePosition, devName,
       void client.disconnect();
       return;
     }
-    void client.connect(roomId, kind);
+    client.enterRoom(roomId, kind);
   }, [client, roomId, kind]);
 
   useEffect(() => () => void client.disconnect(), [client]);

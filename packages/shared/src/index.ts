@@ -8,6 +8,7 @@ export * from './items';
 export * from './rbac';
 export * from './activity';
 export * from './staff';
+export * from './mediaEconomy';
 export * from './powerpoint';
 export * from './layoutRules';
 export * from './furnish';

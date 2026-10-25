@@ -68,3 +68,6 @@
 .people .mi i.cam { background: #3d82d6; }
 .people .mi i.cam.off { background: #6b717e; }
 .people .mi i.speaking { box-shadow: 0 0 0 2px #7dffa8; animation: blink 0.9s steps(2) infinite; }
+
+.wvm-standby { font-size: 11px; opacity: 0.7; padding: 2px 6px; }
+.wvm-check { flex-direction: row; align-items: center; gap: 6px; }

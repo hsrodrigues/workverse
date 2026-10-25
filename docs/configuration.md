@@ -20,6 +20,7 @@
 | `WEB_ROOT` | `apps/client/dist` | Pasta do site servido pelo próprio servidor |
 | `BOOTSTRAP_STAFF_EMAILS` | *(vazio)* | `email:nivel,email2:nivel` — concede staff (`helper`, `moderator`, `admin`) a contas já existentes |
 | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `PUBLIC_LIVEKIT_URL` | dev: `devkey` / `secret` / `ws://localhost:7880` | Mídia (veja [media.md](media.md)) |
+| `MEDIA_ECONOMY`, `MEDIA_IDLE_DISCONNECT_SECONDS`, `MEDIA_HIDDEN_TAB_SECONDS`, `MEDIA_MAX_PEOPLE_PER_ROOM`, `MEDIA_MAX_VIDEO_PUBLISHERS`, `MEDIA_TOKEN_TTL_SECONDS`, `MEDIA_MONTHLY_MINUTES`, `MEDIA_QUOTA_TZ_OFFSET_MINUTES` | ligado, 20, 120, 20, 6, 1800, 5000, -180 | Economia de áudio/vídeo e cota mensal estimada (`off` desliga; veja [media-economy.md](media-economy.md)) |
 | `METRICS_TOKEN` | *(vazio)* | Token do endpoint `/metrics`; em produção sem token ele fica desabilitado |
 
 Cliente: `VITE_WS_URL` (opcional) sobrescreve a URL do WebSocket; por padrão usa `/ws` na mesma origem

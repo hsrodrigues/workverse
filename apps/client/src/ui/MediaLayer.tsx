@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, type MutableRefObject, type ReactNode } from 'react';
 import { MediaProvider, useMedia } from '../media';
+import { useMediaState, mediaState } from '../media/mediaState';
+import { net } from '../net';
 import { mediaIndicators, screenFeed, type MediaIndicator } from '../media/indicators';
 import { isStageRoomDef, useWorld } from '../worldStore';
 import { setStageDevName } from '../stage/stageApi';
@@ -41,6 +43,18 @@ function Bridge() {
     mediaIndicators.set(next);
   }, [state.participants]);
   useEffect(() => () => mediaIndicators.clear(), []);
+
+  // Economia de midia: politica e quem publica vem do servidor; o cliente so decide quando conectar (media/connectGate.ts).
+  const ms = useMediaState();
+  useEffect(() => client.setReporter((r) => net.send({ t: 'media_report', ...r })), [client]);
+  useEffect(() => () => client.setReporter(undefined), [client]);
+  useEffect(() => client.setPolicy(ms.policy), [client, ms.policy]);
+  useEffect(() => client.setActive(ms.active), [client, ms.active, world.room?.id]);
+  useEffect(() => client.setStageLive(!!world.stage?.speakerId), [client, world.stage?.speakerId]);
+  useEffect(() => client.setAway(world.myStatus === 'away'), [client, world.myStatus]);
+  useEffect(() => {
+    if (ms.notice) client.notify(ms.notice.message);
+  }, [client, ms.notice]);
 
   // Speaker, people with the floor and (open stage) everybody: audible in the whole room whatever the proximity mode.
   const voices = useMemo(() => {

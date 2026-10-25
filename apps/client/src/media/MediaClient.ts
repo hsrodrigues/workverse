@@ -10,6 +10,8 @@ import {
   type RemoteTrack,
 } from 'livekit-client';
 import { dataSaverOn } from '../clientPrefs';
+import { DEFAULT_MEDIA_POLICY, MEDIA_TEXT, videoProfile, type MediaActive, type MediaPolicy, type MediaReport } from '@workverse/shared';
+import { ConnectGate, evaluateDemand, videoDenialReason, type DemandReason, type Suspension } from './connectGate';
 import {
   DEFAULT_PROXIMITY,
   isProximityMode,
@@ -86,6 +88,18 @@ export interface MediaSnapshot {
   proximity: ProximityParams;
   devices: DeviceLists;
   selected: InputDevices;
+  /** Regras de economia valendo (politica do servidor); falso = conecta ao entrar na sala, como antes. */
+  economy: boolean;
+  strict: boolean;
+  quotaExceeded: boolean;
+  /** Economia: nao ha motivo para estar na chamada agora (ninguem fala, sem palco/TV): zero minutos. */
+  standby: boolean;
+  /** Chamada pausada de proposito (aba em segundo plano, ausente, cota). */
+  suspended: Suspension | null;
+  /** Por que esta (ou ficaria) na chamada. */
+  demand: DemandReason | null;
+  /** Preferencia da pessoa "Economia de dados": camera/tela minimas e sem video dos outros (exceto palco/TV). */
+  lowData: boolean;
 }
 
 export interface MediaClientOptions {
@@ -101,6 +115,9 @@ const CONNECT_DEBOUNCE_MS = 300;
 const LS_MODE = 'wv.media.mode';
 const LS_PROX = 'wv.media.proximity';
 const LS_DEV = 'wv.media.devices';
+const LS_LOWDATA = 'wv.media.lowData';
+/** Batimento do relato de midia ao servidor (o servidor considera a sessao morta apos ~100 s sem relato). */
+const HEARTBEAT_MS = 30_000;
 
 function lsGet(key: string): string | null {
   try {
@@ -143,7 +160,20 @@ const MSG = {
   screenDenied: 'O navegador bloqueou o compartilhamento de tela.',
   generic: 'Não foi possível ativar. Tente de novo.',
   unavailable: 'Mídia indisponível: o servidor de áudio e vídeo não está acessível. O chat e o jogo continuam normais.',
+  connecting: 'Conectando à chamada…',
+  lowDataVideo: 'Economia de dados ligada: você não recebe o vídeo dos outros (só o áudio), exceto no palco e na TV.',
 };
+
+interface TokenOk {
+  token: string;
+  url: string;
+  identity: string;
+  canPublish: boolean;
+  rights?: PublishRights;
+  notice?: string;
+  expiresAt?: number;
+}
+type TokenResult = ({ kind: 'ok' } & TokenOk) | { kind: 'unavailable' } | { kind: 'error' } | { kind: 'quota'; message: string } | { kind: 'full'; message: string; retryMs: number };
 
 function errName(e: unknown): string {
   return e && typeof e === 'object' && 'name' in e ? String((e as { name: unknown }).name) : '';
@@ -188,6 +218,28 @@ export class MediaClient {
   private wantedKind: MediaKind = 'room';
   /** Speaker and people with the floor in an auditorium: always audible, whatever the proximity mode. */
   private stageVoices = new Set<string>();
+  // ---- economia: conexao sob demanda ----
+  private policy: MediaPolicy = { ...DEFAULT_MEDIA_POLICY };
+  private active: MediaActive | null = null;
+  private stageLive = false;
+  private away = false;
+  private hiddenSince: number | null = null;
+  private gate = new ConnectGate(DEFAULT_MEDIA_POLICY.idleDisconnectSeconds * 1000);
+  private gateTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Ha uma conexao (ou tentativa) em curso para a sala desejada. Falso = em espera. */
+  private engaged = false;
+  private wantScreen = false;
+  /** Ligando agora (enquanto o navegador pede permissao / publica a faixa): ja conta como "transmitindo". */
+  private pending = { mic: false, cam: false, screen: false };
+  /** O servidor recusou por cota: so volta quando a politica disser que acabou. */
+  private quotaLocal = false;
+  private reporter: ((r: MediaReport) => void) | undefined;
+  private lastReport = '';
+  private hbTimer: ReturnType<typeof setInterval> | undefined;
+  private renewTimer: ReturnType<typeof setTimeout> | undefined;
+  private visCleanup: (() => void) | undefined;
+  /** Por que a camera/tela estao negadas (limite de video / modo economia), vindo do token. */
+  private rightsNotice: string | null = null;
 
   constructor(opts: MediaClientOptions = {}) {
     this.opts = { tokenUrl: '/api/media/token', proximityIntervalMs: 200, ...opts };
@@ -214,8 +266,16 @@ export class MediaClient {
       proximity: sanitizeParams(loadJson<Partial<ProximityParams>>(LS_PROX) ?? DEFAULT_PROXIMITY),
       devices: EMPTY_DEVICES,
       selected: loadJson<InputDevices>(LS_DEV) ?? {},
+      economy: false,
+      strict: false,
+      quotaExceeded: false,
+      standby: false,
+      suspended: null,
+      demand: null,
+      lowData: lsGet(LS_LOWDATA) === '1',
     };
     this.watchPermissions();
+    this.watchVisibility();
   }
 
   // ---- reactive store (useSyncExternalStore) ------------------------------
@@ -230,38 +290,180 @@ export class MediaClient {
   private patch(p: Partial<MediaSnapshot>) {
     this.snapshot = { ...this.snapshot, ...p };
     this.listeners.forEach((l) => l());
+    this.sendReport();
   }
 
   setTilePositionProvider(fn: TilePositionProvider | undefined) {
     this.tilePos = fn ?? (() => undefined);
   }
 
-  // ---- connection ---------------------------------------------------------
+  // ---- connection ---------------------------------------------------------------------------
 
-  /** Joins the LiveKit room of a world room (leaving the previous one). Idempotent for the same room. */
-  async connect(roomId: string, kind: MediaKind = 'room'): Promise<void> {
-    if (this.wantedRoom === roomId && this.wantedKind === kind && this.room && this.room.state !== ConnectionState.Disconnected) return;
+  /**
+   * Diz em que sala do mundo a pessoa esta. Nao conecta por si so: `evaluate()` decide se ha motivo (transmitir, alguem falando,
+   * palco/TV). Sem a economia ligada (politica do servidor) o motivo e sempre "esta na sala": conecta ao entrar, como antes.
+   */
+  enterRoom(roomId: string | null, kind: MediaKind = 'room'): void {
+    if (!roomId) {
+      void this.disconnect();
+      return;
+    }
+    if (this.wantedRoom === roomId && this.wantedKind === kind) return;
+    const moved = this.wantedRoom !== roomId;
     this.wantedRoom = roomId;
     this.wantedKind = kind;
     this.retries = 0;
-    // Trocas de sala em sequencia rapida pedem so um token (o da sala em que o usuario parou): sem isso cada sala
-    // do caminho gasta uma chamada /api/media/token e o limite do servidor (429) derruba a chamada de verdade.
+    this.lastReport = '';
+    if (moved) {
+      this.active = null;
+      this.rightsNotice = null;
+      this.gate.reset();
+      // a chamada da sala antiga acaba na hora; a da nova abre (se houver motivo) no proximo `evaluate`
+      if (this.engaged || this.room) void this.standDown(false);
+    }
+    this.evaluate();
+  }
+
+  /** Compatibilidade: entra na sala (veja `enterRoom`). */
+  async connect(roomId: string, kind: MediaKind = 'room'): Promise<void> {
+    this.enterRoom(roomId, kind);
+  }
+
+  /** Politica de economia do servidor (login e cada mudanca: modo economia, cota). */
+  setPolicy(policy: MediaPolicy) {
+    this.policy = { ...DEFAULT_MEDIA_POLICY, ...policy };
+    this.gate.setIdleMs(this.policy.idleDisconnectSeconds * 1000);
+    if (!this.policy.quotaExceeded) this.quotaLocal = false;
+    this.patch({ economy: this.policy.economy, strict: this.policy.strict, quotaExceeded: this.policy.quotaExceeded || this.quotaLocal });
+    if (this.policy.quotaExceeded) this.patch({ notice: MEDIA_TEXT.quotaExceeded });
+    this.evaluate();
+  }
+
+  /** Quem publica na sala (aviso do servidor, vale mesmo sem estar na chamada). */
+  setActive(active: MediaActive | null) {
+    this.active = active && active.roomId === this.wantedRoom ? active : null;
+    this.evaluate();
+  }
+
+  /** Palco/TV da sala em uso (alguem apresentando). */
+  setStageLive(live: boolean) {
+    if (live === this.stageLive) return;
+    this.stageLive = live;
+    this.enforceSubscriptions();
+    this.evaluate();
+  }
+
+  /** Status `ausente` do jogo. */
+  setAway(away: boolean) {
+    if (away === this.away) return;
+    this.away = away;
+    this.evaluate();
+  }
+
+  /** Canal para o relato de midia ao servidor (WebSocket do jogo). */
+  setReporter(fn: ((r: MediaReport) => void) | undefined) {
+    this.reporter = fn;
+    clearInterval(this.hbTimer);
+    this.hbTimer = undefined;
+    this.lastReport = '';
+    if (fn) {
+      this.hbTimer = setInterval(() => this.sendReport(true), HEARTBEAT_MS);
+      this.sendReport(true);
+    }
+  }
+
+  /** Preferencia "Economia de dados" (por pessoa, guardada no navegador). */
+  setLowData(on: boolean) {
+    if (on === this.snapshot.lowData) return;
+    lsSet(LS_LOWDATA, on ? '1' : '0');
+    this.patch({ lowData: on, notice: on ? MSG.lowDataVideo : null });
+    this.enforceSubscriptions();
+  }
+
+  /** Mostra um aviso do servidor (limite de video, modo economia). */
+  notify(message: string) {
+    this.patch({ notice: message });
+  }
+
+  private isPublishing(): boolean {
+    const s = this.snapshot;
+    const connected = this.room?.state === ConnectionState.Connected;
+    return s.micOn || s.camOn || s.screenOn || this.pending.mic || this.pending.cam || this.pending.screen || (!connected && (this.wantMic || this.wantCam || this.wantScreen));
+  }
+
+  private othersPublishing(): boolean {
+    const me = this.snapshot.localIdentity;
+    return (this.active?.publishers ?? []).some((id) => id !== me);
+  }
+
+  /** Decide, a partir do estado atual, se deve estar na chamada, e conecta/desconecta. Barato: pode ser chamado a cada mudanca. */
+  private evaluate() {
+    clearTimeout(this.gateTimer);
+    const roomId = this.wantedRoom;
+    if (!roomId) return;
+    const now = Date.now();
+    const d = evaluateDemand({
+      inRoom: true,
+      economy: this.policy.economy,
+      quotaExceeded: this.policy.quotaExceeded || this.quotaLocal,
+      publishing: this.isPublishing(),
+      othersPublishing: this.othersPublishing(),
+      stageLive: this.stageLive,
+      hiddenForMs: this.hiddenSince === null ? 0 : now - this.hiddenSince,
+      hiddenLimitMs: this.policy.hiddenTabSeconds * 1000,
+      away: this.away,
+    });
+    const r = this.gate.decide(d, this.engaged, now);
+    const standby = !r.connect && !d.suspended;
+    if (this.snapshot.suspended !== d.suspended || this.snapshot.demand !== d.reason || this.snapshot.standby !== standby) {
+      this.patch({ suspended: d.suspended, demand: d.reason, standby });
+    }
+    if (r.connect && !this.engaged) this.dial(roomId, d.reason);
+    else if (!r.connect && this.engaged) void this.standDown(true);
+    if (r.recheckInMs !== null) this.gateTimer = setTimeout(() => this.evaluate(), Math.max(250, r.recheckInMs + 40));
+  }
+
+  /** Pede o token (com um pequeno atraso: trocas rapidas de sala e rajadas de gente conectando ao mesmo tempo viram poucas chamadas). */
+  private dial(roomId: string, reason: DemandReason | null) {
+    this.engaged = true;
+    this.retries = 0;
     const gen = ++this.generation;
     clearTimeout(this.retryTimer);
+    // quem entra "porque alguem falou" espalha o pedido por ate 400 ms: sala cheia nao vira rajada de tokens (e o limite do servidor nao dispara)
+    const jitter = reason === 'others' || reason === 'stage' ? Math.random() * 400 : 0;
+    this.patch({ status: 'connecting', statusMessage: null, roomId });
     this.retryTimer = setTimeout(() => {
       if (gen === this.generation && this.wantedRoom === roomId) void this.open(roomId);
-    }, CONNECT_DEBOUNCE_MS);
+    }, CONNECT_DEBOUNCE_MS + jitter);
+  }
+
+  /** Sai da chamada e fica em espera (a sala do mundo continua; nada de token, nada de minutos). */
+  private async standDown(report: boolean) {
+    this.engaged = false;
+    this.generation++;
+    clearTimeout(this.retryTimer);
+    clearTimeout(this.renewTimer);
+    await this.teardown();
+    this.patch({ status: 'idle', statusMessage: null, localIdentity: null, participants: [], micOn: false, camOn: false, screenOn: false, audioBlocked: false });
+    if (report) this.sendReport(true);
   }
 
   /** Leaves the room and releases the camera, microphone and audio elements. */
   async disconnect(): Promise<void> {
     this.wantedRoom = null;
+    this.engaged = false;
     this.generation++;
     clearTimeout(this.retryTimer);
+    clearTimeout(this.gateTimer);
+    clearTimeout(this.renewTimer);
     await this.teardown();
     this.wantMic = false;
     this.wantCam = false;
-    this.patch({ status: 'idle', statusMessage: null, roomId: null, localIdentity: null, participants: [], micOn: false, camOn: false, screenOn: false });
+    this.wantScreen = false;
+    this.pending = { mic: false, cam: false, screen: false };
+    this.active = null;
+    this.patch({ status: 'idle', statusMessage: null, roomId: null, localIdentity: null, participants: [], micOn: false, camOn: false, screenOn: false, standby: false, suspended: null, demand: null });
+    this.sendReport(true);
   }
 
   /** Stops everything and removes listeners from the page (call when discarding the instance). */
@@ -269,6 +471,9 @@ export class MediaClient {
     await this.disconnect();
     this.permCleanup.forEach((f) => f());
     this.permCleanup = [];
+    this.visCleanup?.();
+    this.visCleanup = undefined;
+    clearInterval(this.hbTimer);
     this.audioHost?.remove();
     this.audioHost = undefined;
     this.listeners.clear();
@@ -295,7 +500,46 @@ export class MediaClient {
     }
   }
 
-  private async fetchToken(roomId: string): Promise<{ token: string; url: string; identity: string; canPublish: boolean; rights?: PublishRights } | 'unavailable' | 'error'> {
+  // ---- visibilidade da aba -------------------------------------------------------------------------------
+
+  private watchVisibility() {
+    if (typeof document === 'undefined') return;
+    const onChange = () => {
+      this.hiddenSince = document.hidden ? (this.hiddenSince ?? Date.now()) : null;
+      this.evaluate();
+    };
+    if (document.hidden) this.hiddenSince = Date.now();
+    document.addEventListener('visibilitychange', onChange);
+    this.visCleanup = () => document.removeEventListener('visibilitychange', onChange);
+  }
+
+  // ---- relato ao servidor --------------------------------------------------------------------------------
+
+  private currentReport(): MediaReport {
+    const s = this.snapshot;
+    const connected = !!this.room && (s.status === 'connected' || s.status === 'reconnecting');
+    return {
+      connected,
+      mic: s.micOn || this.pending.mic || (!connected && this.wantMic),
+      cam: s.camOn || this.pending.cam || (!connected && this.wantCam),
+      screen: s.screenOn || this.pending.screen || (!connected && this.wantScreen),
+    };
+  }
+
+  /** Manda o relato quando mudou (e a cada batimento). Nada a dizer (desconectado e sem transmitir) nao gera trafego. */
+  private sendReport(heartbeat = false) {
+    if (!this.reporter) return;
+    const r = this.currentReport();
+    const sig = `${+r.connected}${+r.mic}${+r.cam}${+r.screen}`;
+    const idle = sig === '0000';
+    if (heartbeat ? idle && this.lastReport === '0000' : sig === this.lastReport) return;
+    this.lastReport = sig;
+    this.reporter(r);
+  }
+
+  // ---- token -----------------------------------------------------------------------------------------------
+
+  private async fetchToken(roomId: string): Promise<TokenResult> {
     let res: Response;
     try {
       res = await fetch(this.opts.tokenUrl, {
@@ -305,20 +549,57 @@ export class MediaClient {
         body: JSON.stringify({ roomId, kind: this.wantedKind, ...(this.opts.devName ? { devName: this.opts.devName } : {}) }),
       });
     } catch {
-      return 'unavailable';
+      return { kind: 'unavailable' };
     }
     if (res.status === 429) {
       const wait = Number(res.headers.get('Retry-After'));
       this.retryHintMs = Number.isFinite(wait) && wait > 0 ? Math.min(60, wait) * 1000 : 0;
     }
-    if (res.status === 503) return 'unavailable';
-    if (res.status === 403 || res.status === 404) return 'error'; // not in that room (yet): the caller retries
-    if (!res.ok) return 'error';
-    try {
-      return (await res.json()) as { token: string; url: string; identity: string; canPublish: boolean; rights?: PublishRights };
-    } catch {
-      return 'error';
+    if (!res.ok) {
+      let code = '';
+      let message = '';
+      let retryAfterSeconds = 0;
+      try {
+        const body = (await res.json()) as { error?: { code?: string; message?: string; retryAfterSeconds?: number } };
+        code = body.error?.code ?? '';
+        message = body.error?.message ?? '';
+        retryAfterSeconds = body.error?.retryAfterSeconds ?? 0;
+      } catch {
+        /* sem corpo */
+      }
+      if (code === 'media_quota') return { kind: 'quota', message: message || MEDIA_TEXT.quotaExceeded };
+      if (code === 'media_room_full') return { kind: 'full', message, retryMs: Math.min(60, Math.max(10, retryAfterSeconds)) * 1000 };
+      if (res.status === 503) return { kind: 'unavailable' };
+      return { kind: 'error' }; // 403/404/429: not in that room (yet) or rate limited: the caller retries
     }
+    try {
+      return { kind: 'ok', ...((await res.json()) as TokenOk) };
+    } catch {
+      return { kind: 'error' };
+    }
+  }
+
+  /** Renova o token antes de vencer: revalida o direito de continuar (cota, acesso) e estende a sessao no servidor. */
+  private scheduleRenew(expiresAt: number | undefined, gen: number) {
+    clearTimeout(this.renewTimer);
+    if (!expiresAt) return;
+    const wait = Math.max(30_000, (expiresAt - Date.now()) * 0.8);
+    this.renewTimer = setTimeout(() => void this.renew(gen), wait);
+  }
+
+  private async renew(gen: number) {
+    const roomId = this.wantedRoom;
+    if (gen !== this.generation || !roomId || !this.room) return;
+    const t = await this.fetchToken(roomId);
+    if (gen !== this.generation) return;
+    if (t.kind === 'quota') {
+      this.quotaLocal = true;
+      this.patch({ quotaExceeded: true, notice: t.message });
+      await this.standDown(true);
+      return;
+    }
+    // Sucesso: o LiveKit ja renova a faixa de conexao sozinho; o novo token so estende a sessao no servidor. Falha passageira: tenta de novo.
+    this.scheduleRenew(t.kind === 'ok' ? t.expiresAt : Date.now() + 120_000, gen);
   }
 
   private async open(roomId: string) {
@@ -330,22 +611,35 @@ export class MediaClient {
 
     const t = await this.fetchToken(roomId);
     if (gen !== this.generation) return;
-    if (t === 'unavailable') {
+    if (t.kind === 'quota') {
+      this.quotaLocal = true;
+      this.patch({ quotaExceeded: true, notice: t.message });
+      this.wantMic = this.wantCam = this.wantScreen = false;
+      await this.standDown(true);
+      return;
+    }
+    if (t.kind === 'full') {
+      this.wantMic = this.wantCam = this.wantScreen = false;
+      this.patch({ status: 'error', statusMessage: t.message || 'A chamada desta sala está cheia. Tentando de novo...' });
+      return this.scheduleRetry(roomId, gen, t.retryMs);
+    }
+    if (t.kind === 'unavailable') {
       this.patch({ status: 'unavailable', statusMessage: MSG.unavailable });
       return this.scheduleRetry(roomId, gen, 15_000);
     }
-    if (t === 'error') {
+    if (t.kind === 'error') {
       this.patch({ status: 'error', statusMessage: 'Não foi possível entrar na chamada desta sala. Tentando de novo...' });
       return this.scheduleRetry(roomId, gen);
     }
 
     const sel = this.snapshot.selected;
+    const prof = this.profile(0);
     const room = new Room({
       adaptiveStream: true,
       dynacast: true,
       audioCaptureDefaults: { deviceId: sel.audioInput, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      // Modo economia de dados (Meu perfil): camera em 360p.
-      videoCaptureDefaults: { deviceId: sel.videoInput, ...(dataSaverOn() ? { resolution: VideoPresets.h360.resolution } : {}) },
+      videoCaptureDefaults: { deviceId: sel.videoInput, resolution: { width: prof.camera.width, height: prof.camera.height, frameRate: prof.camera.frameRate } },
+      publishDefaults: this.publishDefaults(0),
       audioOutput: { deviceId: sel.audioOutput },
     });
     this.room = room;
@@ -364,25 +658,78 @@ export class MediaClient {
     }
     this.retries = 0;
     const rights: PublishRights = t.rights ?? (t.canPublish ? 'all' : 'none');
-    this.patch({ status: 'connected', statusMessage: null, localIdentity: t.identity, canPublish: rights !== 'none', rights });
+    this.rightsNotice = t.notice ?? null;
+    // O que a pessoa ja tinha ligado (ou acabou de pedir) so vale dentro do que o servidor deixa publicar aqui.
+    const wm = this.wantMic && rights !== 'none';
+    const wc = this.wantCam && (rights === 'all' || rights === 'av');
+    const ws = this.wantScreen && rights === 'all';
+    const denied = (this.wantCam && !wc) || (this.wantScreen && !ws) || (this.wantMic && !wm);
+    this.wantMic = wm;
+    this.wantCam = wc;
+    this.wantScreen = ws;
+    this.pending = { mic: wm, cam: wc, screen: ws };
+    this.patch({ status: 'connected', statusMessage: null, localIdentity: t.identity, canPublish: rights !== 'none', rights, ...(denied && t.notice ? { notice: t.notice } : {}) });
+    this.scheduleRenew(t.expiresAt, gen);
     this.startProximity();
     this.refresh();
+    this.enforceSubscriptions();
     void this.refreshDevices();
-    // Keep what the user already enabled when they walk into another room (no new permission prompt: already granted).
-    if (rights !== 'none') {
-      if (this.wantMic) void this.setEnabled('mic', true);
-      if (this.wantCam && (rights === 'all' || rights === 'av')) void this.setEnabled('cam', true);
-    }
+    if (wm) void this.setEnabled('mic', true);
+    if (wc) void this.setEnabled('cam', true);
+    if (ws) void this.setEnabled('screen', true);
+    this.evaluate();
   }
 
   private scheduleRetry(roomId: string, gen: number, minMs = 1000) {
     this.retries++;
-    const delay = Math.min(30_000, Math.max(minMs, this.retryHintMs, 1000 * 2 ** this.retries)) + Math.random() * 500;
+    const delay = Math.min(60_000, Math.max(minMs, this.retryHintMs, 1000 * 2 ** this.retries)) + Math.random() * 500;
     this.retryHintMs = 0;
     this.retryTimer = setTimeout(() => {
-      if (gen !== this.generation || this.wantedRoom !== roomId) return;
+      if (gen !== this.generation || this.wantedRoom !== roomId || !this.engaged) return;
       void this.open(roomId);
     }, delay);
+  }
+
+  // ---- perfil de video economico / assinaturas -------------------------------------------------------------
+
+  private profile(participants: number) {
+    return videoProfile({ lowData: this.snapshot.lowData || dataSaverOn(), strict: this.policy.strict, participants });
+  }
+
+  private publishDefaults(participants: number) {
+    const p = this.profile(participants);
+    return {
+      simulcast: p.camera.simulcast,
+      videoEncoding: { maxBitrate: p.camera.maxBitrate, maxFramerate: p.camera.maxFramerate },
+      screenShareEncoding: { maxBitrate: p.screen.maxBitrate, maxFramerate: p.screen.maxFramerate },
+      audioPreset: { maxBitrate: p.audio.maxBitrate },
+      dtx: p.audio.dtx,
+      red: p.audio.red,
+    };
+  }
+
+  /** Video dos outros so chega se a pessoa nao pediu economia de dados (palco/TV sempre chega). */
+  private videoAllowed(): boolean {
+    return !this.snapshot.lowData || this.stageLive;
+  }
+
+  /** "Economia de dados": cancela a assinatura dos videos dos outros (o audio segue). Mudou a preferencia ou o palco: reaplica. */
+  private enforceSubscriptions() {
+    const room = this.room;
+    if (!room) return;
+    const want = this.videoAllowed();
+    for (const p of room.remoteParticipants.values()) {
+      for (const pub of p.trackPublications.values()) {
+        if (pub.kind !== Track.Kind.Video) continue;
+        if (pub.isSubscribed !== want) {
+          try {
+            pub.setSubscribed(want);
+          } catch {
+            /* a faixa ja foi embora */
+          }
+        }
+      }
+    }
   }
 
   private bind(room: Room, gen: number) {
@@ -390,10 +737,16 @@ export class MediaClient {
       if (gen === this.generation) this.refresh();
     };
     room
-      .on(RoomEvent.ParticipantConnected, changed)
+      .on(RoomEvent.ParticipantConnected, () => {
+        changed();
+        if (gen === this.generation) this.enforceSubscriptions();
+      })
       .on(RoomEvent.ParticipantDisconnected, changed)
       .on(RoomEvent.ParticipantNameChanged, changed)
-      .on(RoomEvent.TrackPublished, changed)
+      .on(RoomEvent.TrackPublished, () => {
+        changed();
+        if (gen === this.generation) this.enforceSubscriptions();
+      })
       .on(RoomEvent.TrackUnpublished, changed)
       .on(RoomEvent.TrackMuted, changed)
       .on(RoomEvent.TrackUnmuted, changed)
@@ -447,7 +800,10 @@ export class MediaClient {
     const wasTransmitting = this.snapshot.micOn || this.snapshot.camOn || this.snapshot.screenOn;
     this.patch({ rights, canPublish: rights !== 'none' });
     const lp = room.localParticipant;
-    if (rights !== 'all') void lp.setScreenShareEnabled(false).catch(() => undefined);
+    if (rights !== 'all') {
+      void lp.setScreenShareEnabled(false).catch(() => undefined);
+      this.wantScreen = false;
+    }
     if (rights === 'audio' || rights === 'none') {
       void lp.setCameraEnabled(false).catch(() => undefined);
       this.wantCam = false;
@@ -570,13 +926,10 @@ export class MediaClient {
 
   private async setEnabled(kind: 'mic' | 'cam' | 'screen', on: boolean) {
     const room = this.room;
-    if (!room || room.state !== ConnectionState.Connected) {
-      this.patch({ notice: 'Sem conexão com a chamada desta sala no momento.' });
-      return;
-    }
+    if (!room || room.state !== ConnectionState.Connected) return this.setEnabledOffline(kind, on);
     const rights = this.snapshot.rights;
     if (on && (rights === 'none' || (rights === 'audio' && kind !== 'mic') || (rights === 'av' && kind === 'screen'))) {
-      this.patch({ notice: rights === 'av' ? MSG.tvScreenOnly : this.wantedKind === 'stage' ? MSG.audienceOnly : MSG.noPublish });
+      this.patch({ notice: this.denialNotice(kind, rights) });
       return;
     }
     if (on && kind !== 'screen' && this.snapshot[kind === 'mic' ? 'micPermission' : 'camPermission'] === 'unavailable') {
@@ -587,30 +940,123 @@ export class MediaClient {
       this.patch({ notice: MSG.screenUnsupported });
       return;
     }
+    if (on && kind !== 'mic') {
+      // limite de video da sala: avisa antes de pedir a camera, sem gastar nada
+      const why = this.videoLimitReason();
+      if (why) {
+        this.patch({ notice: why });
+        return;
+      }
+    }
     const lp: LocalParticipant = room.localParticipant;
+    this.pending[kind] = true;
+    if (on) {
+      if (kind === 'mic') this.wantMic = true;
+      else if (kind === 'cam') this.wantCam = true;
+      else this.wantScreen = true;
+    }
+    this.sendReport();
     try {
+      const prof = this.profile(room.remoteParticipants.size + 1);
       if (kind === 'mic') {
-        await lp.setMicrophoneEnabled(on);
+        await lp.setMicrophoneEnabled(on, undefined, on ? { dtx: prof.audio.dtx, red: prof.audio.red, audioPreset: { maxBitrate: prof.audio.maxBitrate } } : undefined);
         this.wantMic = on;
         if (on) this.patch({ micPermission: 'granted', notice: null });
       } else if (kind === 'cam') {
-        await lp.setCameraEnabled(on);
+        await lp.setCameraEnabled(
+          on,
+          on ? { resolution: { width: prof.camera.width, height: prof.camera.height, frameRate: prof.camera.frameRate } } : undefined,
+          on ? { simulcast: prof.camera.simulcast, videoEncoding: { maxBitrate: prof.camera.maxBitrate, maxFramerate: prof.camera.maxFramerate } } : undefined,
+        );
         this.wantCam = on;
         if (on) this.patch({ camPermission: 'granted', notice: null });
       } else {
-        await lp.setScreenShareEnabled(on, { audio: true, selfBrowserSurface: 'exclude' } as never);
+        await lp.setScreenShareEnabled(
+          on,
+          on ? ({ audio: true, selfBrowserSurface: 'exclude', contentHint: prof.screen.contentHint, resolution: { width: prof.screen.width, height: prof.screen.height, frameRate: prof.screen.frameRate } } as never) : undefined,
+          on ? { simulcast: false, screenShareEncoding: { maxBitrate: prof.screen.maxBitrate, maxFramerate: prof.screen.maxFramerate } } : undefined,
+        );
+        this.wantScreen = on;
         if (on) this.patch({ screenPermission: 'granted', notice: null });
       }
     } catch (e) {
       this.handleMediaError(e, kind);
+    } finally {
+      this.pending[kind] = false;
     }
     this.refresh();
     if (on) void this.refreshDevices();
   }
 
+  /** Ligar/desligar sem estar na chamada (economia: em espera, conectando ou sem conexao). */
+  private setEnabledOffline(kind: 'mic' | 'cam' | 'screen', on: boolean) {
+    if (!on) {
+      if (kind === 'mic') this.wantMic = false;
+      else if (kind === 'cam') this.wantCam = false;
+      else this.wantScreen = false;
+      this.evaluate();
+      return;
+    }
+    const st = this.snapshot.status;
+    if (this.policy.quotaExceeded || this.quotaLocal) {
+      this.patch({ notice: MEDIA_TEXT.quotaExceeded });
+      return;
+    }
+    if (!this.wantedRoom || st === 'unavailable' || st === 'error') {
+      this.patch({ notice: 'Sem conexão com a chamada desta sala no momento.' });
+      return;
+    }
+    if (kind !== 'screen' && this.snapshot[kind === 'mic' ? 'micPermission' : 'camPermission'] === 'unavailable') {
+      this.patch({ notice: kind === 'mic' ? MSG.micMissing : MSG.camMissing });
+      return;
+    }
+    if (kind === 'screen' && this.snapshot.screenPermission === 'unavailable') {
+      this.patch({ notice: MSG.screenUnsupported });
+      return;
+    }
+    if (kind !== 'mic') {
+      const why = this.videoLimitReason();
+      if (why) {
+        this.patch({ notice: why });
+        return;
+      }
+    }
+    // Entra na chamada por causa disso: o que foi pedido e ligado assim que conectar (veja `open`).
+    if (kind === 'mic') this.wantMic = true;
+    else if (kind === 'cam') this.wantCam = true;
+    else this.wantScreen = true;
+    this.patch({ notice: null });
+    this.sendReport();
+    this.evaluate();
+  }
+
+  /** Camera/tela cheias na sala (limite) ou modo economia: a mensagem, ou null se nada impede. */
+  private videoLimitReason(): string | null {
+    const mine = this.snapshot.localIdentity;
+    const reason = videoDenialReason({
+      strict: this.policy.strict && !this.stageLive,
+      videoPublishers: (this.active?.video ?? []).length,
+      maxVideo: this.policy.economy ? this.policy.maxVideoPublishers : 0,
+      iPublishVideo: !!mine && (this.active?.video ?? []).includes(mine),
+    });
+    if (reason === 'strict') return MEDIA_TEXT.strictVideoOff;
+    if (reason === 'limit') return MEDIA_TEXT.videoLimit(this.policy.maxVideoPublishers);
+    return null;
+  }
+
+  private denialNotice(kind: 'mic' | 'cam' | 'screen', rights: PublishRights): string {
+    if (kind !== 'mic') {
+      const why = this.videoLimitReason();
+      if (why) return why;
+      if (this.rightsNotice && rights === 'audio') return this.rightsNotice;
+    }
+    return rights === 'av' ? MSG.tvScreenOnly : this.wantedKind === 'stage' ? MSG.audienceOnly : MSG.noPublish;
+  }
+
   private handleMediaError(e: unknown, kind: 'mic' | 'cam' | 'screen') {
     const c = classify(e);
     if (kind === 'screen') {
+      this.wantScreen = false;
       if (c === 'denied') {
         // NotAllowedError is also what a cancelled picker raises: treat as a soft notice, not a lasting denial.
         this.patch({ notice: MSG.screenCancelled });
@@ -733,5 +1179,12 @@ export class MediaClient {
       screenOn: me.screenOn,
       audioBlocked: this.snapshot.audioBlocked ? !room.canPlaybackAudio : false,
     });
+    // Parou de transmitir por fora (mudo, faixa encerrada, "parar de compartilhar" do navegador): a intencao acompanha a realidade.
+    if (this.snapshot.status === 'connected') {
+      if (!this.pending.mic && !me.micOn) this.wantMic = false;
+      if (!this.pending.cam && !me.camOn) this.wantCam = false;
+      if (!this.pending.screen && !me.screenOn) this.wantScreen = false;
+    }
+    this.evaluate();
   }
 }

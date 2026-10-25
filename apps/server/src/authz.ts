@@ -186,6 +186,8 @@ export const MESSAGE_POLICY: Readonly<Record<string, Permission | null>> = {
   inventory_action: 'dir.search',
   // pet do escritorio (Byte): qualquer pessoa na sala; o servidor limita distancia, taxa e petiscos
   pet_do: 'room.enter',
+  // batimento de midia (conectado / transmitindo): so quem pode usar midia
+  media_report: 'media.use',
 
   // staff da plataforma: a checagem real (nível, serviço, alvo, taxa) fica em staff.ts; sem sessão nada chega até lá
   staff_duty: null,
@@ -202,5 +204,7 @@ export const MESSAGE_POLICY: Readonly<Record<string, Permission | null>> = {
   staff_room: null,
   staff_event: null,
   staff_pet: null,
+  staff_media: null,
+  staff_media_economy: null,
 };
 
