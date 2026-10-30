@@ -4,6 +4,7 @@ import { OrgService } from '../org';
 import type { AuditRecord } from '@workverse/shared';
 import { opToSql, orgDataFromRows, type OrgRows } from './orgMapping';
 import { bookingDataFromRows, bookingOpToSql, type BookingRows } from './bookingMapping';
+import { netsimDataFromRows, netsimOpToSql, type NetsimRows } from './netsimMapping';
 import {
   accountFromRow,
   accountParams,
@@ -126,6 +127,14 @@ export class PgAccountStore extends MemoryAccountStore {
         limits: await q<BookingRows['limits'][number]>('booking_limits'),
       }),
     );
+    // Simulador de rede (migracao 0010).
+    store.netsim.load(
+      netsimDataFromRows({
+        topologies: await q<NetsimRows['topologies'][number]>('netsim_topologies'),
+        progress: await q<NetsimRows['progress'][number]>('netsim_progress'),
+      }),
+    );
+    store.netsim.onOp = (op) => store.enqueue(netsimOpToSql(op));
     store.orgs.onOp = (op) => store.enqueue(opToSql(op));
     store.bookings.onOp = (op) => store.enqueue(bookingOpToSql(op));
     // Idempotente: contas que ja passaram pela migracao (extra.orgsInit) sao puladas.

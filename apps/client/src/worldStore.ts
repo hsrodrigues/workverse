@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { DEFAULT_TEAM, presentationOf, type ClimateView, type ClimateSet, type InventoryAction, type InventoryResult, type DirResult, type ProfileTag, type AvatarConfig, type Deck, type OnlineEntry, type PresenceStatus, type RoomAdminEntry, type RoomDef, type ServerMessage, type SlideState, type StaffLevel, type StaffLogEntry, type StaffSelf, type StageView } from '@workverse/shared';
 import { net } from './net';
+import { netsimStore } from './ui/netsim/netsimStore';
 
 export interface RosterEntry extends ProfileTag {
   id: string;
@@ -268,6 +269,12 @@ net.on((msg: ServerMessage) => {
       break;
     case 'climate_open':
       set({ remoteOpen: true });
+      break;
+    case 'netsim_open':
+    case 'netsim_state':
+    case 'netsim_result':
+    case 'netsim_error':
+      netsimStore.onMessage(msg);
       break;
     case 'inventory_open':
       set({ inventory: { ...state.inventory, open: true, busy: true, notice: null } });

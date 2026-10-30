@@ -11,6 +11,7 @@ import type { DirResult, ProfileTag } from './directory';
 import type { OnlineEntry, RoomAdminEntry, RoomOp, StaffLevel, StaffLogEntry } from './staff';
 import type { ClimateSet, ClimateView } from './climate';
 import type { InventoryAction, InventoryResult } from './inventory';
+import type { NetsimClientMessage, NetsimServerMessage } from './netsim/protocol';
 import type { BookingClientMessage, BookingServerMessage } from './bookingProtocol';
 import type { PetAct, PetAdminEntry, PetFx, PetStaffOp, PetState, PetView } from './pet';
 import type { MediaActive, MediaPolicy, MediaReport, MediaUsageView } from './mediaEconomy';
@@ -163,6 +164,7 @@ export type ClientMessage =
   /** Interacao com o Byte, o pet do escritorio (carinho, petisco, chamar, brincar; `x`/`y` = ponteiro do brincar). */
   | { t: 'pet_do'; act: PetAct; x?: number; y?: number }
   | BookingClientMessage
+  | NetsimClientMessage
   /** O que a pessoa transmite (e se esta conectada a chamada): o servidor avisa a sala quem publica e conta os minutos de participante. Reenviado a cada ~30 s. */
   | ({ t: 'media_report' } & MediaReport)
   | StaffClientMessage;
@@ -214,6 +216,7 @@ export type ServerMessage =
   | { t: 'climate_open' }
   /** A pessoa usou um rack/console da Sala da TI e e da TI (ou staff): abre o painel do inventario. */
   | { t: 'inventory_open' }
+  | NetsimServerMessage
   | ({ t: 'inventory_result' } & InventoryResult)
   /** O pet da sala (ou null: nao esta nesta sala / desligado). Enviado ao entrar e quando ele muda de sala. */
   | { t: 'pet'; pet: PetView | null }

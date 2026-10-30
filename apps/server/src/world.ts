@@ -42,6 +42,8 @@ import { DEFAULT_PASS_TEAM_NAMES, RoomConfig, normTeamName } from './roomConfig'
 import { buildInventory, runInventoryAction, type InventoryContext } from './inventory';
 import { RoomAdmin, isRoomAdminMessage } from './roomAdmin';
 import { BookingService, isBookingMessage } from './bookings';
+import { NetsimService, stationsOf } from './netsim';
+import { isNetsimMessageType } from '@workverse/shared';
 import { OrgService } from './org';
 import { OrgWorld } from './orgWorld';
 import { PetManager } from './pet';
@@ -130,6 +132,8 @@ export class World {
   readonly roomAdmin: RoomAdmin;
   /** Reserva de sala com fila (ver bookings.ts e docs/bookings.md). */
   readonly bookings: BookingService;
+  /** Simulador de rede da Sala da TI (ver netsim.ts e docs/netsim.md). */
+  readonly netsim: NetsimService;
   private readonly removeMedia?: WorldOptions['removeMediaParticipant'];
   /** Byte, o pet do escritorio (nao e jogador; ver pet.ts). */
   readonly pets: PetManager;
@@ -172,6 +176,15 @@ export class World {
         return e ? { player: e.player, send: (m) => e.conn.send(m) } : undefined;
       },
       mutedFor: (id, now) => this.staff.mutedFor(id, now),
+    });
+    this.netsim = new NetsimService({
+      store: opts.store,
+      clock: this.clock,
+      log: this.log,
+      isIT: (p) => this.isIT(p),
+      playerOf: (accountId) => this.online.get(accountId)?.player,
+      stations: (orgId) => stationsOf(this.org(orgId).rooms),
+      canEnter: (p, roomId) => this.canEnter(p, roomId).allow,
     });
     this.bookings = new BookingService({
       store: opts.store,
@@ -709,13 +722,18 @@ export class World {
       },
       depts: this.deptsOf(player.orgId),
       now,
+      net: this.netsim.hostNets(player.orgId),
     };
   }
 
   /** Rack ou console usado na Sala da TI: quem e da TI abre o painel; os demais ouvem uma recusa simpatica. */
   private terminal(player: Player, _furniId: string) {
     if (this.isIT(player)) player.send({ t: 'inventory_open' });
-    else player.send({ t: 'chat', id: null, name: '', text: IT_ONLY_MESSAGE, kind: 'system' });
+    else {
+      player.send({ t: 'chat', id: null, name: '', text: IT_ONLY_MESSAGE, kind: 'system' });
+      // membros (nao visitantes) ainda podem ver o simulador de rede em modo leitura
+      if (player.role !== 'guest') player.send({ t: 'netsim_open' });
+    }
   }
 
   private inventoryQuery(conn: Connection, player: Player, now: number) {
@@ -896,6 +914,10 @@ export class World {
       default:
         if (isRoomAdminMessage(msg.t)) {
           if (!this.roomAdmin.handle(player, msg, now)) this.strike(conn);
+          return;
+        }
+        if (isNetsimMessageType(msg.t)) {
+          if (!this.netsim.handle(player, msg, now)) this.strike(conn);
           return;
         }
         if (isBookingMessage(msg.t)) {
@@ -1202,6 +1224,7 @@ export class World {
     this.media.leave(player, { evict: true });
     this.online.delete(player.accountId);
     this.bookings.forget(player.accountId);
+    this.netsim.forget(player.accountId);
   }
 
   enterRoom(player: Player, roomId: string, at?: Point & { dir: Dir8 }) {

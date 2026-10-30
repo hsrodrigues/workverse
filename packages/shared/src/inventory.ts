@@ -36,6 +36,8 @@ export interface InventoryHost {
   users: HostUser[];
   /** Carga de CPU simulada, 0 a 100. */
   cpu: number;
+  /** Estado de rede vindo do simulador (so quando a TI ja editou a topologia): `ip` acima passa a ser o da topologia. */
+  net?: { link: boolean; internet: boolean; device: string };
 }
 
 export interface InventoryResult {

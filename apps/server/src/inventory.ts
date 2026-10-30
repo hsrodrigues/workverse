@@ -27,6 +27,8 @@ export interface InventoryContext {
   accountOk(accountId: string): boolean;
   depts: Array<{ id: string; name: string; color: string }>;
   now: number;
+  /** Rede simulada por `sala/peca` (netsim.ts); ausente ou vazio = usa o IP padrao do inventario. */
+  net?: ReadonlyMap<string, { ip?: string; link: boolean; internet: boolean; device: string }>;
 }
 
 const hostKey = (roomId: string, furniId: string) => `${roomId}/${furniId}`;
@@ -72,9 +74,10 @@ export function buildInventory(ctx: InventoryContext): InventoryResult {
       }));
       if (visible) {
         const l = labels.get(f.id)!;
-        hosts.push({ id: key, hostname: l.hostname, ip: l.ip, kind, roomId, roomName: def.name, x: f.x, y: f.y, status, users, cpu: simCpu(key, ctx.now, status) });
+        const n = ctx.net?.get(key);
+        hosts.push({ id: key, hostname: l.hostname, ip: n?.ip ?? l.ip, ...(n ? { net: { link: n.link, internet: n.internet, device: n.device } } : {}), kind, roomId, roomName: def.name, x: f.x, y: f.y, status, users, cpu: simCpu(key, ctx.now, status) });
       } else {
-        // sala privada para quem consulta: nada que a identifique (nome, posicao, hostname e IP genericos)
+        // sala privada para quem consulta: nada que a identifique (nome, posicao, hostname e IP genericos) e NENHUM usuario (presenca em reuniao privada nao vaza)
         const n = (hiddenSeq[kind] = (hiddenSeq[kind] ?? 0) + 1);
         const id = `oculto-${kind}-${n}`;
         hosts.push({ id, hostname: `${kind === 'computer' ? 'PC' : kind === 'command_desk' ? 'CMD' : 'LAB'}-RES-${String(n).padStart(2, '0')}`, ip: `10.0.0.${Math.min(250, n)}`, kind, hidden: true, status, users: [], cpu: simCpu(key, ctx.now, status) });

@@ -4,6 +4,7 @@ import { emit } from '../../bus';
 import { net } from '../../net';
 import { useWorld, worldStore } from '../../worldStore';
 import { Window } from '../Window';
+import { netsimStore } from '../netsim/netsimStore';
 import { HIDDEN_ROOM, STATUS_GLYPH, STATUS_TEXT, countByRoom, cpuBar, filterHosts, roomKeyOf, whereText } from './inventoryLogic';
 import './inventory.css';
 
@@ -83,6 +84,9 @@ export function InventoryPanel() {
             em uso: <b data-testid="inventory-busy">{busy}</b>
           </span>
           {inv.busy && <span className="inv-wait">consultando…</span>}
+          <button type="button" className="inv-btn" onClick={() => netsimStore.open()} data-testid="inventory-open-netsim">
+            Rede (simulador)
+          </button>
         </div>
 
         <div className="inv-filters">

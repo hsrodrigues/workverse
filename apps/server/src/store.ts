@@ -4,6 +4,7 @@ import { dirname } from 'node:path';
 import { OrgStore, type OrgData } from './orgStore';
 import { OrgService } from './org';
 import { BookingStore, type BookingData } from './bookingStore';
+import { NetsimStore, type NetsimData } from './netsimStore';
 import { DEFAULT_ROOM_ID, MAX_OUTFITS, type AccountProfile, randomAvatar, sanitizeAvatar, sanitizeOutfitName, type AuditRecord, type AvatarConfig, type Outfit, type PresenceStatus, type StaffLevel } from '@workverse/shared';
 
 export interface Account {
@@ -78,6 +79,8 @@ export interface AccountStore {
   readonly orgs: OrgStore;
   /** Reservas de sala, limites e configuracao por sala (ver bookingStore.ts). */
   readonly bookings: BookingStore;
+  /** Projeto de rede do simulador da TI e progresso dos desafios (ver netsimStore.ts). */
+  readonly netsim: NetsimStore;
   /** Every account (used to migrate existing accounts into the default organization). */
   listAccounts(): Account[];
   getById(id: string): Account | undefined;
@@ -139,6 +142,7 @@ export const nameKey = (n: string) => n.normalize('NFKC').toLocaleLowerCase();
 export class MemoryAccountStore implements AccountStore {
   readonly orgs = new OrgStore();
   readonly bookings = new BookingStore();
+  readonly netsim = new NetsimStore();
   protected accounts = new Map<string, Account>();
   protected byEmail = new Map<string, Account>();
   protected byName = new Map<string, Account>();
@@ -254,7 +258,7 @@ export class MemoryAccountStore implements AccountStore {
 }
 
 /** v2: accounts and sessions. v3 adds organizations, members, teams and invites. */
-interface FileShape extends Partial<OrgData>, BookingData {
+interface FileShape extends Partial<OrgData>, BookingData, NetsimData {
   version: 2 | 3;
   accounts: Account[];
   sessions: SessionRecord[];
@@ -284,6 +288,7 @@ export class JsonFileAccountStore extends MemoryAccountStore {
         this.deleteExpiredSessions(Date.now());
         this.orgs.load(data);
         this.bookings.load(data);
+        this.netsim.load(data);
         if ((data.version ?? 2) < 3) {
           // Keep the untouched v2 file next to the new one (never overwritten, so the first backup survives reruns).
           const backup = `${file}.bak-v2`;
@@ -303,6 +308,7 @@ export class JsonFileAccountStore extends MemoryAccountStore {
     }
     this.orgs.onOp = () => this.schedule();
     this.bookings.onOp = () => this.schedule();
+    this.netsim.onOp = () => this.schedule();
   }
 
   override create(input: NewAccount): Account {
@@ -357,7 +363,7 @@ export class JsonFileAccountStore extends MemoryAccountStore {
     }
     mkdirSync(dirname(this.file), { recursive: true });
     const tmp = `${this.file}.tmp`;
-    const data: FileShape = { version: 3, accounts: [...this.accounts.values()], sessions: [...this.sessions.values()], audit: this.audit, ...this.orgs.snapshot(), ...this.bookings.snapshot() };
+    const data: FileShape = { version: 3, accounts: [...this.accounts.values()], sessions: [...this.sessions.values()], audit: this.audit, ...this.orgs.snapshot(), ...this.bookings.snapshot(), ...this.netsim.snapshot() };
     // The file holds password hashes and session hashes: keep it private to the server user.
     writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 });
     renameSync(tmp, this.file);

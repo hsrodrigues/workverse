@@ -184,6 +184,12 @@ export const MESSAGE_POLICY: Readonly<Record<string, Permission | null>> = {
   climate_set: 'room.enter',
   inventory_query: 'dir.search',
   inventory_action: 'dir.search',
+  // simulador de rede da TI: ver/testar e para membros; editar so a TI (o mundo checa, ver netsim.ts)
+  netsim_get: 'dir.search',
+  netsim_edit: 'dir.search',
+  netsim_undo: 'dir.search',
+  netsim_reset: 'dir.search',
+  netsim_run: 'dir.search',
   // pet do escritorio (Byte): qualquer pessoa na sala; o servidor limita distancia, taxa e petiscos
   pet_do: 'room.enter',
   // batimento de midia (conectado / transmitindo): so quem pode usar midia

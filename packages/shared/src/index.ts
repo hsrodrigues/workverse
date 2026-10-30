@@ -23,3 +23,4 @@ export * from './bookingTime';
 export * from './bookingProtocol';
 export * from './pet';
 export * from './profile';
+export * from './netsim';
