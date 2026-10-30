@@ -7,6 +7,8 @@ import {
   easterSunday,
   eventSpan,
   getEventDef,
+  newYearCountdown,
+  eventStack,
   newYearNumber,
   nextEventSpan,
   type EventId,
@@ -178,5 +180,30 @@ describe('helpers', () => {
   it('every id is a known event', () => {
     const all: EventId[] = [...EVENT_IDS];
     expect(all).toContain('anonovo');
+  });
+});
+
+describe('New Year countdown', () => {
+  it('counts down to midnight on 31/12 and stops at 00:00', () => {
+    expect(newYearCountdown(new Date(2026, 11, 31, 23, 59, 50))).toEqual({ phase: 'count', h: 0, m: 0, s: 10, year: 2027 });
+    expect(newYearCountdown(new Date(2026, 11, 31, 12, 0, 0))).toMatchObject({ phase: 'count', h: 12, m: 0, s: 0 });
+    expect(newYearCountdown(new Date(2026, 11, 31, 0, 0, 0))).toMatchObject({ phase: 'count', h: 24, m: 0, s: 0 });
+  });
+  it('turns into the party state right after midnight (1 and 2 January)', () => {
+    expect(newYearCountdown(new Date(2027, 0, 1, 0, 0, 0)).phase).toBe('party');
+    expect(newYearCountdown(new Date(2027, 0, 2, 18, 30, 0))).toMatchObject({ phase: 'party', year: 2027 });
+  });
+  it('keeps ticking toward the next midnight when forced outside the season', () => {
+    expect(newYearCountdown(new Date(2026, 9, 30, 21, 0, 0))).toMatchObject({ phase: 'count', h: 3, m: 0, s: 0 });
+  });
+});
+
+describe('overlapping events', () => {
+  it('the highest priority wins the signature piece and the others only reinforce', () => {
+    const active = activeEvents(d(2026, 12, 31), { forced: ['halloween'] });
+    const { primary, secondary } = eventStack(active);
+    expect(primary?.id).toBe('anonovo');
+    expect(secondary.map((e) => e.id)).toEqual(['halloween']);
+    expect(eventStack([])).toEqual({ primary: null, secondary: [] });
   });
 });

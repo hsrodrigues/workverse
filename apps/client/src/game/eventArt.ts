@@ -86,13 +86,7 @@ function disc(ctx: Ctx, cx: number, cy: number, rx: number, ry: number, base: st
     for (let x = Math.floor(cx - rx - 1); x <= Math.ceil(cx + rx + 1); x++) {
       const d = ((x + 0.5 - cx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2;
       if (d > 1) {
-        if (outline && d <= 1.5) {
-          const dx = (x + 0.5 - cx) / rx;
-          const dy = (y + 0.5 - cy) / ry;
-          if (d <= 1 + 0.5 / Math.min(rx, ry) + 0.25) px(ctx, x, y, outline);
-          void dx;
-          void dy;
-        }
+        void outline; // a borda de 1px vem do passe global (outlinePass em finish)
         continue;
       }
       const u = (x + 0.5 - cx) / rx;
@@ -124,8 +118,16 @@ export function bunting(p: Plane, a0: number, a1: number, zTop: number, cols: re
     const z = ropeZ(a) - 1;
     const dk = shade(c, -0.3);
     if (shape === 'flag') {
-      for (let r = 0; r < 6; r++) p.rect(a - 2 + Math.floor(r / 3), a + 3 - Math.floor(r / 3), z - r, z - r + 1, r === 5 ? dk : c);
-      p.px(a - 2, z, shade(c, 0.3));
+      const ed = shade(c, -0.6);
+      for (let r = 0; r < 8; r++) {
+        const half = 3 - Math.floor(r / 2.2);
+        const l = a - 3 + Math.floor(r / 2.2);
+        const rr = a + 3 - Math.floor(r / 2.2);
+        const row = z - r;
+        p.rect(l, rr + 1, row, row + 1, ed);
+        if (r > 0 && half >= 0) p.rect(l + 1, rr, row, row + 1, r < 3 ? shade(c, 0.22) : c);
+        if (r > 0 && r % 2 === 1) p.px(a + 1, row, shade(c, -0.22));
+      }
     } else if (shape === 'heart') {
       for (const [da, dz] of [[-2, 0], [-1, 0], [1, 0], [2, 0], [-2, -1], [-1, -1], [0, -1], [1, -1], [2, -1], [-1, -2], [0, -2], [1, -2], [0, -3]] as const) p.px(a + da, z + dz, dz === 0 && da < 0 ? shade(c, 0.25) : c);
       p.px(a - 1, z - 1, shade(c, 0.35));
@@ -209,20 +211,75 @@ export function bat(p: Plane, a: number, z: number) {
   p.px(a + 7, z + 1, '#ff4a4a');
 }
 
-export function banner(p: Plane, a0: number, a1: number, text: string, bg: string, fg: string, trim: string) {
-  const z0 = 86;
-  const z1 = 98;
-  p.rect(a0 + 1, a1 + 1, z0 - 1, z1 - 1, "rgba(10,8,20,0.28)");
-  p.rect(a0, a1, z0, z1, sideShade(bg, p.side));
-  p.rect(a0, a1, z1 - 1, z1, shade(sideShade(bg, p.side), 0.25));
-  p.rect(a0, a1, z0, z0 + 1, shade(sideShade(bg, p.side), -0.3));
-  for (let a = a0 + 2; a < a1 - 2; a += 4) p.px(a, z0 + 1, sideShade(trim, p.side));
+/** Faixa de parede: fundo chapado em 2 tons, borda escura de 1px, texto pixel (escala 1 ou 2) com sombra solida. */
+export function banner(p: Plane, a0: number, a1: number, text: string, bg: string, fg: string, trim: string, scale = 1) {
+  const h = scale === 2 ? 18 : 14;
+  const z1 = 99;
+  const z0 = z1 - h;
+  const B = sideShade(bg, p.side);
+  const edge = shade(B, -0.62);
+  p.rect(a0 + 1, a1 + 1, z0 - 1, z1 - 1, shade(B, -0.5)); // sombra de contato
+  p.rect(a0, a1, z0, z1, edge);
+  p.rect(a0 + 1, a1 - 1, z0 + 1, z1 - 1, B);
+  p.rect(a0 + 1, a1 - 1, z1 - 3, z1 - 1, shade(B, 0.2));
+  p.rect(a0 + 1, a1 - 1, z0 + 1, z0 + 2, shade(B, -0.25));
+  // pontilhado de acabamento (1px) em cima e embaixo
+  const T = sideShade(trim, p.side);
+  for (let a = a0 + 3; a < a1 - 3; a += 3) {
+    p.px(a, z1 - 2, T);
+    p.px(a, z0 + 1, T);
+  }
   // cordas
-  p.line(a0, z1, a0 + 3, z1 + 4, '#4a3a2a');
-  p.line(a1 - 1, z1, a1 - 4, z1 + 4, '#4a3a2a');
-  const tw = textWidth(text, 1);
-  wallText(p, a0 + Math.round((a1 - a0 - tw) / 2) + 1, z0 + 3, text, 'rgba(10,8,20,0.45)', 1);
-  wallText(p, a0 + Math.round((a1 - a0 - tw) / 2), z0 + 4, text, sideShade(fg, p.side), 1);
+  p.line(a0 + 1, z1, a0 + 4, z1 + 4, '#3a2a1a');
+  p.line(a1 - 2, z1, a1 - 5, z1 + 4, '#3a2a1a');
+  const tw = textWidth(text, scale);
+  const x = a0 + Math.round((a1 - a0 - tw) / 2);
+  const zt = z0 + Math.round((h - 5 * scale) / 2) - 1;
+  wallText(p, x, zt - 1, text, edge, scale, p.side === 'w');
+  wallText(p, x, zt, text, sideShade(fg, p.side), scale, p.side === 'w');
+}
+
+/** Guirlanda continua de pinheiro com laços vermelhos e luzinhas (as luzes sao devolvidas em `lights` para piscar em bandas). */
+export function garland(p: Plane, a0: number, a1: number, zTop: number, lights: LightPt[], cols: readonly string[]) {
+  const span = 64;
+  const sag = (a: number) => Math.round(Math.sin((((a - a0) % span) / span) * Math.PI) * 6);
+  for (let a = a0; a < a1; a++) {
+    const z = zTop - sag(a);
+    p.px(a, z + 2, sideShade('#0f2c1a', p.side));
+    for (let k = 1; k >= -4; k--) {
+      const tuft = ((a * 7 + k * 3) & 3) === 0 ? 1 : 0;
+      if (k === -4 && tuft === 0) continue;
+      const tone = k >= 1 ? '#164a2a' : k === 0 ? '#2a8247' : k > -3 ? (((a >> 1) + k) & 1 ? '#3fae62' : '#2f8f4e') : '#237a40';
+      p.px(a, z + k, sideShade(tone, p.side));
+    }
+    p.px(a, z - 5, sideShade('#0f2c1a', p.side));
+  }
+  let i = 0;
+  for (let a = a0 + 6; a < a1 - 4; a += 8, i++) {
+    lights.push({ side: p.side, a, z: zTop - sag(a) - 7, c: cols[i % cols.length]!, k: i });
+    p.px(a, zTop - sag(a) - 6, sideShade('#1c1226', p.side));
+    p.rect(a, a + 2, zTop - sag(a) - 8, zTop - sag(a) - 6, sideShade(shade(cols[i % cols.length]!, -0.5), p.side));
+  }
+  // laços vermelhos nos pontos de ancoragem
+  for (let a = a0; a <= a1; a += span) {
+    const z = zTop + 1;
+    const r = sideShade('#c92f2f', p.side);
+    p.rect(a - 4, a - 1, z - 3, z + 1, shade(r, -0.55));
+    p.rect(a - 3, a - 1, z - 2, z, r);
+    p.rect(a + 1, a + 4, z - 3, z + 1, shade(r, -0.55));
+    p.rect(a + 1, a + 3, z - 2, z, r);
+    p.rect(a - 1, a + 1, z - 3, z, shade(r, -0.35));
+    p.px(a - 3, z - 1, shade(r, 0.35));
+  }
+}
+
+/** Ponto luminoso que pisca em bandas (posicao no plano da parede). */
+export interface LightPt {
+  side: 'n' | 'w';
+  a: number;
+  z: number;
+  c: string;
+  k: number;
 }
 
 export function wreath(p: Plane, a: number, z: number, bow: string) {
@@ -350,13 +407,46 @@ export interface Prop {
 const W = 48;
 const H = 76;
 const newProp = () => createCanvas(W, H);
-const finish = (c: { canvas: HTMLCanvasElement }, h: number): Prop => ({ canvas: c.canvas, ax: 24, ay: 68, h });
-const shadow = (ctx: Ctx, rx = 14) => {
+const OUTLINE = '#1c1226';
+/** Borda escura de 1px em volta de tudo que e opaco (sombras e brilhos translucidos ficam de fora). Chapado, sem antialias. */
+export function outlinePass(canvas: HTMLCanvasElement, color = OUTLINE) {
+  const ctx = canvas.getContext('2d')!;
+  const { width: w, height: h } = canvas;
+  const src = ctx.getImageData(0, 0, w, h);
+  const d = src.data;
+  const solid = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && d[(y * w + x) * 4 + 3]! >= 200;
+  const rgb = [parseInt(color.slice(1, 3), 16), parseInt(color.slice(3, 5), 16), parseInt(color.slice(5, 7), 16)];
+  const out = ctx.createImageData(w, h);
+  out.data.set(d);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (solid(x, y)) continue;
+    if (solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1)) {
+      const i = (y * w + x) * 4;
+      out.data[i] = rgb[0]!;
+      out.data[i + 1] = rgb[1]!;
+      out.data[i + 2] = rgb[2]!;
+      out.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(out, 0, 0);
+}
+const finish = (c: { canvas: HTMLCanvasElement }, h: number, outline = true): Prop => {
+  if (outline) outlinePass(c.canvas);
+  return { canvas: c.canvas, ax: 24, ay: 68, h };
+};
+const shadow = (ctx: Ctx, rx = 14) => shadowAt(ctx, 24, 68, rx);
+const shadowAt = (ctx: Ctx, cx: number, cy: number, rx = 14) => {
   ctx.fillStyle = 'rgba(22,16,44,0.28)';
   for (let y = -3; y <= 3; y++) {
     const w = Math.round(rx * Math.sqrt(1 - (y / 3.6) ** 2));
-    ctx.fillRect(24 - w, 68 + y, w * 2, 1);
+    ctx.fillRect(cx - w, cy + y, w * 2, 1);
   }
+};
+/** Objetos assinatura: tela grande (96x144), base no centro do tile. */
+const newBig = () => createCanvas(96, 144);
+const finishBig = (c: { canvas: HTMLCanvasElement }, h: number): Prop => {
+  outlinePass(c.canvas);
+  return { canvas: c.canvas, ax: 48, ay: 136, h };
 };
 
 export function pumpkinProp(variant: number): Prop {
@@ -940,7 +1030,7 @@ export function hologramProp(frame: number): Prop {
     px(ctx, cx + Math.cos(a) * 16, cy + Math.sin(a) * 5 - 4, i % 2 ? NEON_GR : '#ffffff', 2, 2);
   }
   px(ctx, cx - 1, cy - 1, '#ffffff', 3, 3);
-  return finish(c, 60);
+  return finish(c, 60, false);
 }
 
 /** Robozinho decorativo (2 quadros: antena acende e o bracinho acena). Variante muda as cores. */
@@ -1090,6 +1180,802 @@ export function sign42Prop(): Prop {
   px(ctx, 13, 22, '#ffffff', 1, 1);
   px(ctx, 35, 44, NEON_PK, 2, 1);
   return finish(c, 48);
+}
+
+// ---- pecas assinatura e apoio (arte grande, chapada em 3 tons, borda de 1px) ------------------------------------------
+
+const fillR = (ctx: Ctx, x: number, y: number, w: number, h: number, c: string) => px(ctx, x, y, c, w, h);
+
+/** Caixa de presente: corpo em 3 tons, fita em cruz e laco. */
+function giftBox(ctx: Ctx, x: number, y: number, w: number, h: number, col: string, rib: string) {
+  fillR(ctx, x, y, w, h, col);
+  fillR(ctx, x, y, w, 2, shade(col, 0.28));
+  fillR(ctx, x, y, 2, h, shade(col, 0.16));
+  fillR(ctx, x + w - 3, y + 2, 3, h - 2, shade(col, -0.3));
+  fillR(ctx, x, y + h - 2, w, 2, shade(col, -0.38));
+  const cx = x + Math.floor(w / 2) - 1;
+  fillR(ctx, cx, y, 3, h, rib);
+  fillR(ctx, x, y + Math.floor(h / 2) - 1, w, 3, rib);
+  fillR(ctx, cx, y, 1, h, shade(rib, 0.3));
+  fillR(ctx, cx - 4, y - 4, 4, 4, rib);
+  fillR(ctx, cx + 3, y - 4, 4, 4, rib);
+  fillR(ctx, cx - 1, y - 2, 4, 3, shade(rib, -0.3));
+}
+
+const STAR9 = ['....#....', '....#....', '...###...', '#########', '.#######.', '..#####..', '..#####..', '.###.###.', '.##...##.'];
+
+/** Arvore de Natal grande: 4 andares com sombra de beira, guirlanda dourada, bolas, estrela e luzinhas (2 fases piscam), presentes embaixo. */
+export function treeBigProp(phase: number): Prop {
+  const c = newBig();
+  const { ctx } = c;
+  shadowAt(ctx, 48, 136, 36);
+  fillR(ctx, 44, 114, 8, 16, '#6b4426');
+  fillR(ctx, 44, 114, 2, 16, '#a8693c');
+  const tiers: Array<[number, number, number]> = [[18, 48, 15], [36, 72, 22], [56, 96, 29], [78, 122, 36]];
+  const GL = '#3fae62';
+  const GM = '#2a8247';
+  const GD = '#1d5e34';
+  tiers.forEach(([top, bot, hw]) => {
+    for (let y = top; y <= bot; y++) {
+      const u = (y - top) / (bot - top);
+      const w = Math.round(hw * (0.1 + 0.9 * u));
+      for (let x = -w; x <= w; x++) {
+        const edgeY = bot - ((x + 200) % 12 < 6 ? 0 : 3);
+        if (y > edgeY) continue;
+        let col = x < -w * 0.3 ? GL : x > w * 0.35 ? GD : GM;
+        if (y >= edgeY - 1) col = '#164a2a';
+        else if ((x * 2 + y * 3) % 11 === 0 && Math.abs(x) < w - 1) col = shade(col, -0.18);
+        px(ctx, 48 + x, y, col);
+      }
+    }
+  });
+  const colsL = ['#ff4a4a', '#ffd95a', '#4aa8ff', '#ff9ccf'];
+  tiers.slice(1).forEach(([top, bot, hw], ti) => {
+    const base = top + Math.round((bot - top) * 0.52);
+    const wAt = (y: number) => Math.round(hw * (0.1 + 0.9 * ((y - top) / (bot - top))));
+    for (let x = -hw; x <= hw; x++) {
+      const gy = base + Math.round(6 * (1 - (x / hw) ** 2));
+      if (Math.abs(x) > wAt(gy) - 2) continue;
+      px(ctx, 48 + x, gy, '#f6d96b');
+      px(ctx, 48 + x, gy + 1, '#c9a227');
+    }
+    for (let k = -3; k <= 3; k++) {
+      const x = Math.round((k * hw) / 3.6);
+      const gy = base + Math.round(6 * (1 - (x / hw) ** 2)) + 3;
+      if (Math.abs(x) > wAt(gy) - 3) continue;
+      const lit = (k + ti + phase + 6) % 2 === 0;
+      const col = colsL[(k + 3 + ti) % 4]!;
+      if (lit) {
+        px(ctx, 48 + x - 1, gy - 1, shade(col, 0.55), 1, 1);
+        px(ctx, 48 + x, gy, col, 2, 2);
+        px(ctx, 48 + x + 2, gy + 2, shade(col, 0.4), 1, 1);
+      } else px(ctx, 48 + x, gy, shade(col, -0.55), 2, 2);
+    }
+  });
+  const balls: Array<[number, number, string]> = [[40, 56, '#d03a3a'], [58, 62, '#4aa8ff'], [34, 82, '#ffd95a'], [62, 86, '#d03a3a'], [48, 90, '#ff9ccf'], [28, 106, '#4aa8ff'], [68, 108, '#ffd95a'], [46, 110, '#d03a3a'], [56, 40, '#ffd95a'], [43, 30, '#4aa8ff']];
+  balls.forEach(([x, y, col]) => {
+    disc(ctx, x, y, 2.6, 2.6, col);
+    px(ctx, x - 1, y - 1, '#ffffff', 1, 1);
+  });
+  STAR9.forEach((row, y) => [...row].forEach((ch, x) => ch === '#' && px(ctx, 44 + x, 6 + y, y < 3 ? '#fff0a0' : y > 6 ? '#e0a82a' : '#ffd95a')));
+  if (phase) px(ctx, 41, 9, '#ffffff', 1, 1);
+  else px(ctx, 54, 5, '#ffffff', 1, 1);
+  disc(ctx, 48, 131, 27, 6, '#b02a2a');
+  fillR(ctx, 24, 130, 48, 1, '#f4f1ea');
+  giftBox(ctx, 7, 116, 20, 16, '#3a8fd0', '#ffd95a');
+  giftBox(ctx, 24, 124, 13, 9, '#d03a3a', '#f4f1ea');
+  giftBox(ctx, 66, 113, 22, 19, '#9a5ad0', '#ffd95a');
+  giftBox(ctx, 58, 123, 12, 10, '#2f8f4e', '#ffffff');
+  return finishBig(c, 130);
+}
+
+/** Boneco de neve: 3 bolas, chapeu, cachecol vermelho, nariz de cenoura e bracos de galho. */
+export function snowmanProp(): Prop {
+  const c = newProp();
+  const { ctx } = c;
+  shadow(ctx, 15);
+  for (const [x0, x1, y] of [[8, 17, 40], [31, 40, 40]] as const) {
+    px(ctx, x0, y, '#6b4426', x1 - x0, 2);
+    px(ctx, x0, y - 4, '#6b4426', 2, 4);
+  }
+  disc(ctx, 24, 56, 14, 12, '#e8f0fa');
+  disc(ctx, 24, 36, 10, 9, '#e8f0fa');
+  disc(ctx, 24, 21, 8, 8, '#f4f8ff');
+  px(ctx, 14, 28, '#d03a3a', 20, 4);
+  px(ctx, 14, 28, '#ff6a6a', 20, 1);
+  px(ctx, 30, 31, '#d03a3a', 4, 9);
+  px(ctx, 30, 31, '#a82a2a', 1, 9);
+  px(ctx, 19, 17, '#1c1226', 2, 2);
+  px(ctx, 27, 17, '#1c1226', 2, 2);
+  px(ctx, 22, 21, '#ff8a1c', 8, 2);
+  px(ctx, 22, 21, '#ffc06a', 4, 1);
+  for (const y of [40, 47, 54]) px(ctx, 23, y, '#1c1226', 2, 2);
+  px(ctx, 15, 9, '#2a2236', 18, 3);
+  px(ctx, 18, 1, '#2a2236', 12, 8);
+  px(ctx, 18, 7, '#d03a3a', 12, 1);
+  px(ctx, 19, 2, '#4a3e60', 2, 5);
+  return finish(c, 66);
+}
+
+/** Pilha de presentes media: 3 caixas. */
+export function giftPileProp(c1: string, c2: string, c3: string): Prop {
+  const c = newProp();
+  const { ctx } = c;
+  shadow(ctx, 16);
+  giftBox(ctx, 6, 54, 20, 14, c1, '#ffd95a');
+  giftBox(ctx, 25, 57, 16, 11, c2, '#f4f1ea');
+  giftBox(ctx, 12, 40, 13, 13, c3, '#ffffff');
+  return finish(c, 40);
+}
+
+/** Abobora-lanterna GRANDE: gomos em 3 tons, cabo, rosto recortado aceso por dentro (2 quadros tremeluzem) e 2 aboboras pequenas. */
+export function jackBigProp(phase: number): Prop {
+  const c = newBig();
+  const { ctx } = c;
+  shadowAt(ctx, 48, 136, 40);
+  const cx = 48;
+  const cy = 98;
+  const rx = 33;
+  const ry = 27;
+  for (let y = cy - ry; y <= cy + ry; y++) for (let x = cx - rx; x <= cx + rx; x++) {
+    const u = (x + 0.5 - cx) / rx;
+    const v = (y + 0.5 - cy) / ry;
+    if (u * u + v * v > 1) continue;
+    const lobe = Math.abs(Math.sin(u * Math.PI * 1.5));
+    let col = '#f28a1c';
+    if (u < -0.35 && v < 0.2) col = '#ffa83a';
+    else if (u > 0.4 || v > 0.62) col = '#d66f10';
+    if (lobe < 0.12 || v > 0.86) col = '#a8480c';
+    px(ctx, x, y, col);
+  }
+  fillR(ctx, 44, cy - ry - 7, 8, 9, '#3f7a2a');
+  fillR(ctx, 44, cy - ry - 7, 3, 9, '#6fb04a');
+  fillR(ctx, 49, cy - ry - 7, 3, 9, '#2c5a1e');
+  fillR(ctx, 50, cy - ry - 10, 6, 4, '#3f7a2a');
+  const glow = phase ? '#ffd45a' : '#ffe98a';
+  const deep = phase ? '#ff9a2a' : '#ffb03a';
+  const tri = (x0: number, y0: number, w: number, h: number) => {
+    for (let r = 0; r < h; r++) {
+      const ww = Math.max(1, Math.round((w * (r + 1)) / h));
+      fillR(ctx, x0 + Math.round((w - ww) / 2), y0 + r, ww, 1, r > h - 3 ? deep : glow);
+    }
+  };
+  tri(cx - 21, cy - 12, 14, 12);
+  tri(cx + 7, cy - 12, 14, 12);
+  tri(cx - 3, cy + 1, 7, 6);
+  for (let x = -20; x <= 20; x++) {
+    const yy = cy + 9 + Math.round(Math.abs(x) * 0.12 - 3 * Math.cos((x / 20) * 1.2));
+    fillR(ctx, cx + x, yy, 1, 9, (x + 100) % 8 < 3 ? '#a8480c' : x % 8 === 0 ? deep : glow);
+  }
+  fillR(ctx, cx - 6, cy + 11, 3, 4, '#a8480c');
+  fillR(ctx, cx + 5, cy + 11, 3, 4, '#a8480c');
+  const mini = (mx: number, my: number, r: number, col: string) => {
+    disc(ctx, mx, my, r, r * 0.8, col);
+    fillR(ctx, mx - 1, Math.round(my - r * 0.8 - 3), 3, 3, '#3f7a2a');
+    px(ctx, Math.round(mx - r * 0.5), my, '#a8480c', 1, 3);
+    px(ctx, Math.round(mx + r * 0.5), my, '#a8480c', 1, 3);
+    px(ctx, mx - 3, my - 1, '#ffe27a', 2, 2);
+    px(ctx, mx + 2, my - 1, '#ffe27a', 2, 2);
+    px(ctx, mx - 2, my + 3, '#ffe27a', 5, 1);
+  };
+  mini(14, 124, 9, '#e8791a');
+  mini(82, 126, 8, '#f28a1c');
+  fillR(ctx, 70, 114, 4, 12, '#f4f1ea');
+  fillR(ctx, 70, 114, 1, 12, '#ffffff');
+  fillR(ctx, 71, 108, 2, 5, phase ? '#ffd45a' : '#ff9a2a');
+  return finishBig(c, 126);
+}
+
+/** Caldeirao preto com pocao verde borbulhando (2 quadros) sobre brasas. */
+export function cauldronProp(phase: number): Prop {
+  const c = newProp();
+  const { ctx } = c;
+  shadow(ctx, 15);
+  fillR(ctx, 12, 62, 24, 3, '#6b4426');
+  fillR(ctx, 15, 59, 18, 3, '#d8541a');
+  fillR(ctx, 20, 58, 8, 2, '#ffc23a');
+  fillR(ctx, 14, 62, 4, 6, '#2a2a38');
+  fillR(ctx, 30, 62, 4, 6, '#2a2a38');
+  disc(ctx, 24, 48, 16, 14, '#3a3a4c');
+  px(ctx, 14, 40, '#5a5a70', 4, 8);
+  fillR(ctx, 6, 36, 36, 4, '#2a2a38');
+  fillR(ctx, 6, 36, 36, 1, '#5a5a70');
+  disc(ctx, 24, 36, 17, 4, '#5ae03a');
+  fillR(ctx, 14, 35, 20, 2, '#a6ff7a');
+  const b = phase ? [[18, 26], [28, 30], [24, 20]] : [[20, 30], [29, 24], [23, 26]];
+  b.forEach(([x, y]) => {
+    disc(ctx, x!, y!, 2.5, 2.5, '#7aff5a');
+    px(ctx, x! - 1, y! - 1, '#ffffff', 1, 1);
+  });
+  px(ctx, 22, phase ? 14 : 18, '#a6ff7a', 2, 2);
+  return finish(c, 56);
+}
+
+/** Lapide com "RIP", musgo e terra remexida. */
+export function tombProp(): Prop {
+  const c = newProp();
+  const { ctx } = c;
+  shadow(ctx, 14);
+  disc(ctx, 24, 64, 15, 3, '#4a3424');
+  for (let y = 20; y < 64; y++) {
+    const top = y < 32 ? Math.round(Math.sqrt(Math.max(0, 1 - ((32 - y) / 12) ** 2)) * 12) : 12;
+    fillR(ctx, 24 - top, y, top * 2, 1, y < 24 ? '#a8aab8' : '#8d8fa0');
+    fillR(ctx, 24 - top, y, 2, 1, '#c4c6d4');
+    fillR(ctx, 24 + top - 3, y, 3, 1, '#6a6c80');
+  }
+  flatText(ctx, 15, 30, 'RIP', '#3a3a4c', 2);
+  fillR(ctx, 18, 52, 5, 3, '#3f7a2a');
+  fillR(ctx, 28, 58, 4, 3, '#3f7a2a');
+  fillR(ctx, 22, 40, 4, 1, '#6a6c80');
+  return finish(c, 48);
+}
+
+/** Fantasminha flutuando (2 quadros: sobe e desce). */
+export function ghostProp(phase: number): Prop {
+  const c = newProp();
+  const { ctx } = c;
+  shadow(ctx, 9);
+  const y0 = 22 + phase * 3;
+  for (let y = 0; y < 34; y++) {
+    const w = y < 10 ? Math.round(Math.sqrt(Math.max(0, 1 - ((10 - y) / 10) ** 2)) * 11) : 11;
+    if (y > 28 && (Math.floor(y / 2) + phase) % 2 !== 0) continue;
+    fillR(ctx, 24 - w, y0 + y, w * 2, 1, y > 26 ? '#cdd6ee' : '#f4f8ff');
+    fillR(ctx, 24 + w - 4, y0 + y, 4, 1, '#cdd6ee');
+  }
+  fillR(ctx, 18, y0 + 10, 3, 5, '#1c1226');
+  fillR(ctx, 27, y0 + 10, 3, 5, '#1c1226');
+  fillR(ctx, 22, y0 + 19, 4, 4, '#1c1226');
+  return finish(c, 58);
+}
+
+/** Arco de baloes GRANDE (Ano Novo): dourado, prata e azul-noite; 4 quadros balancam; o ano vai numa placa. */
+export function balloonArchProp(frame: number, year: number): Prop {
+  const c = newBig();
+  const { ctx } = c;
+  shadowAt(ctx, 48, 136, 40);
+  const cols = ['#f4d35e', '#c9d6e8', '#2a3a7a', '#f4d35e', '#ffffff', '#7aa8ff'];
+  const sway = [0, 1, 0, -1][frame % 4]!;
+  for (const bx of [14, 82]) {
+    fillR(ctx, bx - 5, 124, 10, 10, '#f4f1ea');
+    fillR(ctx, bx - 5, 124, 10, 2, '#ffffff');
+    fillR(ctx, bx - 5, 128, 10, 2, '#f4d35e');
+  }
+  for (let i = 0; i <= 12; i++) {
+    const t = i / 12;
+    const x = 14 + 68 * t;
+    const y = 112 - 86 * Math.sin(t * Math.PI) ** 0.9;
+    const dx = Math.round(sway * (1 - y / 130) * (i % 2 ? 1 : -1));
+    const pillar = i <= 2 || i >= 10;
+    for (let k = 0; k < (pillar ? 2 : 1); k++) {
+      const ox = k ? (x < 48 ? -6 : 6) : 0;
+      const oy = k ? 11 : 0;
+      disc(ctx, Math.round(x + dx + ox), Math.round(y + oy), 7.5, 8.5, cols[(i + k * 2) % cols.length]!);
+      px(ctx, Math.round(x + dx + ox - 4), Math.round(y + oy - 4), '#ffffff', 2, 3);
+    }
+  }
+  // ganchos do letreiro (o letreiro vivo e desenhado por eventDecor.ts)
+  for (const x of [26, 70]) fillR(ctx, x, 17, 1, 11, '#f4d35e');
+  void year;
+  return finishBig(c, 130);
+}
+
+/** Balde de gelo com champanhe e duas tacas (apoio de Ano Novo). */
+export function champagneProp(phase: number): Prop {
+  const c = newProp();
+  const { ctx } = c;
+  shadow(ctx, 13);
+  fillR(ctx, 21, 14, 6, 24, '#2f5a2a');
+  fillR(ctx, 21, 14, 2, 24, '#4a8a3a');
+  fillR(ctx, 22, 8, 4, 6, '#2f5a2a');
+  fillR(ctx, 21, 6, 6, 3, '#f4d35e');
+  fillR(ctx, 20, 26, 8, 5, '#f4d35e');
+  for (let y = 0; y < 22; y++) {
+    const w = 11 + Math.floor(y * 0.15);
+    fillR(ctx, 24 - w, 40 + y, w * 2, 1, y < 2 ? '#e8ecf4' : y % 6 < 3 ? '#9aa6c8' : '#8592b8');
+    fillR(ctx, 24 - w, 40 + y, 2, 1, '#c9d6e8');
+  }
+  fillR(ctx, 11, 40, 26, 2, '#dfe9f8');
+  for (const [x, y] of [[16, 38], [22, 37], [28, 38], [32, 39]] as const) disc(ctx, x, y, 2.4, 2.4, '#e8f4ff');
+  for (const gx of [1, 39]) {
+    fillR(ctx, gx + 3, 50, 2, 10, '#dfe9f8');
+    fillR(ctx, gx, 58, 8, 2, '#dfe9f8');
+    fillR(ctx, gx, 44, 8, 6, '#bfe6ff');
+    fillR(ctx, gx + 1, 47, 6, 3, '#f4d35e');
+  }
+  px(ctx, phase ? 25 : 22, phase ? 2 : 0, '#ffffff', 1, 1);
+  px(ctx, phase ? 21 : 26, phase ? 0 : 3, '#f4d35e', 1, 1);
+  return finish(c, 60);
+}
+
+/** Coelho de Pascoa GRANDE (orelhas rosa, laco, cenoura) ao lado de um cesto de ovos decorados; 3 quadros: orelha mexe e pisca. */
+export function bunnyBigProp(phase: number): Prop {
+  const c = newBig();
+  const { ctx } = c;
+  shadowAt(ctx, 48, 136, 40);
+  const fur = '#f6f2ee';
+  const furD = '#d4cdd2';
+  const ear = (x: number, tilt: number) => {
+    for (let r = 0; r < 38; r++) {
+      const w = r < 4 ? 3 + r : r > 33 ? 8 - (r - 33) : 8;
+      const xx = x + Math.round(tilt * r * 0.12);
+      fillR(ctx, xx - w, 4 + (37 - r), w * 2 + 1, 1, fur);
+      fillR(ctx, xx + w - 2, 4 + (37 - r), 3, 1, furD);
+      if (r > 4 && r < 32) fillR(ctx, xx - w + 3, 4 + (37 - r), w * 2 - 5, 1, '#ffb8d8');
+    }
+  };
+  ear(32, -1);
+  ear(50, phase === 1 ? 5 : 2);
+  disc(ctx, 40, 106, 22, 24, fur);
+  disc(ctx, 40, 66, 18, 15, fur);
+  fillR(ctx, 27, 58, 5, 2, '#ffffff');
+  disc(ctx, 40, 112, 12, 14, '#ffffff');
+  fillR(ctx, 18, 128, 14, 8, fur);
+  fillR(ctx, 48, 128, 14, 8, fur);
+  fillR(ctx, 18, 134, 14, 2, furD);
+  fillR(ctx, 48, 134, 14, 2, furD);
+  fillR(ctx, 22, 130, 2, 4, '#ffb8d8');
+  fillR(ctx, 52, 130, 2, 4, '#ffb8d8');
+  fillR(ctx, 30, 64, 4, phase === 2 ? 1 : 5, '#1c1226');
+  fillR(ctx, 46, 64, 4, phase === 2 ? 1 : 5, '#1c1226');
+  if (phase !== 2) {
+    fillR(ctx, 31, 64, 1, 2, '#ffffff');
+    fillR(ctx, 47, 64, 1, 2, '#ffffff');
+  }
+  fillR(ctx, 38, 72, 4, 3, '#ff7aa8');
+  fillR(ctx, 39, 75, 2, 3, '#1c1226');
+  fillR(ctx, 35, 77, 4, 1, '#1c1226');
+  fillR(ctx, 41, 77, 4, 1, '#1c1226');
+  fillR(ctx, 24, 72, 5, 3, '#ffc2dc');
+  fillR(ctx, 51, 72, 5, 3, '#ffc2dc');
+  fillR(ctx, 28, 85, 8, 7, '#3a8fd0');
+  fillR(ctx, 44, 85, 8, 7, '#3a8fd0');
+  fillR(ctx, 28, 85, 8, 2, '#6fb8f0');
+  fillR(ctx, 44, 85, 8, 2, '#6fb8f0');
+  fillR(ctx, 36, 86, 8, 6, '#27689e');
+  for (let r = 0; r < 20; r++) fillR(ctx, 54 + Math.floor(r / 4), 100 + r, Math.max(2, 7 - Math.floor(r / 3)), 1, r % 5 === 0 ? '#c9570e' : '#ff8a1c');
+  fillR(ctx, 53, 94, 3, 7, '#3f9a3a');
+  fillR(ctx, 57, 92, 3, 8, '#58b858');
+  const egg = (x: number, y: number, c1: string, c2: string, kind: number) => {
+    for (let r = 0; r < 14; r++) {
+      const w = Math.max(1, Math.round(Math.sin(((r + 0.5) / 14) * Math.PI) ** 0.75 * 6 + (r > 6 ? 1 : 0)));
+      for (let xx = -w; xx <= w; xx++) {
+        let col = xx < -w * 0.4 ? shade(c1, 0.25) : xx > w * 0.45 ? shade(c1, -0.25) : c1;
+        if (kind === 0 && r % 5 === 2) col = c2;
+        if (kind === 1 && ((xx + r) & 3) === 0) col = c2;
+        if (kind === 2 && (r + (xx & 1)) % 5 === 3) col = c2;
+        px(ctx, x + xx, y + r, col);
+      }
+    }
+  };
+  for (let y = 0; y < 14; y++) {
+    const w = 17 - Math.floor(y / 4);
+    for (let x = -w; x <= w; x++) px(ctx, 74 + x, 118 + y, (x + y) % 4 === 0 ? '#7a4a22' : y % 3 === 0 ? '#b57a3a' : '#c98f4c');
+  }
+  fillR(ctx, 56, 116, 36, 3, '#8a5628');
+  fillR(ctx, 62, 112, 20, 5, '#58b858');
+  egg(64, 98, '#ff9ccf', '#ffffff', 0);
+  egg(75, 94, '#9be0ff', '#3a8fd0', 1);
+  egg(85, 99, '#ffe27a', '#ff9a3a', 2);
+  egg(70, 106, '#b9a0ff', '#ffffff', 1);
+  egg(81, 107, '#9be0a0', '#ffffff', 0);
+  return finishBig(c, 130);
+}
+
+/** Pintinho amarelo pulando (2 quadros) no meio da grama. */
+export function chickProp(phase: number): Prop {
+  const c = newProp();
+  const { ctx } = c;
+  shadow(ctx, 11);
+  const y = 36 + (phase ? 0 : 3);
+  disc(ctx, 24, y + 14, 11, 11, '#ffe27a');
+  disc(ctx, 24, y - 2, 8, 8, '#ffe27a');
+  fillR(ctx, 20, y - 5, 2, 3, '#1c1226');
+  fillR(ctx, 27, y - 5, 2, 3, '#1c1226');
+  fillR(ctx, 22, y - 1, 5, 3, '#ff8a1c');
+  fillR(ctx, 23, y - 12, 2, 4, '#ffc23a');
+  fillR(ctx, 14, y + 10, 4, 6, '#f2c230');
+  fillR(ctx, 20, y + 24, 2, 4, '#ff8a1c');
+  fillR(ctx, 27, y + 24, 2, 4, '#ff8a1c');
+  for (let x = 8; x < 40; x++) {
+    const h = (x * 7) % 5 < 2 ? 7 : 4;
+    fillR(ctx, x, 68 - h, 1, h, x % 3 === 0 ? '#3f9a3a' : '#58b858');
+  }
+  return finish(c, 56);
+}
+
+/** Mascara de carnaval GRANDE num pedestal: roxa e dourada, penas de 5 cores e fitas; 2 quadros brilham e as fitas balancam. */
+export function maskBigProp(phase: number): Prop {
+  const c = newBig();
+  const { ctx } = c;
+  shadowAt(ctx, 48, 136, 32);
+  fillR(ctx, 44, 78, 8, 52, '#6a4a2a');
+  fillR(ctx, 44, 78, 2, 52, '#a8783a');
+  disc(ctx, 48, 132, 22, 5, '#4a3a5a');
+  disc(ctx, 48, 128, 16, 4, '#7a5af0');
+  const fe = ['#e83c8a', '#ffcf1f', '#1fbf6a', '#3a8fd0', '#ff7a1f', '#7a5af0', '#e83c8a'];
+  fe.forEach((col, i) => {
+    const ang = -2.3 + (i / (fe.length - 1)) * 1.6;
+    for (let r = 14; r < 46; r++) {
+      const x = 48 + Math.cos(ang) * r;
+      const y = 58 + Math.sin(ang) * r;
+      fillR(ctx, Math.round(x) - 2, Math.round(y), 5, 1, r > 40 ? shade(col, 0.4) : r % 7 === 0 ? shade(col, -0.25) : col);
+    }
+  });
+  const my0 = 54;
+  for (let y = 0; y < 24; y++) {
+    const hw = y < 9 ? 22 + Math.round(y * 0.9) : 30 - Math.round((y - 9) * 1.1);
+    for (let x = -hw; x <= hw; x++) {
+      const eyeL = ((Math.abs(x) - 14) / 8) ** 2 + ((y - 10) / 4.5) ** 2 < 1;
+      const rim = Math.abs(x) >= hw - 1 || y === 0 || y === 23;
+      const col = eyeL ? '#1c1226' : rim ? '#ffd45a' : x < -8 ? '#9a7aff' : x > 12 ? '#5a3ad0' : '#7a5af0';
+      px(ctx, 48 + x, my0 + y, col);
+    }
+  }
+  fillR(ctx, 44, my0 + 11, 8, 8, '#1c1226');
+  fillR(ctx, 46, my0 + 11, 4, 5, '#7a5af0');
+  fillR(ctx, 20, my0 + 3, 4, 1, '#ffd45a');
+  fillR(ctx, 72, my0 + 3, 4, 1, '#ffd45a');
+  for (const [gx, gy] of [[30, my0 + 4], [66, my0 + 4], [48, my0 + 2], [36, my0 + 18], [60, my0 + 18]] as const) fillR(ctx, gx, gy, 2, 2, (gx + phase) % 2 ? '#ffffff' : '#ffd45a');
+  ([['#e83c8a', 22], ['#ffcf1f', 74]] as const).forEach(([col, x], i) => {
+    for (let y = 0; y < 30; y++) fillR(ctx, x + Math.round(Math.sin(y * 0.4 + i + phase) * 2), 76 + y, 3, 1, y % 6 === 5 ? shade(col, -0.25) : col);
+  });
+  return finishBig(c, 128);
+}
+
+/** Surdo de samba: tambor azul com aros dourados e baquetas. */
+export function drumProp(): Prop {
+  const c = newProp();
+  const { ctx } = c;
+  shadow(ctx, 15);
+  for (let y = 0; y < 30; y++) {
+    fillR(ctx, 10, 36 + y, 28, 1, y < 3 || y > 26 ? '#f2c230' : y % 4 === 0 ? '#2a6bb8' : '#3a8fd0');
+    fillR(ctx, 10, 36 + y, 4, 1, '#6fb8f0');
+    fillR(ctx, 34, 36 + y, 4, 1, '#1f5a96');
+  }
+  disc(ctx, 24, 36, 14, 5, '#f4f1ea');
+  fillR(ctx, 14, 35, 20, 2, '#d8d2c4');
+  px(ctx, 22, 28, '#8a5628', 2, 10);
+  px(ctx, 30, 24, '#8a5628', 2, 12);
+  disc(ctx, 23, 27, 2.5, 2.5, '#e83c8a');
+  disc(ctx, 31, 23, 2.5, 2.5, '#ffcf1f');
+  return finish(c, 50);
+}
+
+/** Fogueira GRANDE de festa junina: pedras, lenhas em cruz e 3 quadros de chama (vermelho, laranja, amarelo, branco) com faiscas. */
+export function bonfireBigProp(frame: number): Prop {
+  const c = newBig();
+  const { ctx } = c;
+  shadowAt(ctx, 48, 136, 36);
+  for (let k = 0; k < 12; k++) {
+    const a = (k / 12) * Math.PI * 2;
+    disc(ctx, Math.round(48 + Math.cos(a) * 26), Math.round(128 + Math.sin(a) * 7), 5, 3.4, k % 2 ? '#8b8b96' : '#a8a8b6');
+  }
+  const log = (x0: number, y0: number, x1: number, y1: number) => {
+    for (let i = 0; i <= 40; i++) {
+      const x = Math.round(x0 + ((x1 - x0) * i) / 40);
+      const y = Math.round(y0 + ((y1 - y0) * i) / 40);
+      fillR(ctx, x - 2, y - 2, 5, 4, i % 9 < 2 ? '#4a2c18' : '#7a4a28');
+      px(ctx, x - 2, y - 2, '#a8693c', 5, 1);
+    }
+  };
+  log(24, 128, 70, 108);
+  log(72, 128, 26, 108);
+  const flame = (x: number, h: number, w0: number, col: string, jig: number) => {
+    for (let r = 0; r < h; r++) {
+      const u = r / h;
+      const w = Math.max(1, Math.round(Math.sin(Math.min(1, u * 1.15 + 0.1) * Math.PI) ** 0.8 * w0 * (1 - u * 0.55)));
+      const sway = Math.round(Math.sin(u * 5 + jig) * 2 * u);
+      fillR(ctx, x - w + sway, 112 - r, w * 2, 1, col);
+    }
+  };
+  flame(48, 74 + frame * 6, 17, '#d8341c', frame);
+  flame(34, 44 + ((frame + 1) % 3) * 6, 11, '#f28a1c', frame + 1);
+  flame(62, 48 + ((frame + 2) % 3) * 6, 11, '#f28a1c', frame + 2);
+  flame(48, 50 + frame * 5, 11, '#ffc23a', frame + 3);
+  flame(48, 26 + frame * 4, 6, '#fff2b0', frame + 4);
+  const sp: Array<[number, number]> = frame === 0 ? [[38, 28], [58, 18], [70, 36]] : frame === 1 ? [[44, 22], [64, 30], [30, 40]] : [[52, 14], [34, 30], [68, 22]];
+  sp.forEach(([x, y]) => px(ctx, x, y, '#ffd45a', 2, 2));
+  return finishBig(c, 100);
+}
+
+/** Cesta de milho (espigas amarelas com palha verde). */
+export function cornProp(): Prop {
+  const c = newProp();
+  const { ctx } = c;
+  shadow(ctx, 14);
+  for (const [x, tilt] of [[17, -3], [24, 0], [31, 3]] as const) {
+    for (let r = 0; r < 22; r++) {
+      const cx = x + Math.round((tilt * (22 - r)) / 22);
+      fillR(ctx, cx - 3, 30 + r, 7, 1, r % 4 === 1 ? '#d4a82a' : '#f2c230');
+      if (r > 10) fillR(ctx, cx - 3, 30 + r, 2, 1, '#3f9a3a');
+    }
+    fillR(ctx, x - 3 + Math.round(tilt * 0.8), 26, 7, 4, '#58b858');
+  }
+  for (let y = 0; y < 14; y++) {
+    const w = 15 - Math.floor(y / 4);
+    for (let x = -w; x <= w; x++) px(ctx, 24 + x, 52 + y, (x + y) % 4 === 0 ? '#7a4a22' : y % 3 === 0 ? '#b57a3a' : '#c98f4c');
+  }
+  fillR(ctx, 8, 50, 32, 3, '#8a5628');
+  return finish(c, 46);
+}
+
+// ---- bloco 2: Namorados, Criancas, Trabalho, Aniversario, Black Friday, Dia da TI ------------------------------------------
+
+/** Coracao de pixels (7x6) em 3 tons, com brilho. */
+function heartAt(ctx: Ctx, x: number, y: number, col: string, k = 1) {
+  const rows = ['.##.##.', '#######', '#######', '.#####.', '..###..', '...#...'];
+  rows.forEach((row, r) => {
+    for (let c = 0; c < 7; c++) {
+      if (row[c] !== '#') continue;
+      const tone = r === 1 && c < 3 ? shade(col, 0.32) : c > 4 || r > 3 ? shade(col, -0.25) : col;
+      fillR(ctx, x + c * k, y + r * k, k, k, tone);
+    }
+  });
+}
+
+/** Arco de rosas GRANDE com coracao no topo (Namorados); 2 quadros brilham. */
+export function roseArchProp(phase: number): Prop {
+  const c = newBig();
+  const { ctx } = c;
+  shadowAt(ctx, 48, 136, 38);
+  for (const bx of [12, 76]) {
+    fillR(ctx, bx, 40, 8, 92, '#f4f1ea');
+    fillR(ctx, bx, 40, 2, 92, '#ffffff');
+    fillR(ctx, bx + 6, 40, 2, 92, '#cfc9b8');
+    fillR(ctx, bx - 2, 128, 12, 6, '#e0dac8');
+    fillR(ctx, bx - 2, 36, 12, 5, '#f4f1ea');
+  }
+  // folhagem e rosas pelo arco
+  const arc: Array<[number, number]> = [];
+  for (let i = 0; i <= 20; i++) {
+    const t = i / 20;
+    arc.push([12 + 72 * t, 56 - 40 * Math.sin(t * Math.PI) ** 0.8]);
+  }
+  arc.forEach(([x, y], i) => {
+    disc(ctx, Math.round(x), Math.round(y), 6, 5, i % 2 ? '#2f8f4e' : '#237a40');
+  });
+  for (let y = 44; y < 124; y += 9) for (const bx of [16, 80]) disc(ctx, bx + ((y / 9) % 2 ? -3 : 3), y, 4, 4, '#2f8f4e');
+  const rose = (x: number, y: number, col: string) => {
+    disc(ctx, x, y, 4, 4, col);
+    px(ctx, x - 1, y - 1, shade(col, -0.4), 2, 1);
+    px(ctx, x, y, shade(col, 0.35), 1, 1);
+  };
+  arc.forEach(([x, y], i) => {
+    if (i % 2) rose(Math.round(x), Math.round(y) - 1, ['#e8344e', '#ff4d7e', '#ff9ab5'][i % 3]!);
+  });
+  for (let y = 54; y < 124; y += 12) {
+    rose(14, y, '#e8344e');
+    rose(82, y + 5, '#ff4d7e');
+  }
+  heartAt(ctx, 36, 2, phase ? '#ff6a96' : '#ff4d7e', 3);
+  if (phase) px(ctx, 40, 5, '#ffffff', 2, 2);
+  else px(ctx, 54, 8, '#ffffff', 2, 2);
+  // petalas no chao
+  for (const [x, y] of [[30, 130], [60, 128], [44, 134], [68, 133]] as const) px(ctx, x, y, '#ff4d7e', 2, 1);
+  return finishBig(c, 130);
+}
+
+/** Ursinho de pelucia com coracao. */
+export function teddyProp(): Prop {
+  const c = newProp();
+  const { ctx } = c;
+  shadow(ctx, 14);
+  const fur = '#c98f4c';
+  disc(ctx, 24, 54, 13, 12, fur);
+  disc(ctx, 24, 53, 7, 7, '#ecc88a');
+  disc(ctx, 24, 30, 11, 10, fur);
+  disc(ctx, 14, 21, 4, 4, fur);
+  disc(ctx, 34, 21, 4, 4, fur);
+  disc(ctx, 14, 21, 2, 2, '#ecc88a');
+  disc(ctx, 34, 21, 2, 2, '#ecc88a');
+  disc(ctx, 24, 34, 5, 4, '#ecc88a');
+  fillR(ctx, 19, 27, 2, 3, '#1c1226');
+  fillR(ctx, 28, 27, 2, 3, '#1c1226');
+  fillR(ctx, 23, 32, 3, 2, '#1c1226');
+  disc(ctx, 10, 50, 4, 6, fur);
+  disc(ctx, 38, 50, 4, 6, fur);
+  disc(ctx, 16, 66, 5, 3, fur);
+  disc(ctx, 32, 66, 5, 3, fur);
+  heartAt(ctx, 21, 46, '#e8344e', 1);
+  fillR(ctx, 18, 40, 12, 3, '#d03a3a');
+  return finish(c, 62);
+}
+
+/** Torre de blocos de montar GRANDE (Dia das Criancas): A, B, C, 1, 2, 3 com estrela no topo e um carrinho; 2 quadros: a estrela pisca. */
+export function blockTowerProp(phase: number): Prop {
+  const c = newBig();
+  const { ctx } = c;
+  shadowAt(ctx, 48, 136, 38);
+  const block = (x: number, y: number, w: number, col: string, ch: string) => {
+    fillR(ctx, x, y, w, 26, col);
+    fillR(ctx, x, y, w, 3, shade(col, 0.35));
+    fillR(ctx, x, y, 3, 26, shade(col, 0.2));
+    fillR(ctx, x + w - 4, y + 3, 4, 23, shade(col, -0.3));
+    fillR(ctx, x, y + 23, w, 3, shade(col, -0.42));
+    // pinos de encaixe
+    for (const px0 of [x + 6, x + w - 14]) {
+      fillR(ctx, px0, y - 3, 8, 3, shade(col, 0.2));
+      fillR(ctx, px0, y - 3, 8, 1, shade(col, 0.45));
+    }
+    A_flat(ctx, x + Math.round(w / 2) - 5, y + 8, ch, '#ffffff', 2);
+  };
+  block(8, 108, 38, '#3aa0ff', 'A');
+  block(50, 108, 38, '#ff5d73', 'B');
+  block(18, 80, 38, '#ffcc2e', 'C');
+  block(58, 80, 30, '#3ed08a', '1');
+  block(34, 52, 38, '#9a5ad0', '2');
+  // estrela no topo
+  const col = phase ? '#fff0a0' : '#ffd95a';
+  fillR(ctx, 46, 28, 3, 24, '#8a5628');
+  star7(ctx, 47, 14, col);
+  if (phase) {
+    px(ctx, 36, 12, '#ffffff', 2, 2);
+    px(ctx, 58, 20, '#ffffff', 2, 2);
+  } else px(ctx, 56, 8, '#ffffff', 2, 2);
+  return finishBig(c, 130);
+}
+const A_flat = (ctx: Ctx, x: number, y: number, s: string, col: string, k: number) => flatText(ctx, x, y, s, col, k);
+function star7(ctx: Ctx, cx: number, cy: number, col: string) {
+  const rows = ['...#...', '...#...', '#######', '.#####.', '..###..', '.##.##.', '.#...#.'];
+  rows.forEach((row, y) => [...row].forEach((ch, x) => ch === '#' && fillR(ctx, cx - 10 + x * 3, cy - 6 + y * 3, 3, 3, y < 3 ? shade(col, 0.2) : col)));
+}
+
+/** Engrenagens GRANDES com capacete amarelo no topo (Dia do Trabalho): azul e dourado, discreto. */
+export function gearsBigProp(): Prop {
+  const c = newBig();
+  const { ctx } = c;
+  shadowAt(ctx, 48, 136, 34);
+  // pedestal
+  fillR(ctx, 22, 118, 52, 12, '#4a5a78');
+  fillR(ctx, 22, 118, 52, 3, '#7a8aa8');
+  fillR(ctx, 22, 127, 52, 3, '#2a3550');
+  fillR(ctx, 36, 123, 24, 3, '#f2c230');
+  const gear = (cx: number, cy: number, r: number, col: string) => {
+    for (let y = -r - 5; y <= r + 5; y++) for (let x = -r - 5; x <= r + 5; x++) {
+      const d = Math.hypot(x, y);
+      const ang = Math.atan2(y, x);
+      const teeth = d > r - 1 && d <= r + 4 && Math.floor(((ang + Math.PI) / (Math.PI * 2)) * 10 + 0.5) % 2 === 0;
+      const body = d <= r && d > r * 0.35;
+      if (!body && !teeth) continue;
+      px(ctx, cx + x, cy + y, x + y < -r * 0.6 ? shade(col, 0.28) : x + y > r * 0.6 ? shade(col, -0.3) : col);
+    }
+    disc(ctx, cx, cy, r * 0.22, r * 0.22, shade(col, -0.45));
+  };
+  gear(34, 90, 20, '#2f6fd0');
+  gear(66, 82, 15, '#f2c230');
+  gear(50, 54, 11, '#8aa8e0');
+  // capacete
+  disc(ctx, 48, 30, 15, 12, '#ffcf1f');
+  fillR(ctx, 30, 36, 36, 5, '#e0a80a');
+  fillR(ctx, 30, 36, 36, 1, '#fff0a0');
+  fillR(ctx, 45, 14, 6, 14, '#e0a80a');
+  fillR(ctx, 45, 14, 2, 14, '#fff0a0');
+  fillR(ctx, 38, 26, 4, 3, '#ffffff');
+  return finishBig(c, 124);
+}
+
+/** Caixa de ferramentas aberta com chave e martelo. */
+export function toolboxProp(): Prop {
+  const c = newProp();
+  const { ctx } = c;
+  shadow(ctx, 14);
+  fillR(ctx, 8, 46, 32, 20, '#d03a3a');
+  fillR(ctx, 8, 46, 32, 3, '#ff6a6a');
+  fillR(ctx, 8, 46, 3, 20, '#e85a5a');
+  fillR(ctx, 36, 49, 4, 17, '#a82a2a');
+  fillR(ctx, 8, 62, 32, 4, '#7a1a1a');
+  fillR(ctx, 8, 54, 32, 2, '#2a2a38');
+  fillR(ctx, 20, 40, 8, 6, '#8a8794');
+  fillR(ctx, 20, 40, 8, 1, '#c9c6d4');
+  fillR(ctx, 14, 30, 3, 14, '#8a5628');
+  fillR(ctx, 10, 28, 12, 5, '#8a8794');
+  fillR(ctx, 28, 34, 3, 12, '#c9c6d4');
+  fillR(ctx, 26, 30, 7, 5, '#c9c6d4');
+  return finish(c, 40);
+}
+
+/** Bolo de aniversario GRANDE de 3 andares com velas acesas (3 quadros: chamas dancam) e confeitos. */
+export function cakeBigProp(frame: number): Prop {
+  const c = newBig();
+  const { ctx } = c;
+  shadowAt(ctx, 48, 136, 36);
+  disc(ctx, 48, 128, 32, 7, '#e8ecf4');
+  fillR(ctx, 20, 126, 56, 2, '#c9d0e0');
+  const tier = (cx: number, y0: number, hw: number, h: number, base: string, cream: string) => {
+    for (let y = 0; y < h; y++) for (let x = -hw; x <= hw; x++) {
+      const col = x < -hw * 0.45 ? shade(base, 0.22) : x > hw * 0.5 ? shade(base, -0.25) : base;
+      px(ctx, cx + x, y0 + y, y < 5 ? cream : col);
+    }
+    for (let x = -hw; x <= hw; x += 5) fillR(ctx, cx + x, y0 + 5, 3, 3 + (x % 3 === 0 ? 3 : 1), cream);
+    for (let x = -hw + 3; x < hw - 2; x += 7) fillR(ctx, cx + x, y0 + h - 8, 3, 3, ['#ffd45a', '#3aa0ff', '#7ae85a'][((x + 99) / 7 | 0) % 3]!);
+    disc(ctx, cx, y0, hw, 3, cream);
+  };
+  tier(48, 94, 32, 32, '#ff6fa8', '#fff4f8');
+  tier(48, 64, 23, 30, '#7a5af0', '#f4eeff');
+  tier(48, 38, 15, 26, '#ffc83d', '#fff8e0');
+  // velas
+  const flame = (x: number, f: number) => {
+    fillR(ctx, x, 22, 3, 14, '#f4f1ea');
+    fillR(ctx, x, 22, 1, 14, '#ffffff');
+    fillR(ctx, x + 1, 24, 1, 2, '#ff6fa8');
+    fillR(ctx, x + 1, 30, 1, 2, '#ff6fa8');
+    const h = 6 + (f % 2);
+    fillR(ctx, x, 22 - h, 3, h, '#ff9a2a');
+    fillR(ctx, x + 1, 22 - h + 1, 1, h - 1, '#ffe27a');
+    if (f === 2) fillR(ctx, x + 2, 22 - h - 1, 1, 2, '#ff9a2a');
+  };
+  flame(38, frame);
+  flame(47, frame + 1);
+  flame(56, frame + 2);
+  return finishBig(c, 130);
+}
+
+/** Letreiro de Black Friday em cavalete: neon dourado "BLACK FRIDAY" e "-70%", lampadas piscam em 2 quadros. */
+export function blackSignProp(phase: number): Prop {
+  const c = newBig();
+  const { ctx } = c;
+  shadowAt(ctx, 48, 136, 34);
+  fillR(ctx, 24, 100, 5, 32, '#2a2a34');
+  fillR(ctx, 67, 100, 5, 32, '#2a2a34');
+  fillR(ctx, 18, 128, 60, 5, '#1c1c24');
+  fillR(ctx, 8, 28, 80, 76, '#0c0c12');
+  fillR(ctx, 10, 30, 76, 72, '#15151c');
+  fillR(ctx, 10, 30, 76, 2, '#2a2a38');
+  const gold = '#f0b429';
+  fillR(ctx, 12, 32, 72, 2, gold);
+  fillR(ctx, 12, 98, 72, 2, gold);
+  fillR(ctx, 12, 32, 2, 68, gold);
+  fillR(ctx, 82, 32, 2, 68, gold);
+  // lampadas piscando ao redor
+  for (let i = 0; i < 10; i++) {
+    const on = (i + phase) % 2 === 0;
+    for (const [x, y] of [[14 + i * 7, 26], [14 + i * 7, 102]] as const) fillR(ctx, x, y, 3, 3, on ? '#fff0a0' : '#6a5a2a');
+  }
+  for (let i = 0; i < 7; i++) {
+    const on = (i + phase) % 2 === 1;
+    for (const x of [4, 90]) fillR(ctx, x, 32 + i * 10, 3, 3, on ? '#fff0a0' : '#6a5a2a');
+  }
+  flatText(ctx, 18, 42, 'BLACK', '#6a4a10', 3);
+  flatText(ctx, 18, 41, 'BLACK', gold, 3);
+  flatText(ctx, 14, 62, 'FRIDAY', '#6a4a10', 3);
+  flatText(ctx, 14, 61, 'FRIDAY', '#ffffff', 3);
+  fillR(ctx, 20, 82, 56, 12, gold);
+  flatText(ctx, 30, 85, 'SO HOJE!', '#15151c', 1);
+  return finishBig(c, 132);
+}
+
+/** Holograma GRANDE da Sala da TI: pedestal de ponte de comando, globo de arame ciano e dados orbitando (2 quadros). */
+export function holoBigProp(frame: number): Prop {
+  const c = newBig();
+  const { ctx } = c;
+  shadowAt(ctx, 48, 136, 34);
+  disc(ctx, 48, 128, 30, 7, '#1c2440');
+  fillR(ctx, 22, 124, 52, 2, NEON_CY);
+  disc(ctx, 48, 120, 20, 5, '#2b3556');
+  fillR(ctx, 30, 119, 36, 2, NEON_CY);
+  for (let y = 0; y < 60; y++) {
+    const w = 8 + y * 0.45;
+    fillR(ctx, Math.round(48 - w), 116 - y, Math.round(w * 2), 1, 'rgba(39,217,255,0.14)');
+  }
+  const R = 24;
+  const cx = 48;
+  const cy = 62;
+  for (let a = 0; a < 6.3; a += 0.03) fillR(ctx, Math.round(cx + Math.cos(a) * R), Math.round(cy + Math.sin(a) * R), 1, 1, NEON_CY);
+  for (let k = -3; k <= 3; k++) {
+    const yy = cy + k * 6;
+    const rw = Math.sqrt(Math.max(0, R * R - (k * 6) ** 2));
+    for (let a = 0; a < 6.3; a += 0.07) fillR(ctx, Math.round(cx + Math.cos(a) * rw), Math.round(yy + Math.sin(a) * rw * 0.25), 1, 1, '#7ae8ff');
+  }
+  for (const ph of [0, 1, 2]) {
+    const off = (frame * 0.5 + ph * 1.05) % 3.14;
+    for (let t = -1.5; t < 1.5; t += 0.05) fillR(ctx, Math.round(cx + Math.sin(off) * R * Math.cos(t)), Math.round(cy + Math.sin(t) * R), 1, 1, '#bff4ff');
+  }
+  for (let i = 0; i < 5; i++) {
+    const a = frame * 1.1 + i * 1.26;
+    fillR(ctx, Math.round(cx + Math.cos(a) * 32), Math.round(cy + Math.sin(a) * 9 - 6), 3, 3, i % 2 ? NEON_GR : '#ffffff');
+  }
+  fillR(ctx, cx - 2, cy - 2, 4, 4, '#ffffff');
+  return { canvas: c.canvas, ax: 48, ay: 136, h: 120 };
 }
 
 // ---- brilhos --------------------------------------------------------------------------------------------------------

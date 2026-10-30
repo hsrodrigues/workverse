@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FURNI_KINDS, ROOM_DEFS, auditRoomLayout, buildRoom, planEventDecor, reachableTiles, slotRuns } from '@workverse/shared';
+import { DECOR_LIMITS, FURNI_KINDS, ROOM_DEFS, auditRoomLayout, buildRoom, decorLevel, planEventDecor, reachableTiles, slotRuns, spreadSlots } from '@workverse/shared';
 import { THEMES, windowSpots } from '../src/game/roomArt';
 
 /** Event decoration never blocks a path nor covers a door, a switch or a piece of furniture. */
@@ -51,6 +51,38 @@ describe('event decoration layout', () => {
       for (const run of slotRuns(plan.wallTop)) expect(new Set(run.map((r) => r.side)).size).toBe(1);
     });
   }
+
+  it('density: reception/office are rich, small rooms discreet, a second event lowers one level', () => {
+    expect(decorLevel('reception', 200)).toBe(3);
+    expect(decorLevel('office', 200)).toBe(3);
+    expect(decorLevel('lounge', 90)).toBe(2);
+    expect(decorLevel('private', 20)).toBe(1);
+    expect(decorLevel('office', 200, true)).toBe(2);
+    expect(decorLevel('private', 20, true)).toBe(1);
+    expect(DECOR_LIMITS[3].props).toBeGreaterThan(DECOR_LIMITS[2].props);
+    expect(DECOR_LIMITS[2].props).toBeGreaterThan(DECOR_LIMITS[1].props);
+  });
+
+  it('spreadSlots is deterministic, spaced and symmetric on a symmetric wall', () => {
+    const slots = Array.from({ length: 11 }, (_, t) => ({ side: 'n' as const, t }));
+    const a = spreadSlots(slots, 3);
+    expect(spreadSlots(slots, 3)).toEqual(a);
+    const ts = a.map((s) => s.t).sort((x, y) => x - y);
+    for (let i = 1; i < ts.length; i++) expect(ts[i]! - ts[i - 1]!).toBeGreaterThanOrEqual(2);
+  });
+
+  it('top-band slots never sit over a split A/C, TV or clock', () => {
+    for (const def of ROOM_DEFS) {
+      const room = buildRoom(def);
+      const plan = planEventDecor(def, windowSpots(room, THEMES[def.id] ?? THEMES.office));
+      for (const f of def.furniture.filter((x) => ['ac_split', 'tv', 'clock'].includes(x.kind))) {
+        const north = f.dir % 2 === 0;
+        for (const t of [f.x, f.y]) void t;
+        const tiles = north ? Array.from({ length: FURNI_KINDS[f.kind].w }, (_, i) => f.x + i) : Array.from({ length: FURNI_KINDS[f.kind].w }, (_, i) => f.y + i);
+        for (const s of plan.wallTop) if (s.side === (north ? 'n' : 'w')) expect(tiles.includes(s.t), `${def.id}/${f.id}`).toBe(false);
+      }
+    }
+  });
 
   it('the layout rules still pass for the stock rooms (decoration does not change furniture)', () => {
     for (const def of ROOM_DEFS) expect(auditRoomLayout(def).filter((i) => i.code.startsWith('wall_'))).toEqual([]);

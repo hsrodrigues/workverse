@@ -99,6 +99,50 @@ function wallBusy(room: BuiltRoom): { n: Set<number>; w: Set<number> } {
   return { n, w };
 }
 
+/** Pecas penduradas que chegam ate a faixa alta da parede (split, TV, telao, relogio...): faixas e bandeirolas nao passam por cima. */
+const HIGH_WALL = new Set(['ac_split', 'tv', 'videowall', 'screen', 'router', 'cable_tray', 'logo', 'arch_board', 'clock', 'whiteboard']);
+function highWall(room: BuiltRoom): { n: Set<number>; w: Set<number> } {
+  const n = new Set<number>();
+  const w = new Set<number>();
+  for (const f of room.def.furniture) {
+    if (!HIGH_WALL.has(f.kind)) continue;
+    const north = f.dir % 2 === 0;
+    for (const t of footprintTiles(f)) (north ? n : w).add(north ? t.x : t.y);
+  }
+  return { n, w };
+}
+
+/** Niveis de densidade: 3 = recepcao/escritorio (rico), 2 = salas medias, 1 = salas pequenas (discreto). */
+export type DecorLevel = 1 | 2 | 3;
+export const DECOR_LIMITS: Record<DecorLevel, { props: number; items: number; particles: number }> = {
+  1: { props: 2, items: 2, particles: 0 },
+  2: { props: 3, items: 3, particles: 14 },
+  3: { props: 6, items: 5, particles: 26 },
+};
+/** `stacked`: ha outro evento ativo ao mesmo tempo; o principal reduz um nivel. */
+export function decorLevel(roomId: string, walkableTiles: number, stacked = false): DecorLevel {
+  let lv: DecorLevel = roomId === 'reception' || roomId === 'office' ? 3 : roomId === 'lounge' || roomId === 'auditorium' || roomId === 'ti' ? 2 : walkableTiles >= 70 ? 2 : 1;
+  if (stacked && lv > 1) lv = (lv - 1) as DecorLevel;
+  return lv;
+}
+
+/** Escolhe `n` trechos espalhados de forma regular e simetrica (sem sorteio) entre os livres, respeitando `gap` tiles. */
+export function spreadSlots(slots: readonly WallSlot[], n: number, gap = 2): WallSlot[] {
+  const out: WallSlot[] = [];
+  for (const side of ['n', 'w'] as const) {
+    const list = slots.filter((s) => s.side === side).sort((a, b) => a.t - b.t);
+    const share = side === 'n' ? Math.ceil(n * 0.6) : n - Math.ceil(n * 0.6);
+    const k = Math.min(share, list.length);
+    const picked: WallSlot[] = [];
+    for (let i = 0; i < k; i++) {
+      const cand = list[Math.floor(((i + 0.5) * list.length) / k)]!;
+      if (picked.every((p) => Math.abs(p.t - cand.t) >= gap)) picked.push(cand);
+    }
+    out.push(...picked);
+  }
+  return out.slice(0, Math.max(n, 0));
+}
+
 export function planEventDecor(def: RoomDef, windows: readonly WallSlot[] = [], seed = 0, maxProps?: number): EventDecorPlan {
   const room = buildRoom(def);
   const { width, height, floor } = room.grid;
@@ -164,18 +208,19 @@ export function planEventDecor(def: RoomDef, windows: readonly WallSlot[] = [], 
   const portalW = new Set(def.portals.filter((p) => p.x === 0).map((p) => p.y));
   const winN = new Set(windows.filter((s) => s.side === 'n').map((s) => s.t));
   const winW = new Set(windows.filter((s) => s.side === 'w').map((s) => s.t));
+  const high = highWall(room);
   const wallFree: WallSlot[] = [];
   const wallTop: WallSlot[] = [];
   for (let x = 0; x < width; x++) {
     if (!isFloor(x, 0)) continue;
-    if (!portalN.has(x - 1) && !portalN.has(x) && !portalN.has(x + 1)) wallTop.push({ side: 'n', t: x });
+    if (!portalN.has(x - 1) && !portalN.has(x) && !portalN.has(x + 1) && !high.n.has(x)) wallTop.push({ side: 'n', t: x });
     if (portalN.has(x) || busy.n.has(x) || winN.has(x)) continue;
     if ((room.furniAt.get(x) ?? []).length > 0) continue;
     wallFree.push({ side: 'n', t: x });
   }
   for (let y = 0; y < height; y++) {
     if (!isFloor(0, y)) continue;
-    if (!portalW.has(y - 1) && !portalW.has(y) && !portalW.has(y + 1)) wallTop.push({ side: 'w', t: y });
+    if (!portalW.has(y - 1) && !portalW.has(y) && !portalW.has(y + 1) && !high.w.has(y)) wallTop.push({ side: 'w', t: y });
     if (portalW.has(y) || busy.w.has(y) || winW.has(y)) continue;
     if ((room.furniAt.get(y * width) ?? []).length > 0) continue;
     wallFree.push({ side: 'w', t: y });

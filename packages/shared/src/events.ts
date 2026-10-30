@@ -352,3 +352,32 @@ export const newYearNumber = (date: Date | number): number => {
   const d = typeof date === 'number' ? new Date(date) : date;
   return d.getMonth() >= 6 ? d.getFullYear() + 1 : d.getFullYear();
 };
+
+// ---- Ano Novo: contagem para 00:00 --------------------------------------------------------------------------------
+
+export interface NewYearClock {
+  /** `count`: faltam h:m:s para a meia-noite; `party`: ja virou (1 e 2 de janeiro), a decoracao pisca "FELIZ ANO NOVO". */
+  phase: 'count' | 'party';
+  h: number;
+  m: number;
+  s: number;
+  /** Ano que comecou (party) ou que vai comecar (count). */
+  year: number;
+}
+
+/**
+ * Relogio da decoracao de Ano Novo. Em 31/12 conta ate a meia-noite que vira o ano; em 1 e 2 de janeiro esta em festa.
+ * Fora da janela (evento forcado pela staff) conta ate a proxima meia-noite local, so para o relogio andar.
+ */
+export function newYearCountdown(now: Date | number): NewYearClock {
+  const d = typeof now === 'number' ? new Date(now) : now;
+  if (d.getMonth() === 0) return { phase: 'party', h: 0, m: 0, s: 0, year: d.getFullYear() };
+  const target = d.getMonth() === 11 && d.getDate() === 31 ? new Date(d.getFullYear() + 1, 0, 1) : new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+  const left = Math.max(0, Math.ceil((target.getTime() - d.getTime()) / 1000));
+  return { phase: 'count', h: Math.floor(left / 3600), m: Math.floor((left % 3600) / 60), s: left % 60, year: target.getFullYear() };
+}
+
+/** Pilha de eventos simultaneos: so o de maior prioridade desenha a peca assinatura; os demais so reforcam com acentos leves. */
+export function eventStack<T extends { id: string }>(active: readonly T[]): { primary: T | null; secondary: T[] } {
+  return { primary: active[0] ?? null, secondary: active.slice(1) };
+}
