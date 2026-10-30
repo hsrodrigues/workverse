@@ -56,6 +56,14 @@ export interface SessionRecord {
   expiresAt: number;
 }
 
+/** Pedido de redefinicao de senha por e-mail. Guarda so o SHA-256 do token; o token em claro vai apenas no e-mail. */
+export interface ResetTokenRecord {
+  tokenHash: string;
+  accountId: string;
+  createdAt: number;
+  expiresAt: number;
+}
+
 export interface NewAccount {
   email: string;
   displayName: string;
@@ -99,6 +107,16 @@ export interface AccountStore {
   deleteExpiredSessions(now: number): void;
   /** Keeps only the `keep` newest sessions of the account (older ones are revoked). Returns how many were removed. */
   trimSessionsOf(accountId: string, keep: number): number;
+
+  /** Registra um token de redefinicao e mantem no maximo `maxPending` validos por conta (os mais antigos caem). */
+  createResetToken(record: ResetTokenRecord, maxPending: number, now: number): void;
+  /** Consulta sem consumir (token valido = existe e nao expirou). */
+  getResetToken(tokenHash: string, now: number): ResetTokenRecord | undefined;
+  /** Uso unico: devolve o registro e o apaga; undefined se nao existe, ja foi usado ou expirou. */
+  consumeResetToken(tokenHash: string, now: number): ResetTokenRecord | undefined;
+  deleteResetTokensOf(accountId: string): void;
+  countResetTokens(accountId: string, now: number): number;
+  deleteExpiredResetTokens(now: number): void;
 
   /** Auditoria permanente de staff (ver docs/staff.md). Mantem os registros mais recentes em memoria. */
   appendAudit(record: AuditRecord): void;
@@ -148,6 +166,44 @@ export class MemoryAccountStore implements AccountStore {
   protected byName = new Map<string, Account>();
   protected sessions = new Map<string, SessionRecord>();
   protected audit: AuditRecord[] = [];
+  protected resets = new Map<string, ResetTokenRecord>();
+
+  createResetToken(record: ResetTokenRecord, maxPending: number, now: number): void {
+    const mine = [...this.resets.values()].filter((r) => r.accountId === record.accountId && r.expiresAt > now).sort((a, b) => b.createdAt - a.createdAt);
+    for (const r of mine.slice(Math.max(0, maxPending - 1))) this.dropReset(r.tokenHash);
+    this.resets.set(record.tokenHash, record);
+    this.onResetAdded(record);
+  }
+
+  getResetToken(tokenHash: string, now: number): ResetTokenRecord | undefined {
+    const r = this.resets.get(tokenHash);
+    return r && r.expiresAt > now ? r : undefined;
+  }
+
+  consumeResetToken(tokenHash: string, now: number): ResetTokenRecord | undefined {
+    const r = this.getResetToken(tokenHash, now);
+    if (r) this.dropReset(tokenHash);
+    return r;
+  }
+
+  deleteResetTokensOf(accountId: string): void {
+    for (const r of [...this.resets.values()]) if (r.accountId === accountId) this.dropReset(r.tokenHash);
+  }
+
+  countResetTokens(accountId: string, now: number): number {
+    return [...this.resets.values()].filter((r) => r.accountId === accountId && r.expiresAt > now).length;
+  }
+
+  deleteExpiredResetTokens(now: number): void {
+    for (const r of [...this.resets.values()]) if (r.expiresAt <= now) this.dropReset(r.tokenHash);
+  }
+
+  /** Ganchos de persistencia (JSON / PostgreSQL sobrescrevem). */
+  protected onResetAdded(_r: ResetTokenRecord): void {}
+  protected onResetDropped(_tokenHash: string): void {}
+  private dropReset(tokenHash: string) {
+    if (this.resets.delete(tokenHash)) this.onResetDropped(tokenHash);
+  }
 
   appendAudit(record: AuditRecord): void {
     this.audit.push(record);
@@ -263,6 +319,7 @@ interface FileShape extends Partial<OrgData>, BookingData, NetsimData {
   accounts: Account[];
   sessions: SessionRecord[];
   audit?: AuditRecord[];
+  resetTokens?: ResetTokenRecord[];
 }
 
 export interface JsonStoreOptions {
@@ -285,6 +342,7 @@ export class JsonFileAccountStore extends MemoryAccountStore {
         for (const a of data.accounts ?? []) this.index({ ...a, avatar: sanitizeAvatar(a.avatar), ...(a.outfits ? { outfits: sanitizeOutfits(a.outfits) } : {}) });
         for (const s of data.sessions ?? []) this.sessions.set(s.tokenHash, s);
         if (Array.isArray(data.audit)) this.audit = data.audit.slice(-AUDIT_CAP);
+        for (const r of data.resetTokens ?? []) if (r.expiresAt > Date.now() && this.accounts.has(r.accountId)) this.resets.set(r.tokenHash, r);
         this.deleteExpiredSessions(Date.now());
         this.orgs.load(data);
         this.bookings.load(data);
@@ -332,6 +390,14 @@ export class JsonFileAccountStore extends MemoryAccountStore {
     this.schedule();
   }
 
+  protected override onResetAdded(): void {
+    this.schedule();
+  }
+
+  protected override onResetDropped(): void {
+    this.schedule();
+  }
+
   override deleteSession(tokenHash: string): void {
     super.deleteSession(tokenHash);
     this.schedule();
@@ -363,7 +429,7 @@ export class JsonFileAccountStore extends MemoryAccountStore {
     }
     mkdirSync(dirname(this.file), { recursive: true });
     const tmp = `${this.file}.tmp`;
-    const data: FileShape = { version: 3, accounts: [...this.accounts.values()], sessions: [...this.sessions.values()], audit: this.audit, ...this.orgs.snapshot(), ...this.bookings.snapshot(), ...this.netsim.snapshot() };
+    const data: FileShape = { version: 3, accounts: [...this.accounts.values()], sessions: [...this.sessions.values()], audit: this.audit, resetTokens: [...this.resets.values()], ...this.orgs.snapshot(), ...this.bookings.snapshot(), ...this.netsim.snapshot() };
     // The file holds password hashes and session hashes: keep it private to the server user.
     writeFileSync(tmp, JSON.stringify(data, null, 2), { mode: 0o600 });
     renameSync(tmp, this.file);

@@ -25,7 +25,8 @@ export interface BookingBlock extends BookingWindow {
 export interface BookingQueueEntry extends BookingWindow {
   id: string;
   position: number;
-  ownerName: string;
+  /** Ausente para quem nao pode entrar na sala e nao e o dono nem administra. */
+  ownerName?: string;
   mine: boolean;
   title?: string;
 }

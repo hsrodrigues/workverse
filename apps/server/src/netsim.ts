@@ -27,6 +27,7 @@ import {
   type Topology,
 } from '@workverse/shared';
 import { TokenBucket } from './limiter';
+import { ChallengeService } from './netsimChallenges';
 import type { NetsimRow } from './netsimStore';
 import type { Player, RoomInstance } from './room';
 import type { AccountStore } from './store';
@@ -81,7 +82,12 @@ export class NetsimService {
   private readonly buckets = new Map<string, TokenBucket>();
   private readonly hostCache = new Map<string, { version: number; hosts: Map<string, HostNet> }>();
 
-  constructor(private readonly host: NetsimHost) {}
+  /** Desafios "Conserte a rede": sandbox por pessoa, nunca toca a topologia real da org. */
+  private readonly challenges: ChallengeService;
+
+  constructor(private readonly host: NetsimHost) {
+    this.challenges = new ChallengeService(host);
+  }
 
   /** O mundo chama isto para toda mensagem `netsim_*`. Devolve false se a mensagem for malformada (vira strike). */
   handle(p: Player, msg: ClientMessage, now: number): boolean {
@@ -91,6 +97,13 @@ export class NetsimService {
       return true;
     }
     switch (msg.t) {
+      case 'netsim_challenges':
+      case 'netsim_challenge_start':
+      case 'netsim_challenge_edit':
+      case 'netsim_challenge_check':
+      case 'netsim_challenge_hint':
+      case 'netsim_challenge_quit':
+        return this.challenges.handle(p, msg, now);
       case 'netsim_get':
         this.subscribe(p);
         this.sendState(p);
@@ -349,6 +362,7 @@ export class NetsimService {
 
   forget(accountId: string) {
     for (const s of this.subs.values()) s.delete(accountId);
+    this.challenges.forget(accountId);
   }
 }
 

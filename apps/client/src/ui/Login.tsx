@@ -13,6 +13,9 @@ interface Props {
   registration?: 'open' | 'invite' | 'closed';
   /** Convite vindo do link (/invite/CODIGO). */
   inviteFromUrl?: string;
+  /** Servidor com "Esqueci minha senha" por e-mail ligado: mostra o link; senao orienta a falar com a staff. */
+  passwordReset?: boolean;
+  onForgot?(): void;
   /** Called when switching tabs so the parent can clear a stale error. */
   onModeChange?(): void;
 }
@@ -22,7 +25,7 @@ function cleanName(raw: string): string {
   return raw.normalize('NFKC').replace(/\s+/g, ' ').trim();
 }
 
-export function Login({ busy, error, onLogin, onRegister, onModeChange, registration = 'open', inviteFromUrl = '' }: Props) {
+export function Login({ busy, error, onLogin, onRegister, onModeChange, registration = 'open', inviteFromUrl = '', passwordReset = false, onForgot }: Props) {
   const closed = registration === 'closed';
   const needsInvite = registration === 'invite';
   const [mode, setMode] = useState<Mode>(inviteFromUrl && !closed ? 'register' : 'login');
@@ -169,9 +172,20 @@ export function Login({ busy, error, onLogin, onRegister, onModeChange, registra
           <button className="btn btn-primary" disabled={busy} aria-busy={busy}>
             {busy ? (register ? 'Criando conta…' : 'Entrando…') : register ? 'Criar conta' : 'Entrar'}
           </button>
+          {!register && (
+            <p className="hint" data-testid="forgot-hint">
+              {passwordReset && onForgot ? (
+                <button type="button" className="linklike" onClick={onForgot} data-testid="forgot-link">
+                  Esqueci minha senha
+                </button>
+              ) : (
+                'Esqueceu a senha? Peça à staff para redefinir.'
+              )}
+            </p>
+          )}
           <p className="hint">
             {register
-              ? 'Depois de criar a conta você escolhe o visual do seu avatar. Ainda não há recuperação de senha: guarde-a em um gerenciador.'
+              ? 'Depois de criar a conta você escolhe o visual do seu avatar. Guarde a senha em um gerenciador.'
               : closed
                 ? 'Peça a quem administra para criar sua conta.'
                 : needsInvite

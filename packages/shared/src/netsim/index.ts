@@ -5,3 +5,4 @@ export * from './ops';
 export * from './engine';
 export * from './templates';
 export * from './protocol';
+export * from './challenges';

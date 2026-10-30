@@ -114,7 +114,7 @@ function MediaCard() {
         <b>{usage.usedMinutes.toLocaleString('pt-BR')} de {usage.limitMinutes.toLocaleString('pt-BR')} min ({usage.percent}%)</b> em {usage.month}{' '}
         <Chip tone={tone}>{usage.level === 'exceeded' ? 'cota atingida' : usage.level === 'ok' ? 'normal' : usage.level === 'warn90' ? 'acima de 90%' : 'acima de 70%'}</Chip>
       </p>
-      <p className="sf-hint">{usage.activeSessions} pessoa(s) na chamada agora. {MEDIA_TEXT.estimateNote}</p>
+      <p className="sf-hint">{usage.activeSessions} pessoa(s) na chamada agora. {usage.webhook ? MEDIA_TEXT.webhookOn : MEDIA_TEXT.webhookOff}</p>
       <div className="sf-mode">
         <button
           type="button"

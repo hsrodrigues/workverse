@@ -85,8 +85,10 @@ export interface MediaUsageView {
   /** MEDIA_ECONOMY nao e `off`. */
   economyEnv: boolean;
   activeSessions: number;
-  /** Sempre verdadeiro: e uma ESTIMATIVA local; a cota oficial esta no painel do LiveKit. */
-  estimate: true;
+  /** Verdadeiro sem webhook: a contagem e uma ESTIMATIVA local (relatos dos clientes); a cota oficial esta no painel do LiveKit. */
+  estimate: boolean;
+  /** Os eventos assinados do LiveKit (webhook) estao chegando: os minutos vem deles. */
+  webhook: boolean;
   /** Minutos dos meses anteriores (mais recente primeiro). */
   history: Array<{ month: string; minutes: number }>;
   /** Salas com chamada ativa agora. */
@@ -104,6 +106,8 @@ export const MEDIA_TEXT = {
   suspendedHidden: 'Chamada pausada: esta aba ficou em segundo plano. Volte para a aba para reconectar.',
   suspendedAway: 'Chamada pausada enquanto você está ausente. Volte para reconectar.',
   estimateNote: 'Estimativa local do servidor; a cota oficial está no painel do LiveKit.',
+  webhookOff: 'Webhook não configurado: contagem estimada (configure o webhook no painel do LiveKit; veja docs/media-economy.md).',
+  webhookOn: 'Contagem confirmada pelos eventos do LiveKit (webhook). A cota oficial está no painel do LiveKit.',
 } as const;
 
 // ---- video economico ----------------------------------------------------------------------------------------

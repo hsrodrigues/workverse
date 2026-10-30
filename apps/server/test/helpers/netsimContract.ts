@@ -46,17 +46,18 @@ export function netsimStoreContract(label: string, make: () => Promise<RoomsHand
     it('guarda o progresso dos desafios por conta e organizacao', async () => {
       const h = await make();
       const { boss, ana } = await seed(h);
-      h.store.netsim.putProgress({ orgId: 'orgA', accountId: ana.id, challengeId: 'gateway', best: 60, attempts: 2, solvedAt: null, updatedAt: 10 });
-      h.store.netsim.putProgress({ orgId: 'orgA', accountId: ana.id, challengeId: 'gateway', best: 90, attempts: 3, solvedAt: 20, updatedAt: 20 });
-      h.store.netsim.putProgress({ orgId: 'orgA', accountId: boss.id, challengeId: 'vlan', best: 100, attempts: 1, solvedAt: 5, updatedAt: 5 });
-      h.store.netsim.putProgress({ orgId: 'orgB', accountId: ana.id, challengeId: 'gateway', best: 10, attempts: 1, solvedAt: null, updatedAt: 6 });
+      h.store.netsim.putProgress({ orgId: 'orgA', accountId: ana.id, challengeId: 'gateway', best: 60, attempts: 2, hints: 1, solvedAt: null, updatedAt: 10 });
+      h.store.netsim.putProgress({ orgId: 'orgA', accountId: ana.id, challengeId: 'gateway', best: 90, attempts: 3, hints: 2, solvedAt: 20, updatedAt: 20 });
+      h.store.netsim.putProgress({ orgId: 'orgA', accountId: boss.id, challengeId: 'vlan', best: 100, attempts: 1, hints: 0, solvedAt: 5, updatedAt: 5 });
+      h.store.netsim.putProgress({ orgId: 'orgB', accountId: ana.id, challengeId: 'gateway', best: 10, attempts: 1, hints: 3, solvedAt: null, updatedAt: 6 });
       await h.settle();
       const again = await h.reopen();
-      expect(again.netsim.getProgress('orgA', ana.id, 'gateway')).toEqual({ orgId: 'orgA', accountId: ana.id, challengeId: 'gateway', best: 90, attempts: 3, solvedAt: 20, updatedAt: 20 });
+      expect(again.netsim.getProgress('orgA', ana.id, 'gateway')).toEqual({ orgId: 'orgA', accountId: ana.id, challengeId: 'gateway', best: 90, attempts: 3, hints: 2, solvedAt: 20, updatedAt: 20 });
       expect(again.netsim.progressOfOrg('orgA').map((r) => r.challengeId).sort()).toEqual(['gateway', 'vlan']);
       expect(again.netsim.progressOfOrg('orgB')).toHaveLength(1);
       expect(again.netsim.progressOf('orgA', boss.id)).toHaveLength(1);
       expect(again.netsim.getProgress('orgB', ana.id, 'gateway')?.best).toBe(10);
+      expect(again.netsim.getProgress('orgB', ana.id, 'gateway')?.hints).toBe(3);
     });
   });
 }

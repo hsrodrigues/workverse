@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import { AccessToken, RoomServiceClient, TrackSource, type VideoGrant } from 'livekit-server-sdk';
+import { AccessToken, RoomServiceClient, TrackSource, TrackType, WebhookReceiver, type VideoGrant, type WebhookEvent } from 'livekit-server-sdk';
 import { DEFAULT_ORG_ID, type ApiErrorBody } from '@workverse/shared';
 import { can } from './authz';
 import { KeyedLimiter } from './limiter';
@@ -7,7 +7,7 @@ import { authenticate, type AuthDeps } from './authRoutes';
 import { normalizeName } from './world';
 import type { Player } from './room';
 import type { PermissionSync, PublishRights } from './stage';
-import { publishRights, resolveEconomyConfig, type MediaKind } from './mediaEconomy';
+import { publishRights, resolveEconomyConfig, type LkEvent, type LkSource, type MediaKind } from './mediaEconomy';
 
 export type { PublishRights } from './stage';
 export { publishRights, type MediaKind };
@@ -99,6 +99,42 @@ export function createLiveKitRemover(config: MediaConfig, log: (event: string, d
   };
 }
 
+/** Corpo maximo aceito no webhook (os eventos reais tem poucos KB). */
+export const WEBHOOK_BODY_LIMIT = 32 * 1024;
+
+/** Fonte de uma faixa para o servidor: tela (e audio da tela) = `screen`; fonte desconhecida cai pelo tipo (video = camera). */
+function lkSource(source: TrackSource | undefined, type: TrackType | undefined): LkSource | undefined {
+  if (source === TrackSource.MICROPHONE) return 'mic';
+  if (source === TrackSource.CAMERA) return 'cam';
+  if (source === TrackSource.SCREEN_SHARE || source === TrackSource.SCREEN_SHARE_AUDIO) return 'screen';
+  if (type === TrackType.VIDEO) return 'cam';
+  if (type === TrackType.AUDIO) return 'mic';
+  return undefined;
+}
+
+const toMs = (v: bigint | number | undefined) => (v === undefined ? 0 : Number(v) * 1000);
+
+/** Reduz o evento verificado do SDK ao que a economia de midia usa. */
+export function toLkEvent(ev: WebhookEvent): LkEvent {
+  const tracks: NonNullable<LkEvent['tracks']> = [];
+  for (const t of ev.participant?.tracks ?? []) {
+    const source = lkSource(t.source, t.type);
+    if (source && t.sid) tracks.push({ sid: t.sid, source });
+  }
+  const source = lkSource(ev.track?.source, ev.track?.type);
+  return {
+    id: ev.id,
+    event: ev.event,
+    createdAt: toMs(ev.createdAt),
+    room: ev.room?.name ?? '',
+    ...(ev.participant?.identity ? { identity: ev.participant.identity } : {}),
+    ...(ev.participant?.joinedAt ? { joinedAt: toMs(ev.participant.joinedAt) } : {}),
+    ...(ev.track?.sid ? { trackSid: ev.track.sid } : {}),
+    ...(source ? { source } : {}),
+    ...(tracks.length ? { tracks } : {}),
+  };
+}
+
 export interface MediaOptions {
   config?: MediaConfig;
   /** Overrides the policy with a yes/no (tests). */
@@ -131,6 +167,35 @@ export function registerMediaRoutes(app: FastifyInstance, deps: AuthDeps, opts: 
     void reply.header('Cache-Control', 'no-store');
     return config.enabled ? { enabled: true, url: config.url } : { enabled: false, url: '' };
   });
+
+  // Webhook do LiveKit (docs/media-economy.md): chamado pelo servidor do LiveKit, nunca por navegador. Corpo cru `application/webhook+json`
+  // verificado com a mesma chave da API (JWT + sha256 do corpo); tudo que nao verifica e recusado. Sem CORS e sem aceitar `Origin`.
+  const receiver = config.enabled ? new WebhookReceiver(config.apiKey, config.apiSecret) : undefined;
+  const hookLimiter = new KeyedLimiter(60, 5);
+  void app.register(async (scope) => {
+    scope.addContentTypeParser('application/webhook+json', { parseAs: 'string', bodyLimit: WEBHOOK_BODY_LIMIT }, (_req, body, done) => done(null, body));
+    scope.post('/api/media/webhook', { bodyLimit: WEBHOOK_BODY_LIMIT }, async (req, reply) => {
+      void reply.header('Cache-Control', 'no-store');
+      if (!receiver) return fail(reply, 503, 'media_disabled', 'Mídia indisponível neste servidor.');
+      if (req.headers.origin !== undefined) return fail(reply, 403, 'forbidden_origin', 'Origem não permitida.');
+      const now = deps.clock();
+      if (!hookLimiter.take(req.ip, now)) return fail(reply, 429, 'rate_limited', 'Muitas solicitações.', Math.max(1, hookLimiter.retryAfterSeconds(req.ip, now)));
+      let event: WebhookEvent;
+      try {
+        if (typeof req.body !== 'string' || !req.headers.authorization) throw new Error('missing');
+        event = await receiver.receive(req.body, req.headers.authorization);
+      } catch {
+        // Quem erra a assinatura gasta mais do balde: tentativa de adivinhar nao compensa.
+        hookLimiter.take(req.ip, now);
+        hookLimiter.take(req.ip, now);
+        app.log.warn({ event: 'media.webhook_rejected', ip: req.ip }, 'webhook do LiveKit recusado (assinatura invalida)');
+        return fail(reply, 401, 'unauthorized', 'Assinatura inválida.');
+      }
+      const result = deps.world.media.webhook(toLkEvent(event), now);
+      return { ok: true, result };
+    });
+  });
+  if (config.enabled) app.log.info({ event: 'media.webhook_pending' }, 'LiveKit: webhook nao confirmado (contagem estimada) ate chegar o primeiro evento em /api/media/webhook; veja docs/media-economy.md');
 
   app.post('/api/media/token', { bodyLimit: 2048 }, async (req, reply) => {
     void reply.header('Cache-Control', 'no-store');

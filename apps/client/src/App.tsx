@@ -5,13 +5,14 @@ import { api, ApiError, describeError, setApiDevName } from './api';
 import { worldStore } from './worldStore';
 import { Login } from './ui/Login';
 import { ChangePassword } from './ui/ChangePassword';
+import { ForgotPassword, ResetPassword } from './ui/ForgotPassword';
 import { AvatarEditor } from './ui/AvatarEditor';
 import { GameView } from './ui/GameView';
 import { Hud } from './ui/Hud';
 import { MediaLayer } from './ui/MediaLayer';
 import type { WorldScene } from './game/WorldScene';
 
-type Phase = 'boot' | 'login' | 'password' | 'editor' | 'world';
+type Phase = 'boot' | 'login' | 'forgot' | 'reset' | 'password' | 'editor' | 'world';
 
 /** Codigo de convite vindo do link (/invite/CODIGO ou ?invite=CODIGO). */
 function inviteFromUrl(): string {
@@ -26,6 +27,8 @@ export function App() {
   const [changingPassword, setChangingPassword] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [passwordReset, setPasswordReset] = useState(false);
+  const resetToken = useRef('');
   const [registration, setRegistration] = useState<NonNullable<ServerConfig['registration']>>('closed');
   const sceneRef = useRef<WorldScene | null>(null);
   const booted = useRef(false);
@@ -64,6 +67,15 @@ export function App() {
     void (async () => {
       const config = await api.config().catch(() => ({ devLogin: false }) as ServerConfig);
       setRegistration(config.registration ?? 'closed');
+      setPasswordReset(config.passwordReset === true);
+      // Link do e-mail (?reset=TOKEN): guarda o token so em memoria e tira da barra de endereco na hora.
+      const rt = new URLSearchParams(location.search).get('reset');
+      if (rt) {
+        resetToken.current = rt;
+        history.replaceState(null, '', location.pathname);
+        setPhase('reset');
+        return;
+      }
       // Dev/testing shortcut: ?name=Ana opens straight into the world (only when the server allows it).
       const q = new URLSearchParams(location.search).get('name');
       if (config.devLogin && q) {
@@ -137,8 +149,29 @@ export function App() {
         onModeChange={() => setError('')}
         onLogin={(email, password) => void authenticate(() => api.login(email, password), false)}
         registration={registration}
+        passwordReset={passwordReset}
+        onForgot={() => {
+          setError('');
+          setPhase('forgot');
+        }}
         inviteFromUrl={inviteFromUrl()}
         onRegister={(email, password, name, invite) => void authenticate(() => api.register(email, password, name, invite), true)}
+      />
+    );
+  }
+  if (phase === 'forgot') return <ForgotPassword onBack={() => setPhase('login')} />;
+  if (phase === 'reset') {
+    return (
+      <ResetPassword
+        token={resetToken.current}
+        onDone={() => {
+          resetToken.current = '';
+          setPhase('login');
+        }}
+        onRequestNew={() => {
+          resetToken.current = '';
+          setPhase(passwordReset ? 'forgot' : 'login');
+        }}
       />
     );
   }

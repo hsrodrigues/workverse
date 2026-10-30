@@ -681,7 +681,7 @@ function QueueTab({ room }: { room: BookingRoomInfo | undefined }) {
             <li key={q.id} className={q.mine ? 'mine' : ''} data-testid="bk-queue-entry">
               <b className="bk-pos">{q.position}º</b>
               <span>
-                <b>{q.mine ? 'Você' : q.ownerName}</b>
+                <b>{q.mine ? 'Você' : (q.ownerName ?? 'Alguém')}</b>
                 {q.title ? ` — ${q.title}` : ''}
                 <small>{fmtRange(q.startAt, q.endAt, s.tz)}</small>
               </span>

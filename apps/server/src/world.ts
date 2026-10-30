@@ -860,7 +860,10 @@ export class World {
         const req = parseClimateSet(msg);
         if (!req) return this.strike(conn);
         if (!player.miscBucket.take(now)) return;
-        if (!this.roomOf(player)!.applyClimateSet(req, now)) conn.send({ t: 'error', code: 'no_climate', message: 'Esta sala não tem ar-condicionado.' });
+        const res = this.roomOf(player)!.applyClimateSet(req, now, player);
+        if (res === 'none') conn.send({ t: 'error', code: 'no_climate', message: 'Esta sala não tem ar-condicionado.' });
+        else if (res === 'far') conn.send({ t: 'error', code: 'climate_far', message: 'Chegue perto do ar-condicionado ou do termostato.' });
+        else if (res === 'busy') conn.send({ t: 'error', code: 'rate_limited', message: 'Calma! Espere um instante para mexer no ar de novo.' });
         return;
       }
       case 'inventory_query':

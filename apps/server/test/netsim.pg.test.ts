@@ -14,7 +14,7 @@ afterAll(async () => {
 }, 60_000);
 
 let n = 0;
-netsimStoreContract('PgAccountStore (PostgreSQL real, migracao 0010)', async () => {
+netsimStoreContract('PgAccountStore (PostgreSQL real, migracoes 0010 e 0011)', async () => {
   if (!h) {
     const store = new MemoryAccountStore();
     return { store, settle: async () => undefined, reopen: async () => store };
@@ -54,6 +54,7 @@ describe.skipIf(!h)('PostgreSQL real: simulador de rede', () => {
     await expect(topo(1, '{"devices":1,"cables":[]}')).rejects.toThrow();
     await topo(1, JSON.stringify(edgeNatDhcp()));
     await expect(pool.query("INSERT INTO netsim_progress (org_id, account_id, challenge_id, best) VALUES ('o1', $1, 'x', 101)", [a.id])).rejects.toThrow();
+    await expect(pool.query("INSERT INTO netsim_progress (org_id, account_id, challenge_id, best, hints) VALUES ('o1', $1, 'y', 50, 4)", [a.id])).rejects.toThrow();
   });
 
   it('apagar a organizacao apaga a topologia e o progresso dela, e nao os de outra', async () => {
@@ -65,7 +66,7 @@ describe.skipIf(!h)('PostgreSQL real: simulador de rede', () => {
     for (const id of ['o1', 'o2']) store.orgs.putOrg({ id, slug: id, name: id, settings: {}, createdAt: 1 });
     for (const id of ['o1', 'o2']) {
       store.netsim.put({ orgId: id, version: 1, topology: edgeNatDhcp(), updatedBy: a.id, updatedAt: 1 });
-      store.netsim.putProgress({ orgId: id, accountId: a.id, challengeId: 'c', best: 50, attempts: 1, solvedAt: null, updatedAt: 1 });
+      store.netsim.putProgress({ orgId: id, accountId: a.id, challengeId: 'c', best: 50, attempts: 1, hints: 0, solvedAt: null, updatedAt: 1 });
     }
     await store.flush();
     await pool.query("DELETE FROM orgs WHERE id = 'o1'");

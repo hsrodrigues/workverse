@@ -13,7 +13,8 @@
     "staff:grant": "tsx src/staffCli.ts grant",
     "staff:revoke": "tsx src/staffCli.ts revoke",
     "staff:list": "tsx src/staffCli.ts list",
-    "account:create": "tsx src/accountCli.ts"
+    "account:create": "tsx src/accountCli.ts",
+    "mail:test": "tsx src/mailTestCli.ts"
   },
   "dependencies": {
     "@fastify/compress": "^9.2.2",

@@ -202,12 +202,17 @@ describe('site estatico + cabecalhos', () => {
       expect(csp).toContain("img-src 'self' data: blob:");
       expect(csp).toContain("media-src 'self' blob:");
       expect(csp).toContain('wss://x.livekit.cloud');
+      // connect-src: so 'self' + o host do LiveKit; nenhum `wss:` generico
+      expect(csp).not.toMatch(/(^|[\s;])wss:(\s|;|$)/);
+      expect(csp).toMatch(/connect-src 'self' wss:\/\/x\.livekit\.cloud/);
       expect(csp).toContain('https://fonts.googleapis.com');
       expect(h['x-content-type-options']).toBe('nosniff');
       expect(h['referrer-policy']).toBe('strict-origin-when-cross-origin');
       expect(h['permissions-policy']).toContain('microphone=(self)');
       expect(h['permissions-policy']).toContain('display-capture=(self)');
       expect(h['strict-transport-security']).toMatch(/max-age=\d+/);
+      expect(h['strict-transport-security']).toContain('includeSubDomains');
+      expect(h['strict-transport-security']).not.toContain('preload');
     }
   });
 
@@ -223,7 +228,7 @@ describe('REGISTRATION_MODE', () => {
 
   it('/api/config informa devLogin=false e o modo', async () => {
     const { app } = await setup({ production: true, registrationMode: 'invite' });
-    expect((await app.inject({ method: 'GET', url: '/api/config' })).json()).toEqual({ devLogin: false, registration: 'invite' });
+    expect((await app.inject({ method: 'GET', url: '/api/config' })).json()).toEqual({ devLogin: false, registration: 'invite', passwordReset: false });
   });
 
   it('closed: ninguem se cadastra, mas quem ja tem conta entra', async () => {

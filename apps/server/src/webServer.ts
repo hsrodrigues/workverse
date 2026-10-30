@@ -19,9 +19,13 @@ export const isServerPath = (url: string) => {
   return SERVER_PREFIXES.some((p) => (p.endsWith('/') ? path.startsWith(p) : path === p || path.startsWith(`${p}/`)));
 };
 
-/** Content-Security-Policy compativel com Phaser (blob/data), LiveKit (wss + worker blob) e Google Fonts. */
+/**
+ * Content-Security-Policy compativel com Phaser (blob/data), LiveKit (worker blob) e Google Fonts.
+ * connect-src: so o proprio site ('self' cobre o WebSocket /ws do jogo na mesma origem) e o host do LiveKit configurado;
+ * nada de `wss:` generico (um XSS nao poderia exfiltrar por qualquer WebSocket).
+ */
 export function buildCsp(livekitUrl?: string): string {
-  const connect = ["'self'", 'wss:'];
+  const connect = ["'self'"];
   if (livekitUrl) {
     try {
       const u = new URL(livekitUrl);
@@ -34,7 +38,7 @@ export function buildCsp(livekitUrl?: string): string {
   return [
     "default-src 'self'",
     "script-src 'self'",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "style-src 'self' https://fonts.googleapis.com",
     "font-src 'self' data: https://fonts.gstatic.com",
     "img-src 'self' data: blob:",
     "media-src 'self' blob:",
@@ -55,7 +59,7 @@ export function securityHeaders(opts: Pick<WebOptions, 'production' | 'livekitUr
     'Referrer-Policy': 'strict-origin-when-cross-origin',
     'Permissions-Policy': 'microphone=(self), camera=(self), display-capture=(self), geolocation=(), payment=(), usb=()',
     'Cross-Origin-Opener-Policy': 'same-origin',
-    ...(opts.production ? { 'Strict-Transport-Security': 'max-age=31536000' } : {}),
+    ...(opts.production ? { 'Strict-Transport-Security': 'max-age=31536000; includeSubDomains' } : {}),
   };
 }
 

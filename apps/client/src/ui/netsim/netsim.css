@@ -374,6 +374,209 @@
   font-family: ui-monospace, Consolas, monospace;
 }
 
+/* ---- Desafios "Conserte a rede" ---- */
+.ns-views {
+  display: flex;
+  gap: 2px;
+}
+.ns-views button {
+  flex: 1;
+  background: #131d36;
+  color: #9fb2e0;
+  border: 1px solid #26365c;
+  padding: 6px 8px;
+  font: inherit;
+  cursor: pointer;
+}
+.ns-views button.on {
+  background: #26365c;
+  color: #fff;
+  border-color: #5b78c8;
+}
+.ns-diff {
+  padding: 0 6px;
+  border: 1px solid;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.ns-diff.easy {
+  color: #5fe39a;
+  border-color: #2f7d55;
+}
+.ns-diff.mid {
+  color: #ffd24a;
+  border-color: #8a7020;
+}
+.ns-diff.hard {
+  color: #ff9a9a;
+  border-color: #8a3a44;
+}
+.ns-chitems,
+.ns-board,
+.ns-objs,
+.ns-hints,
+.ns-break {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ns-chitems {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ns-ch {
+  border: 1px solid #26365c;
+  background: #0f182c;
+}
+.ns-ch.done {
+  border-color: #2f7d55;
+}
+.ns-chhead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
+  width: 100%;
+  background: transparent;
+  color: #dbe5ff;
+  border: 0;
+  padding: 8px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-height: 36px;
+}
+.ns-chhead:hover {
+  background: #16213c;
+}
+.ns-chmark {
+  width: 14px;
+  color: #5fe39a;
+}
+.ns-chtitle {
+  flex: 1 1 140px;
+  font-weight: 700;
+}
+.ns-chstate {
+  color: #8b9bc2;
+}
+.ns-chbody {
+  padding: 0 10px 10px 28px;
+  line-height: 1.45;
+}
+.ns-chbody p {
+  margin: 0 0 6px;
+}
+.ns-board li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 3px 6px;
+  border-bottom: 1px solid #1d2a47;
+}
+.ns-board li.me {
+  background: #1a2745;
+}
+.ns-rank {
+  width: 28px;
+  color: #ffd24a;
+}
+.ns-bname {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ns-chbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: center;
+  justify-content: space-between;
+  background: #16213c;
+  border: 1px solid #34487a;
+  padding: 6px 8px;
+}
+.ns-chbar-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.ns-goals p {
+  margin: 0 0 8px;
+  line-height: 1.45;
+}
+.ns-goals h4 {
+  margin: 10px 0 4px;
+  color: #9fb2e0;
+  border-bottom: 1px solid #26365c;
+}
+.ns-objs li {
+  display: flex;
+  gap: 6px;
+  padding: 4px 0;
+  line-height: 1.4;
+}
+.ns-objs li.ok {
+  color: #5fe39a;
+}
+.ns-objs li.bad .ns-objmark {
+  color: #ff8c8c;
+}
+.ns-objmark {
+  flex: none;
+  width: 14px;
+}
+.ns-objwhy {
+  font-size: 11px;
+}
+.ns-hints {
+  counter-reset: h;
+}
+.ns-hints li {
+  counter-increment: h;
+  background: #1a2745;
+  border-left: 3px solid #ffd24a;
+  padding: 5px 8px;
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+.ns-hints li::before {
+  content: 'Dica ' counter(h) ': ';
+  color: #ffd24a;
+  font-weight: 700;
+}
+.ns-done {
+  background: #11301f;
+  border: 2px solid #3fb67a;
+  padding: 14px;
+  text-align: center;
+}
+.ns-done h3 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  color: #5fe39a;
+}
+.ns-done p {
+  margin: 4px 0;
+}
+.ns-score {
+  font-size: 28px;
+  font-weight: 700;
+  color: #ffd24a;
+}
+.ns-break {
+  display: inline-block;
+  text-align: left;
+  margin: 4px 0;
+  color: #cfe0ff;
+}
+.ns-done .ns-row {
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
 @media (max-width: 720px) {
   .win.panel-netsim {
     top: 4px;
@@ -396,5 +599,12 @@
   .ns-btn,
   .ns-mini {
     min-height: 32px;
+  }
+  .ns-chbar-btns .ns-btn {
+    flex: 1;
+  }
+  .ns-tabs button {
+    font-size: 11px;
+    padding: 6px 2px;
   }
 }

@@ -274,6 +274,9 @@ net.on((msg: ServerMessage) => {
     case 'netsim_state':
     case 'netsim_result':
     case 'netsim_error':
+    case 'netsim_challenges_state':
+    case 'netsim_challenge_session':
+    case 'netsim_challenge_result':
       netsimStore.onMessage(msg);
       break;
     case 'inventory_open':

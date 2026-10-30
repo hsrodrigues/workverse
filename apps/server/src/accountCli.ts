@@ -7,13 +7,15 @@ import { normalizeName } from './world';
 import { generateProvisionalPassword } from './provisional';
 
 /**
- * Cria uma conta direto no armazenamento (REGISTRATION_MODE=closed ou primeiro dono).
+* Cria uma conta direto no armazenamento (REGISTRATION_MODE=closed ou primeiro dono).
  *   npm run account:create -w @workverse/server -- email@exemplo.com "Nome" ["senha-com-10-ou-mais-caracteres"] [--trocar-senha]
  * Com --resetar redefine a senha de uma conta que ja existe (gera uma provisoria se nao informar senha).
  * Sem senha: gera uma senha provisoria forte, mostrada UMA vez, e a conta fica marcada para trocar a senha no primeiro
  * login (o mesmo que o painel de staff faz). Com senha informada ela e a definitiva, a menos que use --trocar-senha.
  * Com o armazenamento em arquivo JSON, PARE o servidor antes (ele guarda as contas em memoria e sobrescreveria o
  * arquivo); com PostgreSQL basta reiniciar para a conta entrar na organizacao padrao.
+ * "Esqueci minha senha" por e-mail e opcional (docs/password-reset.md); teste o provedor com
+ *   npm run mail:test -w @workverse/server -- seu@email.com
  * A senha tambem pode vir de ACCOUNT_PASSWORD (evita deixar a senha no historico do terminal).
  */
 const argv = process.argv.slice(2);

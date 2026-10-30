@@ -36,6 +36,15 @@ const wait = (ms: number) => {
   }
 };
 const def = (id: string) => ROOM_DEFS.find((r) => r.id === id)!;
+/** Coloca o jogador junto de uma unidade de ar/termostato da sala dele (o controle remoto exige proximidade). */
+const near = (c: FakeConn) => {
+  const room = world.rooms.get(c.player!.roomId!)!;
+  const f = room.built.def.furniture.find((x) => isAcUnit(x.kind) || x.kind === 'thermostat');
+  if (f) {
+    c.player!.x = f.x;
+    c.player!.y = f.y;
+  }
+};
 const use = (c: FakeConn, f: { id: string; x: number; y: number }) => {
   world.handle(c, { t: 'interact', furniId: f.id, x: f.x, y: f.y });
   wait(STEP_MS * 40);
@@ -65,7 +74,8 @@ describe('ar-condicionado: estado por sala, visto por todos', () => {
   });
 
   const set = (c: FakeConn, body: Record<string, unknown>) => {
-    now += 300;
+    now += 2100;
+    near(c);
     world.handle(c, { t: 'climate_set', ...body } as never);
   };
 
@@ -117,9 +127,44 @@ describe('ar-condicionado: estado por sala, visto por todos', () => {
     expect(world.rooms.get('office')!.climate.on).toBe(false);
   });
 
+  it('exige proximidade de uma unidade ou termostato e intervalo minimo de 2 s por sala', () => {
+    const a = login('Ana', 'office');
+    const b = login('Beto', 'office');
+    const room = world.rooms.get('office')!;
+    const units = room.built.def.furniture.filter((f) => isAcUnit(f.kind));
+    // longe: o ponto do mapa mais afastado das unidades
+    const g = room.built.grid;
+    let far = { x: 0, y: 0 };
+    let best = -1;
+    for (let y = 0; y < g.height; y++) for (let x = 0; x < g.width; x++) {
+      const d = Math.min(...units.map((u) => Math.max(Math.abs(u.x - x), Math.abs(u.y - y))));
+      if (d > best) { best = d; far = { x, y }; }
+    }
+    expect(best).toBeGreaterThan(3);
+    a.player!.x = far.x;
+    a.player!.y = far.y;
+    now += 2100;
+    world.handle(a, { t: 'climate_set', power: true } as never);
+    expect(room.climate.on).toBe(false);
+    expect(a.all('error').some((e) => e.code === 'climate_far')).toBe(true);
+    // perto: aplica; logo em seguida (< 2 s) outro jogador perto e recusado; passado o intervalo, vale
+    near(a);
+    world.handle(a, { t: 'climate_set', power: true } as never);
+    expect(room.climate.on).toBe(true);
+    near(b);
+    now += 1000;
+    world.handle(b, { t: 'climate_set', power: false } as never);
+    expect(room.climate.on).toBe(true);
+    expect(b.all('error').some((e) => e.code === 'rate_limited')).toBe(true);
+    now += 1100;
+    world.handle(b, { t: 'climate_set', power: false } as never);
+    expect(room.climate.on).toBe(false);
+  });
+
   it('limita a taxa de pedidos', () => {
     const a = login('Ana', 'office');
     const room = world.rooms.get('office')!;
+    near(a);
     for (let i = 0; i < 40; i++) world.handle(a, { t: 'climate_set', target: 18 + (i % 9) } as never);
     // a rajada passa do balde: nem todos os 40 pedidos foram aplicados (o último valor aplicado não é o do pedido 40)
     expect(a.all('climate').length).toBeLessThan(40);
@@ -149,7 +194,8 @@ describe('ar-condicionado: estado por sala, visto por todos', () => {
   it('cada sala tem o seu clima (ligar na copa não liga o escritório)', () => {
     const a = login('Ana', 'lounge');
     const b = login('Beto', 'office');
-    now += 300;
+    now += 2100;
+    near(a);
     world.handle(a, { t: 'climate_set', power: true } as never);
     expect(a.last('climate')).toMatchObject({ on: true });
     expect(b.last('climate')).toBeUndefined();
@@ -158,7 +204,8 @@ describe('ar-condicionado: estado por sala, visto por todos', () => {
 
   it('isolamento por organização: o clima de uma org nunca muda o de outra', () => {
     const a = login('Ana', 'office');
-    now += 300;
+    now += 2100;
+    near(a);
     world.handle(a, { t: 'climate_set', power: true } as never);
     expect(world.rooms.get('office')!.climate.on).toBe(true);
     expect(world.org('outra').rooms.get('office')!.climate.on).toBe(false);
@@ -173,7 +220,8 @@ describe('temperatura ambiente e superaquecimento', () => {
     wait(CLIMATE_STEP_MS * 60);
     const warm = room.climate.temp;
     expect(warm).toBeGreaterThan(BASE_TEMP + 0.5);
-    now += 300;
+    now += 2100;
+    near(people[0]!);
     world.handle(people[0]!, { t: 'climate_set', power: true, mode: 'cool', fan: 'high' } as never);
     wait(CLIMATE_STEP_MS * 80);
     expect(room.climate.temp).toBeLessThan(warm - 0.5);
@@ -192,7 +240,8 @@ describe('temperatura ambiente e superaquecimento', () => {
     wait(CLIMATE_STEP_MS * 20);
     expect(c.all('chat').filter((m) => m.text === 'Sala da TI superaquecendo!').length).toBe(1);
     c.strikes = 0;
-    now += 300;
+    now += 2100;
+    near(c);
     world.handle(c, { t: 'climate_set', power: true } as never);
     expect(room.climate.overheat).toBe(false);
     wait(CLIMATE_STEP_MS * 150);

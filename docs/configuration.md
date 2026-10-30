@@ -17,6 +17,8 @@
 | `KEEPALIVE_MINUTES` | `10` | Intervalo do autoping, de 1 a 14 (o plano gratuito do Render dorme após ~15 min) |
 | `PET` | *(ligado)* | `off` desliga o Byte, o pet do escritório, em todo o servidor ([pet.md](pet.md)) |
 | `REGISTRATION_MODE` | `closed` | `closed`, `invite` ou `open`. O padrão é cadastro fechado: só a equipe cria contas |
+| `MAIL_PROVIDER` | `log` (dev), `off` (produção) | Envio de e-mail do "Esqueci minha senha": `resend`, `smtp`, `log` (só dev: o link vai para o log) ou `off`. Sem provedor em produção o recurso fica desligado ([password-reset.md](password-reset.md)) |
+| `MAIL_FROM`, `RESEND_API_KEY`, `SMTP_URL` | *(vazio)* | Remetente (`WorkVerse <no-reply@seudominio.com>`), chave da API do Resend e URL SMTP (`smtps://usuario:senha@host:465`; caracteres especiais da senha em %XX) |
 | `WEB_ROOT` | `apps/client/dist` | Pasta do site servido pelo próprio servidor |
 | `BOOTSTRAP_STAFF_EMAILS` | *(vazio)* | `email:nivel,email2:nivel` — concede staff (`helper`, `moderator`, `admin`) a contas já existentes |
 | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `PUBLIC_LIVEKIT_URL` | dev: `devkey` / `secret` / `ws://localhost:7880` | Mídia (veja [media.md](media.md)) |

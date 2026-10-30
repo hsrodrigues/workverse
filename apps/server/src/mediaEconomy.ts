@@ -194,6 +194,8 @@ interface Session {
   lastSeen: number;
   /** O cliente ja disse `connected: true`. */
   connected: boolean;
+  /** O servidor ja viu `participant_joined` desta sessao (webhook): dai em diante so o LiveKit conta. */
+  lkSeen?: boolean;
   tokenExp: number;
 }
 
@@ -229,6 +231,54 @@ const STAFF_PUSH_EVERY_MS = 60_000;
 
 const keyOf = (orgId: string, roomId: string) => `${orgId}\0${roomId}`;
 
+const lkKeyOf = (orgId: string, roomId: string, identity: string) => [orgId, roomId, identity].join('|');
+
+// ---- webhook do LiveKit (fonte de verdade) -------------------------------------------------------------------
+
+/** Tipo de midia de uma faixa, ja normalizado por media.ts (a tela conta como video). */
+export type LkSource = 'mic' | 'cam' | 'screen';
+
+/** Evento do webhook do LiveKit, ja VERIFICADO (assinatura) e reduzido ao que o servidor usa. Tempos em ms. */
+export interface LkEvent {
+  id: string;
+  event: string;
+  createdAt: number;
+  /** Nome da sala do LiveKit (`wv:${orgId}:${roomId}`). */
+  room: string;
+  identity?: string;
+  joinedAt?: number;
+  trackSid?: string;
+  source?: LkSource;
+  /** Faixas que o participante ja publicava ao entrar. */
+  tracks?: Array<{ sid: string; source: LkSource }>;
+}
+
+export type WebhookResult = 'applied' | 'duplicate' | 'stale' | 'ignored';
+
+/** Quem participa de verdade da sala do LiveKit (so existe com webhook). */
+interface LkPart {
+  orgId: string;
+  roomId: string;
+  identity: string;
+  lastAccrued: number;
+  tracks: Map<string, LkSource>;
+  /** Desde quando nao ha sessao registrada no servidor para esta pessoa (0 = ha). */
+  orphanAt: number;
+}
+
+/** Eventos mais velhos que isso (ou do futuro alem de 2 min) sao descartados: replay. */
+export const WEBHOOK_MAX_AGE_MS = 10 * 60_000;
+const WEBHOOK_FUTURE_MS = 2 * 60_000;
+/** Os ids vistos ficam por mais tempo que a janela acima, senao um replay antigo-mas-valido passaria. */
+const WEBHOOK_SEEN_MS = 20 * 60_000;
+/** Sem evento por tanto tempo, o servidor volta a contar pela estimativa. */
+export const WEBHOOK_ACTIVE_MS = 24 * 3600_000;
+/** Quem conectou a sessao sem o servidor ver `participant_joined` depois disso passa a contar por estimativa (evento perdido). */
+export const LK_JOIN_GRACE_MS = 180_000;
+/** Participante no LiveKit sem sessao registrada: expulso depois disso. */
+export const LK_ORPHAN_GRACE_MS = 60_000;
+const RIGHTS_NEEDED: Record<LkSource, number> = { mic: 1, cam: 2, screen: 3 };
+
 function freshFile(month: string, strict = false): UsageFile {
   return { month, minutes: 0, strict, alerted: { warn70: false, warn90: false, exceeded: false }, history: [] };
 }
@@ -243,6 +293,10 @@ export class MediaEconomy {
   private lastSweep = 0;
   private lastStaffPush = 0;
   private lastPolicySig = '';
+  private readonly lk = new Map<string, LkPart>();
+  private readonly seenEvents = new Map<string, number>();
+  private webhookAt = 0;
+  private webhookWarnAt = 0;
 
   constructor(
     private readonly host: EconomyHost,
@@ -326,7 +380,8 @@ export class MediaEconomy {
       strict: this.state.strict,
       economyEnv: this.config.enabled,
       activeSessions: sessions,
-      estimate: true,
+      estimate: !this.webhookActive(now),
+      webhook: this.webhookActive(now),
       history: this.state.history,
       rooms: [...rooms.values()].sort((a, b) => b.connected - a.connected).slice(0, 20),
     };
@@ -340,7 +395,26 @@ export class MediaEconomy {
 
   // ---- contagens ------------------------------------------------------------------------------------------
 
+  /** O webhook esta chegando: a contagem vem dos eventos do LiveKit e nao dos relatos dos clientes. */
+  webhookActive(now = this.host.clock()): boolean {
+    return this.webhookAt > 0 && now - this.webhookAt < WEBHOOK_ACTIVE_MS;
+  }
+
+  private lkOf(r: Rec): LkPart | undefined {
+    return this.lk.get(lkKeyOf(r.orgId, r.roomId, r.player.id));
+  }
+
+  /** O que a pessoa publica: as faixas vistas pelo LiveKit quando ha webhook; senao o relato (dica) do cliente. */
+  private pub(r: Rec): { mic: boolean; cam: boolean; screen: boolean } {
+    const e = this.lkOf(r);
+    if (!e) return r;
+    const v = new Set(e.tracks.values());
+    return { mic: v.has('mic'), cam: v.has('cam'), screen: v.has('screen') };
+  }
+
   private claims(r: Rec, now: number): boolean {
+    const e = this.lkOf(r);
+    if (e) return e.tracks.size > 0;
     return (r.mic || r.cam || r.screen) && now - r.claimAt <= CLAIM_TTL_MS && (r.session?.connected === true || now - r.intentAt <= INTENT_GRACE_MS);
   }
 
@@ -354,7 +428,8 @@ export class MediaEconomy {
     let n = 0;
     for (const [account, r] of this.recs) {
       if (account === except || r.orgId !== orgId || r.roomId !== roomId) continue;
-      if ((r.cam || r.screen) && this.claims(r, now)) n++;
+      const pb = this.pub(r);
+      if ((pb.cam || pb.screen) && this.claims(r, now)) n++;
     }
     return n;
   }
@@ -365,7 +440,8 @@ export class MediaEconomy {
     for (const r of this.recs.values()) {
       if (r.orgId !== orgId || r.roomId !== roomId || !this.claims(r, now)) continue;
       publishers.push(r.player.id);
-      if (r.cam || r.screen) video.push(r.player.id);
+      const pb = this.pub(r);
+      if (pb.cam || pb.screen) video.push(r.player.id);
     }
     publishers.sort();
     video.sort();
@@ -540,10 +616,170 @@ export class MediaEconomy {
     if (!s) return;
     const dt = now - s.lastAccrued;
     if (dt > 0) {
+      s.lastAccrued = now;
+      // Com webhook ativo quem conta e o evento do LiveKit (accrueLk); o relato do cliente so cobre um `participant_joined` perdido.
+      if (this.lkOf(rec)) return;
+      if (this.webhookActive(now) && !(s.connected && !s.lkSeen && now - s.startedAt > LK_JOIN_GRACE_MS)) return;
       this.roll(now);
       this.state.minutes += dt / 60_000;
-      s.lastAccrued = now;
       this.dirty = true;
+    }
+  }
+
+  private accrueLk(e: LkPart, now: number, until = now) {
+    const end = Math.min(now, Math.max(e.lastAccrued, until));
+    const dt = end - e.lastAccrued;
+    if (dt > 0) {
+      this.roll(now);
+      this.state.minutes += dt / 60_000;
+      e.lastAccrued = end;
+      this.dirty = true;
+    }
+  }
+
+  private dropLk(e: LkPart, now: number, until = now) {
+    this.accrueLk(e, now, until);
+    this.lk.delete(lkKeyOf(e.orgId, e.roomId, e.identity));
+  }
+
+  // ---- webhook do LiveKit -----------------------------------------------------------------------------------
+
+  private recOf(orgId: string, roomId: string, identity: string): Rec | undefined {
+    for (const r of this.recs.values()) if (r.player.id === identity && r.orgId === orgId && r.roomId === roomId && r.session) return r;
+    return undefined;
+  }
+
+  private kick(orgId: string, roomId: string, identity: string, why: string) {
+    this.host.log('media.webhook_kick', { room: roomId, identity, why });
+    this.host.removeMedia?.(orgId, roomId, identity);
+  }
+
+  /**
+   * Evento ja verificado do webhook do LiveKit: a FONTE DE VERDADE dos minutos, de quem esta na chamada e do que publica. Aplica os limites
+   * (pessoas por sala, video, direitos) em quem passou do permitido e expulsa quem conectou sem passar pelo servidor. Idempotente por `id`.
+   */
+  webhook(ev: LkEvent, now = this.host.clock()): WebhookResult {
+    if (!ev.id || ev.id.length > 128) return 'ignored';
+    for (const [id, at] of this.seenEvents) {
+      if (now - at <= WEBHOOK_SEEN_MS && this.seenEvents.size < 20_000) break;
+      this.seenEvents.delete(id);
+    }
+    if (this.seenEvents.has(ev.id)) return 'duplicate';
+    if (!Number.isFinite(ev.createdAt) || now - ev.createdAt > WEBHOOK_MAX_AGE_MS || ev.createdAt - now > WEBHOOK_FUTURE_MS) return 'stale';
+    this.seenEvents.set(ev.id, now);
+    const m = /^wv:([^:]+):(.+)$/.exec(ev.room);
+    if (!m) return 'ignored';
+    const orgId = m[1]!;
+    const roomId = m[2]!;
+    if (this.webhookAt === 0) this.host.log('media.webhook_active', { note: 'primeiro evento verificado do LiveKit: a contagem de minutos passa a vir dos eventos' });
+    this.webhookAt = now;
+    this.roll(now);
+    const identity = ev.identity ?? '';
+    const key = lkKeyOf(orgId, roomId, identity);
+    switch (ev.event) {
+      case 'room_finished': {
+        for (const e of [...this.lk.values()]) if (e.orgId === orgId && e.roomId === roomId) this.dropLk(e, now, ev.createdAt);
+        this.after(orgId, roomId, now);
+        return 'applied';
+      }
+      case 'participant_left': {
+        const e = this.lk.get(key);
+        if (e) this.dropLk(e, now, ev.createdAt);
+        this.after(orgId, roomId, now);
+        return 'applied';
+      }
+      case 'track_unpublished': {
+        const e = this.lk.get(key);
+        if (e && ev.trackSid) e.tracks.delete(ev.trackSid);
+        this.after(orgId, roomId, now);
+        return 'applied';
+      }
+      case 'participant_joined':
+      case 'track_published': {
+        if (!identity) return 'ignored';
+        const rec = this.recOf(orgId, roomId, identity);
+        // Conectou sem passar pelo servidor (token nao emitido por aqui, ou sessao ja encerrada): fora.
+        if (!rec) {
+          this.kick(orgId, roomId, identity, 'no_session');
+          const stray = this.lk.get(key);
+          if (stray) this.dropLk(stray, now);
+          return 'applied';
+        }
+        let e = this.lk.get(key);
+        if (!e) {
+          e = { orgId, roomId, identity, lastAccrued: Math.min(now, Math.max(ev.joinedAt ?? ev.createdAt, rec.session!.lastAccrued)), tracks: new Map(), orphanAt: 0 };
+          const max = this.config.maxPeoplePerRoom;
+          const h = this.host.rightsOf(rec.player, rec.kind);
+          if (this.economy && max > 0 && !h.presenter && !(rec.player.staff && rec.player.onDuty)) {
+            let others = 0;
+            for (const o of this.lk.values()) if (o.orgId === orgId && o.roomId === roomId) others++;
+            if (others >= max) {
+              this.host.log('media.webhook_room_full', { room: roomId, identity, max });
+              this.kick(orgId, roomId, identity, 'room_full');
+              rec.player.send({ t: 'error', code: 'media_room_full', message: MEDIA_TEXT.roomFull(max) });
+              this.note('webhook_room_full');
+              return 'applied';
+            }
+          }
+          this.lk.set(key, e);
+        }
+        rec.session!.connected = true;
+        rec.session!.lkSeen = true;
+        rec.session!.lastSeen = now;
+        e.orphanAt = 0;
+        const tracks = ev.event === 'participant_joined' ? (ev.tracks ?? []) : ev.trackSid && ev.source ? [{ sid: ev.trackSid, source: ev.source }] : [];
+        for (const t of tracks) this.enforceTrack(rec, e, t.sid, t.source, now);
+        this.after(orgId, roomId, now);
+        return 'applied';
+      }
+      default:
+        return 'ignored';
+    }
+  }
+
+  /** Uma faixa publicada de verdade: vale se os direitos e o limite de video deixam; senao o servidor tira o direito e a faixa cai. */
+  private enforceTrack(rec: Rec, e: LkPart, sid: string, src: LkSource, now: number) {
+    const eff = this.effective(rec, now);
+    const presenter = this.host.rightsOf(rec.player, rec.kind).presenter;
+    let deny = RANK[eff] < RIGHTS_NEEDED[src];
+    let videoCap = false;
+    if (!deny && src !== 'mic' && !presenter && this.economy && this.videoFull(rec.orgId, rec.roomId, rec.player.accountId, now)) {
+      deny = true;
+      videoCap = true;
+    }
+    if (!deny) {
+      e.tracks.set(sid, src);
+      return;
+    }
+    e.tracks.delete(sid);
+    if (videoCap) rec.capped = true;
+    this.host.log('media.webhook_track_denied', { room: rec.roomId, identity: rec.player.id, source: src, why: videoCap ? 'video_limit' : 'rights' });
+    this.host.syncRights?.(rec.roomId, rec.player.id, videoCap ? capRights(eff, 'audio') : eff, rec.orgId);
+    if (src !== 'mic') {
+      if (this.state.strict) rec.player.send({ t: 'error', code: 'media_strict', message: MEDIA_TEXT.strictVideoOff });
+      else rec.player.send({ t: 'error', code: 'media_video_limit', message: MEDIA_TEXT.videoLimit(this.config.maxVideoPublishers) });
+    }
+  }
+
+  /** Participantes do LiveKit sem sessao no servidor (a sessao acabou ou nunca existiu): somem depois da tolerancia. */
+  private sweepLk(now: number) {
+    for (const e of [...this.lk.values()]) {
+      this.accrueLk(e, now);
+      if (this.recOf(e.orgId, e.roomId, e.identity)) {
+        e.orphanAt = 0;
+        continue;
+      }
+      if (e.orphanAt === 0) e.orphanAt = now;
+      else if (now - e.orphanAt > LK_ORPHAN_GRACE_MS) {
+        this.kick(e.orgId, e.roomId, e.identity, 'orphan');
+        this.dropLk(e, now);
+        this.after(e.orgId, e.roomId, now);
+      }
+    }
+    // Aviso (no maximo a cada 6 h) de que a contagem esta sendo estimada.
+    if (!this.webhookActive(now) && this.sessionCount > 0 && now - this.webhookWarnAt > 6 * 3600_000) {
+      this.webhookWarnAt = now;
+      this.host.log('media.webhook_inactive', { note: 'webhook do LiveKit nao configurado (ou sem eventos): contagem de minutos ESTIMADA. Veja docs/media-economy.md.' });
     }
   }
 
@@ -622,6 +858,8 @@ export class MediaEconomy {
       if (rec.session) {
         this.accrue(rec, now);
         const s = rec.session;
+        // o participante esta de fato no LiveKit (evento verificado): isso vale como sinal de vida, mesmo sem relato do cliente
+        if (this.lkOf(rec)) s.lastSeen = now;
         const stale = now - s.lastSeen > (s.connected ? HEARTBEAT_TIMEOUT_MS : PENDING_TIMEOUT_MS);
         const expired = now > s.tokenExp + TOKEN_GRACE_MS;
         if (stale || expired) {
@@ -641,6 +879,7 @@ export class MediaEconomy {
       const [orgId, roomId] = k.split('\0') as [string, string];
       this.after(orgId, roomId, now);
     }
+    this.sweepLk(now);
     this.checkQuota(now);
     if (this.policySig() !== this.lastPolicySig) this.broadcastPolicy();
     this.save(now);
@@ -706,6 +945,7 @@ export class MediaEconomy {
   /** Grava agora (desligamento do servidor): minutos das sessoes abertas entram na conta. */
   flush(now = this.host.clock()) {
     for (const rec of this.recs.values()) this.accrue(rec, now);
+    for (const e of this.lk.values()) this.accrueLk(e, now);
     this.dirty = true;
     this.save(now, true);
   }

@@ -52,6 +52,11 @@ type PendingAction =
   | { kind: 'face'; dir: Dir8 }
   | { kind: 'portal'; portal: Portal };
 
+/** Distancia (em tiles, Chebyshev) para usar um movel. */
+export const INTERACT_DIST = 1;
+/** Intervalo minimo entre duas mudancas do controle remoto de uma sala. */
+export const CLIMATE_SET_MIN_GAP_MS = 2000;
+
 export class Player {
   /** Cargo e setor mostrados no mundo (ver directory.ts); vem do vinculo com a organizacao, nunca do cliente. */
   title: string | undefined;
@@ -163,6 +168,7 @@ export class RoomInstance {
   /** Air conditioning and ambient temperature of the room (authoritative; a server restart goes back to the defaults). */
   readonly climate: ClimateView = defaultClimate();
   private climateAt = 0;
+  private climateSetAt = 0;
   private climateSent: ClimateView = { ...this.climate };
   /** When the sleep timer switches the air off (clock value); 0 = no timer. */
   private timerEndsAt = 0;
@@ -494,7 +500,7 @@ export class RoomInstance {
     }
     if (kind.usable) {
       this.sync(p, now);
-      const adjacent = tiles.some((t) => Math.max(Math.abs(t.x - p.x), Math.abs(t.y - p.y)) <= 1);
+      const adjacent = tiles.some((t) => Math.max(Math.abs(t.x - p.x), Math.abs(t.y - p.y)) <= INTERACT_DIST);
       if (adjacent && p.path.length === 0) {
         this.useFurniture(p, f.id);
         return true;
@@ -597,10 +603,18 @@ export class RoomInstance {
    * The remote control (`climate_set`, already validated by parseClimateSet): power, target, mode, fan, swing and sleep timer.
    * Every unit of the room follows and everybody is told. Returns false when the room has no air conditioning to control.
    */
-  applyClimateSet(req: ClimateSet, now: number): boolean {
+  applyClimateSet(req: ClimateSet, now: number, by?: Player): 'ok' | 'none' | 'far' | 'busy' {
     const units = this.acUnits();
-    const hasControl = units.length > 0 || this.built.def.furniture.some((f) => f.kind === 'thermostat');
-    if (!hasControl) return false;
+    const controls = [...units, ...this.built.def.furniture.filter((f) => f.kind === 'thermostat')];
+    if (controls.length === 0) return 'none';
+    // O controle remoto so vale perto de uma unidade/termostato da sala (distancia de interacao + 1 tile de folga, porque o
+    // controle fica aberto enquanto a pessoa se afasta um passo) e no maximo uma mudanca a cada CLIMATE_SET_MIN_GAP_MS por sala.
+    if (by) {
+      this.sync(by, now);
+      if (!controls.some((f) => footprintTiles(f).some((t) => Math.max(Math.abs(t.x - by.x), Math.abs(t.y - by.y)) <= INTERACT_DIST + 1))) return 'far';
+      if (this.climateSetAt > 0 && now - this.climateSetAt < CLIMATE_SET_MIN_GAP_MS) return 'busy';
+      this.climateSetAt = now;
+    }
     this.climateNowMs = now;
     const c = this.climate;
     const wasOn = c.on;
@@ -614,7 +628,7 @@ export class RoomInstance {
     if (wasOn !== c.on) for (const u of units) this.setFurni(u.id, c.on);
     c.overheat = overheating(c.overheat, c.temp, this.rackCount(), isCooling(c.on, c.mode));
     this.sendClimate(true);
-    return true;
+    return 'ok';
   }
 
   private sendClimate(force: boolean) {

@@ -3,6 +3,7 @@ import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, type ApiErrorBody } from '@wo
 import { checkPassword, hashPassword, verifyPassword } from './auth';
 import { authenticate, toView, type AuthDeps } from './authRoutes';
 import { KeyedLimiter } from './limiter';
+import { registerPasswordReset } from './passwordReset';
 
 /**
  * Troca de senha pela propria pessoa (POST /api/account/password) e a trava da senha provisoria:
@@ -11,7 +12,7 @@ import { KeyedLimiter } from './limiter';
  */
 
 const BODY_LIMIT = 1024;
-const OPEN_WHILE_PENDING = new Set(['/api/config', '/api/me', '/api/login', '/api/logout', '/api/account/password']);
+const OPEN_WHILE_PENDING = new Set(['/api/config', '/api/me', '/api/login', '/api/logout', '/api/account/password', '/api/password/forgot', '/api/password/reset']);
 
 function fail(reply: FastifyReply, status: number, code: string, message: string, retryAfterSeconds?: number) {
   if (retryAfterSeconds !== undefined) void reply.header('Retry-After', String(retryAfterSeconds));
@@ -23,6 +24,7 @@ export function registerPasswordRoutes(app: FastifyInstance, deps: AuthDeps) {
   const { store, world, clock } = deps;
   // Quem erra a senha atual repetidamente (sessao roubada, por exemplo) leva atraso: 5 tentativas e depois 1 por minuto.
   const attempts = new KeyedLimiter(5, 1 / 60);
+  registerPasswordReset(app, deps);
 
   app.addHook('onRequest', async (req, reply) => {
     if (!req.url.startsWith('/api/')) return;

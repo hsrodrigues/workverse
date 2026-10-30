@@ -268,6 +268,8 @@ export interface ServerConfig {
   devLogin: boolean;
   /** Quem pode criar conta: open (qualquer um), invite (so com convite) ou closed (so pelo CLI). Ausente = open. */
   registration?: 'open' | 'invite' | 'closed';
+  /** True quando "Esqueci minha senha" por e-mail esta ligado (MAIL_PROVIDER configurado). Ausente = desligado. */
+  passwordReset?: boolean;
 }
 
 // ---- staff da plataforma (ver docs/staff.md); o servidor valida nível, serviço, alvo e taxa de cada mensagem ----

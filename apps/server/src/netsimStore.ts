@@ -22,6 +22,8 @@ export interface NetsimProgressRow {
   /** Melhor pontuacao (0..100). */
   best: number;
   attempts: number;
+  /** Dicas usadas na execucao da melhor pontuacao (0..3). */
+  hints: number;
   /** Quando resolveu pela primeira vez; null enquanto nao resolveu. */
   solvedAt: number | null;
   updatedAt: number;
@@ -87,6 +89,7 @@ export class NetsimStore {
         challengeId: r.challengeId,
         best: Number.isFinite(r.best) ? Math.max(0, Math.min(100, Math.round(r.best))) : 0,
         attempts: Number.isInteger(r.attempts) && r.attempts >= 0 ? r.attempts : 0,
+        hints: Number.isInteger(r.hints) && r.hints >= 0 ? Math.min(3, r.hints) : 0,
         solvedAt: Number.isFinite(r.solvedAt) ? (r.solvedAt as number) : null,
         updatedAt: Number.isFinite(r.updatedAt) ? r.updatedAt : 0,
       });

@@ -13,5 +13,7 @@ jobs:
       - run: npx tsc -p packages/shared/tsconfig.json --noEmit
       - run: npx tsc -p apps/server/tsconfig.json --noEmit
       - run: npx tsc -p apps/client/tsconfig.json --noEmit
+      # So falha com vulnerabilidade ALTA/CRITICA em dependencias de producao; baixa e moderada nao quebram o CI.
+      - run: npm audit --omit=dev --audit-level=high
       - run: npm test
       - run: npm run build

@@ -1,5 +1,5 @@
 import type { Pool } from 'pg';
-import { AUDIT_CAP, MemoryAccountStore, nameKey, type Account, type NewAccount, type SessionRecord } from '../store';
+import { AUDIT_CAP, MemoryAccountStore, nameKey, type Account, type NewAccount, type ResetTokenRecord, type SessionRecord } from '../store';
 import { OrgService } from '../org';
 import type { AuditRecord } from '@workverse/shared';
 import { opToSql, orgDataFromRows, type OrgRows } from './orgMapping';
@@ -106,6 +106,13 @@ export class PgAccountStore extends MemoryAccountStore {
     // Auditoria de staff (migracao 0004): so os mais recentes ficam em memoria; a tabela guarda tudo.
     const audit = await pool.query<AuditRow>('SELECT * FROM (SELECT * FROM staff_audit ORDER BY at DESC, id DESC LIMIT $1) t ORDER BY at ASC, id ASC', [AUDIT_CAP]);
     store.audit = audit.rows.map(auditFromRow);
+    // Tokens de redefinicao de senha (migracao 0012): so os ainda validos.
+    const resets = await pool.query<{ token_hash: string; account_id: string; created_at: Date; expires_at: Date }>('SELECT * FROM password_reset_tokens WHERE expires_at > $1', [now]);
+    for (const r of resets.rows) {
+      if (store.accounts.has(r.account_id)) {
+        store.resets.set(r.token_hash, { tokenHash: r.token_hash, accountId: r.account_id, createdAt: r.created_at.getTime(), expiresAt: r.expires_at.getTime() });
+      }
+    }
     // Organizacoes (migracao 0002). Carregar nao gera escrita; depois disso toda mudanca entra na fila.
     const q = <T extends object>(table: string) => pool.query<T>(`SELECT * FROM ${table}`).then((r) => r.rows);
     store.orgs.load(
@@ -177,6 +184,18 @@ export class PgAccountStore extends MemoryAccountStore {
     this.enqueue({ sql: INSERT_AUDIT_SQL, params: auditParams(record) });
   }
 
+  protected override onResetAdded(r: ResetTokenRecord): void {
+    this.enqueue({
+      sql: 'INSERT INTO password_reset_tokens (token_hash, account_id, created_at, expires_at) VALUES ($1, $2, $3, $4) ON CONFLICT (token_hash) DO NOTHING',
+      params: [r.tokenHash, r.accountId, new Date(r.createdAt), new Date(r.expiresAt)],
+      onPermanent: () => this.resets.delete(r.tokenHash),
+    });
+  }
+
+  protected override onResetDropped(tokenHash: string): void {
+    this.enqueue({ sql: 'DELETE FROM password_reset_tokens WHERE token_hash = $1', params: [tokenHash] });
+  }
+
   override deleteSession(tokenHash: string): void {
     super.deleteSession(tokenHash);
     this.enqueue({ sql: 'DELETE FROM sessions WHERE token_hash = $1', params: [tokenHash] });
@@ -185,6 +204,11 @@ export class PgAccountStore extends MemoryAccountStore {
   override deleteSessionsOf(accountId: string): void {
     super.deleteSessionsOf(accountId);
     this.enqueue({ sql: 'DELETE FROM sessions WHERE account_id = $1', params: [accountId] });
+  }
+
+  override deleteExpiredResetTokens(now: number): void {
+    super.deleteExpiredResetTokens(now);
+    this.enqueue({ sql: 'DELETE FROM password_reset_tokens WHERE expires_at <= $1', params: [new Date(now)], key: 'expired-resets' });
   }
 
   override deleteExpiredSessions(now: number): void {

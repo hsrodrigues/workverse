@@ -42,7 +42,7 @@ Sem RIP/OSPF/BGP, IPv6, STP, MTU/fragmentação, estado de TCP, NAT de destino/p
 
 ## Persistência
 
-Migração `0010_netsim.sql`: `netsim_topologies` (uma linha por org, `version`, JSON validado) e `netsim_progress` (progresso de desafios por conta, reservado). Stores em memória, JSON e PostgreSQL com o contrato `apps/server/test/helpers/netsimContract.ts` (inclui PG real e `ON DELETE CASCADE`).
+Migração `0010_netsim.sql`: `netsim_topologies` (uma linha por org, `version`, JSON validado) e `netsim_progress` (progresso dos desafios por conta; a migração `0011` acrescenta `hints`). Stores em memória, JSON e PostgreSQL com o contrato `apps/server/test/helpers/netsimContract.ts` (inclui PG real e `ON DELETE CASCADE`).
 
 ## Painel (apps/client/src/ui/netsim)
 
@@ -50,6 +50,16 @@ SVG da topologia com ícones pixel art originais, arrastar (TI), cabos com LEDs 
 
 Comandos do terminal: `help`, `ip addr`, `ifconfig`, `ip addr add 10.0.0.2/24 [dev Gig0/0]`, `gateway`, `dns`, `dhcp on|off`, `ip route [add|del] ...`, `show ip route`, `show vlan`, `vlan Gig0/1 20`, `trunk Gig0/24`, `shutdown` / `no shutdown`, `nat on|off`, `nat inside|outside`, `ping`, `traceroute`, `nslookup`, `curl`/`navegar`, `testar`, `hostname`, `clear`. Comandos que alteram só valem para a TI (os demais recebem "Permissão negada").
 
-## Pendente
+## Desafios "Conserte a rede"
 
-Etapa 4 (desafios "Conserte a rede" com pontuação, dicas e placar): ainda não implementada. Já existem a tabela `netsim_progress` e o store (`putProgress`, `progressOfOrg`), sem mensagens nem UI.
+Aba **Desafios** no painel Rede (botão ao lado de "Rede da organização"). São 12 desafios (fácil, médio, difícil) em `packages/shared/src/netsim/challenges.ts`: gateway errado, máscara errada, cabo solto e porta desativada, PC na VLAN errada, trunk sem VLAN, DHCP sem pool, rota padrão faltando, NAT desligado, DNS interno com registro errado, ACL bloqueando o servidor financeiro (e o RH precisa continuar bloqueado), IP duplicado e um "caos" com três falhas juntas.
+
+- **Desafio** = história curta em pt-BR, topologia com falhas plantadas, **objetivos** verificáveis pelo próprio motor (ping, navegar, DNS, "Testar internet"; objetivos negativos como "o RH NÃO acessa o servidor financeiro" e `noWarn` para avisos de IP duplicado), 3 dicas progressivas e tempo de referência. Remover ou renomear um dispositivo nunca satisfaz um objetivo.
+- **Pontuação** (`scoreChallenge`): base 40/60/80 (fácil/médio/difícil) + bônus de tempo até +20 (cheio até o tempo de referência, zero a partir de 3x) − dicas (5, 10, 15) − 2 por verificação errada (teto 10); mínimo 10, máximo 100. O servidor calcula; a melhor pontuação nunca piora ao repetir.
+- **Sandbox**: cada pessoa tem no máximo uma sessão em memória com uma **cópia** da topologia do desafio (perdida ao desconectar ou reiniciar). A rede real da organização nunca é lida nem alterada. Qualquer membro (não visitante) joga; a edição da rede real continua só da TI. O painel usa o mesmo canvas, propriedades, terminal e aba Testar, e uma aba **Objetivos** com ✔/✘ ao vivo (calculados no cliente com o mesmo motor; o servidor reavalia em **Verificar** e decide).
+- **Mensagens**: `netsim_challenges` (lista com progresso da conta e placar → `netsim_challenges_state`), `netsim_challenge_start` (`resume: true` continua o sandbox), `netsim_challenge_edit` (lote de até 8 operações com `base`), `netsim_challenge_check` (→ `netsim_challenge_result` com objetivos, pontuação detalhada e recorde), `netsim_challenge_hint`, `netsim_challenge_quit`; a sessão volta em `netsim_challenge_session`. Validação estrita (strike para lixo), rate limit por conta (edição, verificação, controle), erros `no_session`, `not_found`, `conflict`, `invalid`, `rate_limited`.
+- **Progresso**: tabela `netsim_progress` por conta e organização (melhor pontuação, tentativas = quantas vezes iniciou, dicas da melhor execução, quando resolveu pela primeira vez). Migração `0011_netsim_hints.sql` acrescenta `hints`. Contrato de testes nos stores memória, JSON e PostgreSQL real.
+- **Placar** da organização: top 10 por pontos (soma das melhores pontuações dos resolvidos) com posição, nome de exibição, quantidade resolvida e pontos; quem não está entre os 10 aparece com a própria posição. Só nomes de exibição; quem saiu da organização ou é visitante não aparece. Cada resolução vira uma linha de auditoria `netsim.challenge`.
+- **Solução de referência**: `challengeSolutions.ts` (só testes; não vai no pacote exportado nem para o cliente) prova por teste automatizado que cada desafio é resolvível e que falha sem a correção, inclusive pelo caminho completo no servidor.
+
+Limitações: o sandbox não tem desfazer nem "restaurar padrão" (use Recomeçar); o catálogo é fixo no código (sem editor de desafios); o bônus de tempo usa o relógio do servidor desde o início da sessão.

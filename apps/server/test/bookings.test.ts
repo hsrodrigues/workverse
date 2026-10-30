@@ -267,6 +267,23 @@ describe('reservar e acesso durante a janela', () => {
   });
 });
 
+describe('privacidade de sala privada na agenda', () => {
+  it('quem nao pode entrar nao ve o nome real da sala nem o dono da fila; dono e admin veem', () => {
+    request(cAna, 'private', [[at(14), at(16)]]);
+    request(cBia, 'private', [[at(15), at(17)]]);
+    const member = sync(cCris);
+    expect(member.rooms.find((r) => r.roomId === 'private')!.name).toBe('Sala privada');
+    expect(member.queue).toHaveLength(1);
+    expect(member.queue[0]!.ownerName).toBeUndefined();
+    expect(JSON.stringify(member)).not.toContain('"Bia"');
+    // a propria entrada da fila mostra o dono (ele mesmo); o admin ve tudo
+    expect(sync(cBia).queue[0]!.ownerName).toBe('Bia');
+    const adminView = sync(cAdm);
+    expect(adminView.rooms.find((r) => r.roomId === 'private')!.name).toBe('Sala Privada');
+    expect(adminView.queue[0]!.ownerName).toBe('Bia');
+  });
+});
+
 describe('conflito e fila', () => {
   it('horario ocupado entra na fila com posicao e proxima janela livre; cancelar promove automaticamente', () => {
     const a = slot0(request(cAna, 'private', [[at(14), at(16)]]));
@@ -278,7 +295,7 @@ describe('conflito e fila', () => {
     const c = slot0(request(cCris, 'private', [[at(15), at(16)]]));
     expect(c).toMatchObject({ status: 'queued', position: 2 });
     const view = sync(cCris);
-    expect(view.queue.map((q) => [q.ownerName, q.position, q.mine])).toEqual([['Bia', 1, false], ['Cris', 2, true]]);
+    expect(view.queue.map((q) => [q.ownerName, q.position, q.mine])).toEqual([[undefined, 1, false], ['Cris', 2, true]]);
     expect(view.mine[0]).toMatchObject({ status: 'queued', position: 2, suggestion: at(16) });
 
     cBia.clear();
@@ -534,9 +551,9 @@ describe('privacidade e isolamento', () => {
     expect(stranger.blocks).toEqual([{ id: a.id, startAt: at(14), endAt: at(15), state: 'busy', mine: false }]);
     const json = JSON.stringify(stranger);
     for (const secret of ['Demissão', 'x.com', ana.id, bia.id, cris.id, boss.id]) expect(json, secret).not.toContain(secret);
-    // a fila mostra nomes, mas o titulo so para o dono da entrada e para a administracao
+    // a fila nao revela o dono a quem nao entra na sala privada; o titulo so para o dono da entrada e para a administracao
     const q = sync(cBia).queue;
-    expect(q).toEqual([{ id: expect.any(String), startAt: at(14, 30), endAt: at(15, 30), position: 1, ownerName: 'Cris', mine: false }]);
+    expect(q).toEqual([{ id: expect.any(String), startAt: at(14, 30), endAt: at(15, 30), position: 1, mine: false }]);
     expect(sync(cCris).queue[0]!.title).toBe('Título da fila');
     expect(sync(cAdm).queue[0]!.title).toBe('Título da fila');
     // convidado ve detalhes

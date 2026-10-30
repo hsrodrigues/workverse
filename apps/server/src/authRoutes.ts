@@ -21,6 +21,7 @@ import { DuplicateAccountError, type Account, type AccountStore } from './store'
 import { isReservedName, normalizeName, type World } from './world';
 import { registrationGate, type RegistrationMode } from './registration';
 import { accessBlock } from './accountState';
+import type { Mailer } from './mailer';
 
 /** Requests to `/api/*` never need more than a few hundred bytes. */
 const BODY_LIMIT = 2048;
@@ -47,7 +48,15 @@ export interface AuthDeps {
   allowedOrigins: string[];
   /** REGISTRATION_MODE (padrao 'open' quando ausente, ex.: testes). */
   registrationMode?: RegistrationMode;
+  /** Provedor de e-mail (ausente ou desligado = sem "Esqueci minha senha"). */
+  mailer?: Mailer;
+  /** PUBLIC_URL sem barra final: base do link enviado por e-mail. */
+  publicUrl?: string;
+  forgotMinMs?: number;
 }
+
+/** O recurso so liga com provedor ativo e uma base de link conhecida. */
+export const passwordResetEnabled = (d: Pick<AuthDeps, 'mailer' | 'publicUrl'>) => Boolean(d.mailer?.enabled && d.publicUrl);
 
 export const toView = (a: Account): AccountView => ({ id: a.id, email: a.email, displayName: a.displayName, avatar: a.avatar, ...(a.mustChangePassword ? { mustChangePassword: true } : {}) });
 
@@ -135,7 +144,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthDeps) {
 
   app.get('/api/config', async (_req, reply): Promise<ServerConfig> => {
     noStore(reply);
-    return { devLogin: deps.allowDevLogin, registration: deps.registrationMode ?? 'open' };
+    return { devLogin: deps.allowDevLogin, registration: deps.registrationMode ?? 'open', passwordReset: passwordResetEnabled(deps) };
   });
 
   app.get('/api/me', async (req, reply) => {

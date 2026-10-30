@@ -18,6 +18,7 @@ import type { PermissionSync } from './stage';
 import { JsonFileUsageStore, type EconomyConfig, type UsageStore } from './mediaEconomy';
 import { ServerMetrics, registerMetricsRoute } from './metrics';
 import type { RegistrationMode } from './registration';
+import type { Mailer } from './mailer';
 import { registerWeb, type WebOptions } from './webServer';
 
 export interface AppOptions {
@@ -33,6 +34,12 @@ export interface AppOptions {
   /** Serve o site (apps/client/dist) + cabecalhos de seguranca. Ausente = so API (testes, dev). */
   web?: WebOptions;
   authLimits?: Partial<AuthLimits>;
+  /** Provedor de e-mail da redefinicao de senha (ausente = recurso desligado). */
+  mailer?: Mailer;
+  /** PUBLIC_URL (origem, sem barra final): base do link do e-mail. */
+  publicUrl?: string;
+  /** Tempo minimo de resposta de /api/password/forgot (igualar o caso "conta existe" e "nao existe"); 0 nos testes. */
+  forgotMinMs?: number;
   /** Clock for sessions and auth rate limits (tests). */
   clock?: () => number;
   /** Comma separated allowed Origin values; empty means any origin (development only). */
@@ -141,7 +148,7 @@ export async function createApp(opts: AppOptions): Promise<{ app: FastifyInstanc
   await app.register(websocket, { options: { maxPayload: MAX_DECK_MESSAGE_BYTES } });
 
   const guard = new AuthGuard({ ...DEFAULT_AUTH_LIMITS, ...opts.authLimits }, clock);
-  const authDeps = { store: opts.store, world, guard, clock, secureCookies: production, allowDevLogin, allowedOrigins: allowed, registrationMode: opts.registrationMode };
+  const authDeps = { store: opts.store, world, guard, clock, secureCookies: production, allowDevLogin, allowedOrigins: allowed, registrationMode: opts.registrationMode, mailer: opts.mailer, publicUrl: opts.publicUrl, forgotMinMs: opts.forgotMinMs };
   registerAuthRoutes(app, authDeps);
   registerPasswordRoutes(app, authDeps);
   registerProfileRoutes(app, authDeps);

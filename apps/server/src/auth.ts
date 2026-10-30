@@ -145,6 +145,10 @@ export interface AuthLimits {
   loginPerEmail: { burst: number; perMinute: number };
   registerPerIp: { burst: number; perMinute: number };
   registerPerEmail: { burst: number; perMinute: number };
+  /** "Esqueci minha senha": pedidos de link (por IP e por e-mail) e tentativas de usar um token (por IP). */
+  forgotPerIp: { burst: number; perMinute: number };
+  forgotPerEmail: { burst: number; perMinute: number };
+  resetPerIp: { burst: number; perMinute: number };
   /** Failed logins (same IP + e-mail) before a temporary lockout starts. */
   lockoutAfter: number;
   lockoutBaseMs: number;
@@ -158,6 +162,9 @@ export const DEFAULT_AUTH_LIMITS: AuthLimits = {
   loginPerEmail: { burst: 10, perMinute: 5 },
   registerPerIp: { burst: 5, perMinute: 0.2 },
   registerPerEmail: { burst: 3, perMinute: 0.1 },
+  forgotPerIp: { burst: 5, perMinute: 0.5 },
+  forgotPerEmail: { burst: 3, perMinute: 0.1 },
+  resetPerIp: { burst: 10, perMinute: 3 },
   lockoutAfter: 5,
   lockoutBaseMs: 30_000,
   lockoutMaxMs: 15 * 60_000,
@@ -177,6 +184,9 @@ export class AuthGuard {
   private readonly loginEmail: KeyedLimiter;
   private readonly registerIp: KeyedLimiter;
   private readonly registerEmail: KeyedLimiter;
+  private readonly forgotIp: KeyedLimiter;
+  private readonly forgotEmail: KeyedLimiter;
+  private readonly resetIp: KeyedLimiter;
   private readonly failures = new Map<string, FailureState>();
 
   constructor(
@@ -188,6 +198,9 @@ export class AuthGuard {
     this.loginEmail = mk(limits.loginPerEmail);
     this.registerIp = mk(limits.registerPerIp);
     this.registerEmail = mk(limits.registerPerEmail);
+    this.forgotIp = mk(limits.forgotPerIp);
+    this.forgotEmail = mk(limits.forgotPerEmail);
+    this.resetIp = mk(limits.resetPerIp);
   }
 
   checkLogin(ip: string, email: string): Throttle {
@@ -211,6 +224,19 @@ export class AuthGuard {
     if (email && !this.registerEmail.take(email, now)) {
       return { ok: false, retryAfterSeconds: Math.max(1, this.registerEmail.retryAfterSeconds(email, now)) };
     }
+    return { ok: true };
+  }
+
+  checkForgot(ip: string, email: string): Throttle {
+    const now = this.clock();
+    if (!this.forgotIp.take(ip, now)) return { ok: false, retryAfterSeconds: Math.max(1, this.forgotIp.retryAfterSeconds(ip, now)) };
+    if (email && !this.forgotEmail.take(email, now)) return { ok: false, retryAfterSeconds: Math.max(1, this.forgotEmail.retryAfterSeconds(email, now)) };
+    return { ok: true };
+  }
+
+  checkReset(ip: string): Throttle {
+    const now = this.clock();
+    if (!this.resetIp.take(ip, now)) return { ok: false, retryAfterSeconds: Math.max(1, this.resetIp.retryAfterSeconds(ip, now)) };
     return { ok: true };
   }
 

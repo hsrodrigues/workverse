@@ -6,6 +6,7 @@ import { JsonFileAccountStore, MemoryAccountStore } from '../src/store';
 import { accountStoreContract } from './helpers/storeContract';
 import { roomsStoreContract } from './helpers/roomsContract';
 import { profileStoreContract } from './helpers/profileContract';
+import { resetTokenContract } from './helpers/resetContract';
 
 const dirs: string[] = [];
 afterAll(() => {
@@ -41,6 +42,27 @@ profileStoreContract('MemoryAccountStore', async () => {
 
 profileStoreContract('JsonFileAccountStore', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'wv-json-profile-'));
+  dirs.push(dir);
+  const file = join(dir, 'accounts.json');
+  let current = new JsonFileAccountStore(file);
+  return {
+    store: current,
+    settle: async () => current.flush(),
+    reopen: async () => {
+      current.flush();
+      current = new JsonFileAccountStore(file);
+      return current;
+    },
+  };
+});
+
+resetTokenContract('MemoryAccountStore', async () => {
+  const store = new MemoryAccountStore();
+  return { store, settle: async () => undefined, reopen: async () => store };
+});
+
+resetTokenContract('JsonFileAccountStore', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'wv-json-reset-'));
   dirs.push(dir);
   const file = join(dir, 'accounts.json');
   let current = new JsonFileAccountStore(file);

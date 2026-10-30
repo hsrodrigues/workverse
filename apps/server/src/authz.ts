@@ -190,6 +190,13 @@ export const MESSAGE_POLICY: Readonly<Record<string, Permission | null>> = {
   netsim_undo: 'dir.search',
   netsim_reset: 'dir.search',
   netsim_run: 'dir.search',
+  // desafios da rede: sandbox por pessoa, qualquer membro (nao visitante)
+  netsim_challenges: 'dir.search',
+  netsim_challenge_start: 'dir.search',
+  netsim_challenge_edit: 'dir.search',
+  netsim_challenge_check: 'dir.search',
+  netsim_challenge_hint: 'dir.search',
+  netsim_challenge_quit: 'dir.search',
   // pet do escritorio (Byte): qualquer pessoa na sala; o servidor limita distancia, taxa e petiscos
   pet_do: 'room.enter',
   // batimento de midia (conectado / transmitindo): so quem pode usar midia

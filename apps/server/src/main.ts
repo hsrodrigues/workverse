@@ -6,6 +6,7 @@ import { resolveBootConfig } from './bootConfig';
 import { resolveMediaConfig } from './media';
 import { resolveKeepaliveConfig, startKeepalive } from './keepalive';
 import { makeOriginList } from './origins';
+import { createMailer } from './mailer';
 import { migrate } from './db/migrate';
 import { PgAccountStore } from './db/pgAccountStore';
 import { closePool, createPool, poolOptionsFromEnv } from './db/pool';
@@ -45,6 +46,8 @@ if (pool) {
 } else {
   store = new JsonFileAccountStore(resolve(dataDir, 'accounts.json'));
 }
+const mailer = createMailer(process.env, production);
+if (!mailer.enabled) console.warn(`[workverse] AVISO: "Esqueci minha senha" por e-mail DESLIGADO (${mailer.reason}). A staff redefine senhas pelo painel.`);
 const { app, world } = await createApp({
   store,
   allowedOrigins,
@@ -52,6 +55,8 @@ const { app, world } = await createApp({
   production,
   trustProxy,
   registrationMode: cfg.registration,
+  mailer,
+  publicUrl: cfg.publicUrl || (production ? undefined : (cfg.allowedOrigins.find((o) => !o.includes('*')) ?? 'http://localhost:5173')),
   mediaUsageFile: resolve(dataDir, 'media-usage.json'),
   web: { webRoot, production, livekitUrl: mediaCfg.enabled ? mediaCfg.url : undefined },
   logger: true,
@@ -59,7 +64,7 @@ const { app, world } = await createApp({
 if (!existsSync(resolve(webRoot, 'index.html'))) {
   app.log.warn({ webRoot }, 'build do cliente nao encontrado: so a API/WebSocket estao ativos (rode npm run build)');
 }
-app.log.info({ registration: cfg.registration, media: mediaCfg.enabled, postgres: cfg.usingPostgres, trustProxy }, 'workverse config');
+app.log.info({ registration: cfg.registration, passwordReset: mailer.enabled, mailProvider: mailer.provider, media: mediaCfg.enabled, postgres: cfg.usingPostgres, trustProxy }, 'workverse config');
 
 // The old name+token profiles had no passwords and cannot be turned into real accounts.
 const legacy = resolve(dataDir, 'profiles.json');

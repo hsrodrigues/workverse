@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DEVICE_KINDS, DEVICE_LABEL, buildContext, browse, isHostKind, isL2Kind, ping, testInternet, type DeviceKind, type NetOp, type SimResult, type Topology } from '@workverse/shared';
+import { DEVICE_KINDS, DEVICE_LABEL, buildContext, browse, evaluateObjectives, getChallenge, isHostKind, isL2Kind, ping, testInternet, type DeviceKind, type NetOp, type SimResult, type Topology } from '@workverse/shared';
 import { Window } from '../Window';
 import { DeviceIcon } from './icons';
 import { NetsimCanvas, type Selection, type Tool } from './NetsimCanvas';
 import { CableProps, DeviceProps } from './NetsimProps';
 import { formatSteps, freeIface, runTerminal, type TermLine } from './netsimLogic';
+import { ChallengeBar, ChallengeListView, DoneCard, GoalsTab, useElapsed } from './NetsimChallenges';
 import { netsimStore, useNetsim } from './netsimStore';
 import './netsim.css';
 
-type Tab = 'props' | 'term' | 'test';
+type Tab = 'props' | 'term' | 'test' | 'goals';
 const PALETTE_KINDS = DEVICE_KINDS.filter((k) => k !== 'internet');
 
 /**
@@ -19,8 +20,15 @@ const PALETTE_KINDS = DEVICE_KINDS.filter((k) => k !== 'internet');
 export function NetsimPanel() {
   const ui = useNetsim();
   const s = ui.state;
-  const topo: Topology | null = s?.topology ?? null;
-  const canEdit = !!s?.canEdit;
+  const session = ui.view === 'challenges' ? ui.session : null;
+  const challenge = session ? getChallenge(session.id) : undefined;
+  const inCh = !!session && !!challenge;
+  const topo: Topology | null = inCh ? session.topology : (s?.topology ?? null);
+  const canEdit = inCh ? !session.solved : !!s?.canEdit;
+  const results = useMemo(() => (inCh && topo ? evaluateObjectives(topo, challenge) : []), [inCh, topo, challenge]);
+  const liveElapsed = useElapsed(ui.sessionAt, inCh && !session.solved);
+  const elapsed = inCh && session.solved ? session.elapsedSec : liveElapsed;
+  const [showDone, setShowDone] = useState(true);
   const [sel, setSel] = useState<Selection>(null);
   const [tool, setTool] = useState<Tool>('select');
   const [cableFrom, setCableFrom] = useState<string | null>(null);
@@ -36,6 +44,20 @@ export function NetsimPanel() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [ui.open]);
+
+  // trocar de modo/desafio limpa a selecao (os ids sao de outra topologia) e abre a aba de objetivos
+  const sessionId = inCh ? session.id : null;
+  useEffect(() => {
+    setSel(null);
+    setCableFrom(null);
+    setTool('select');
+    setTab(sessionId ? 'goals' : 'props');
+    setShowDone(true);
+  }, [sessionId, ui.view]);
+  useEffect(() => {
+    if (ui.result?.solved) setShowDone(true);
+  }, [ui.result]);
+  const curTab: Tab = !inCh && tab === 'goals' ? 'props' : tab;
 
   // a selecao some se o dispositivo foi removido por outra pessoa
   const selDev = topo && sel?.kind === 'device' ? topo.devices.find((d) => d.id === sel.id) : undefined;
@@ -91,12 +113,27 @@ export function NetsimPanel() {
   return (
     <Window id="netsim" className="win panel panel-netsim" title="Rede · Simulador da TI" onClose={() => netsimStore.close()} role="dialog" aria-label="Simulador de rede da TI" bodyClassName="ns-body">
       <div className="ns" data-testid="netsim-panel">
-        <p className="ns-note">
-          Tudo aqui é <b>simulado</b>: nenhum pacote real sai do WorkVerse.{' '}
-          {canEdit ? <span className="ns-badge edit">Você pode editar</span> : <span className="ns-badge ro" data-testid="netsim-readonly">Modo leitura (somente a TI edita)</span>}
-          {s && <span className="ns-dim"> · versão {s.version}{s.version === 0 ? ' (modelo do inventário)' : ''}{s.updatedBy ? ` · por ${s.updatedBy}` : ''}</span>}
-          {ui.busy && <span className="ns-dim"> · aguarde…</span>}
-        </p>
+        <div className="ns-views" role="tablist" aria-label="Modo do simulador">
+          {(['net', 'challenges'] as const).map((v) => (
+            <button key={v} type="button" role="tab" aria-selected={ui.view === v} className={ui.view === v ? 'on' : ''} onClick={() => netsimStore.setView(v)} data-testid={`netsim-view-${v}`}>
+              {v === 'net' ? 'Rede da organização' : 'Desafios'}
+            </button>
+          ))}
+        </div>
+        {inCh ? (
+          <p className="ns-note">
+            Tudo aqui é <b>simulado</b>. Você edita uma <b>cópia</b> do desafio: a rede real da organização não é afetada.{' '}
+            <span className="ns-badge edit" data-testid="netsim-sandbox">Modo desafio</span>
+            {ui.busy && <span className="ns-dim"> · aguarde…</span>}
+          </p>
+        ) : ui.view === 'net' ? (
+          <p className="ns-note">
+            Tudo aqui é <b>simulado</b>: nenhum pacote real sai do WorkVerse.{' '}
+            {canEdit ? <span className="ns-badge edit">Você pode editar</span> : <span className="ns-badge ro" data-testid="netsim-readonly">Modo leitura (somente a TI edita)</span>}
+            {s && <span className="ns-dim"> · versão {s.version}{s.version === 0 ? ' (modelo do inventário)' : ''}{s.updatedBy ? ` · por ${s.updatedBy}` : ''}</span>}
+            {ui.busy && <span className="ns-dim"> · aguarde…</span>}
+          </p>
+        ) : null}
         {(msg || ui.notice) && (
           <p className="ns-alert" role="alert" data-testid="netsim-notice">
             {msg ?? ui.notice}
@@ -105,9 +142,13 @@ export function NetsimPanel() {
             </button>
           </p>
         )}
-        {s && s.omitted > 0 && <p className="ns-dim">{s.omitted} estação(ões) do inventário ficaram de fora por causa do limite de dispositivos.</p>}
+        {ui.view === 'net' && s && s.omitted > 0 && <p className="ns-dim">{s.omitted} estação(ões) do inventário ficaram de fora por causa do limite de dispositivos.</p>}
 
-        {canEdit && (
+        {ui.view === 'challenges' && !inCh && <ChallengeListView list={ui.list} busy={ui.busy} />}
+        {inCh && <ChallengeBar ch={challenge} session={session} results={results} elapsed={elapsed} busy={ui.busy} />}
+        {inCh && ui.result?.solved && showDone && <DoneCard ch={challenge} result={ui.result} onSee={() => setShowDone(false)} />}
+
+        {(ui.view === 'net' || inCh) && canEdit && (
           <div className="ns-toolbar" role="toolbar" aria-label="Ferramentas da rede">
             <div className="ns-pal" aria-label="Adicionar equipamento">
               {PALETTE_KINDS.map((k) => (
@@ -121,16 +162,21 @@ export function NetsimPanel() {
               <button type="button" className={`ns-btn${tool === 'cable' ? ' on' : ''}`} aria-pressed={tool === 'cable'} onClick={() => { setTool(tool === 'cable' ? 'select' : 'cable'); setCableFrom(null); }} data-testid="netsim-tool-cable">
                 {tool === 'cable' ? 'Cabo: clique em 2 dispositivos' : 'Cabo'}
               </button>
-              <button type="button" className="ns-btn" disabled={!s?.canUndo} onClick={() => netsimStore.undo()} data-testid="netsim-undo">
-                Desfazer
-              </button>
-              <button type="button" className="ns-btn danger" onClick={() => { if (window.confirm('Restaurar o modelo padrão gerado do inventário? Suas alterações viram uma versão desfazível.')) netsimStore.reset(); }} data-testid="netsim-reset">
-                Restaurar padrão
-              </button>
+              {!inCh && (
+                <>
+                  <button type="button" className="ns-btn" disabled={!s?.canUndo} onClick={() => netsimStore.undo()} data-testid="netsim-undo">
+                    Desfazer
+                  </button>
+                  <button type="button" className="ns-btn danger" onClick={() => { if (window.confirm('Restaurar o modelo padrão gerado do inventário? Suas alterações viram uma versão desfazível.')) netsimStore.reset(); }} data-testid="netsim-reset">
+                    Restaurar padrão
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}
 
+        {(ui.view === 'net' || (inCh && !(ui.result?.solved && showDone))) && (
         <div className="ns-main">
           <div className="ns-left">
             <div className="ns-zoom">
@@ -179,25 +225,27 @@ export function NetsimPanel() {
 
           <div className="ns-right">
             <div className="ns-tabs" role="tablist">
-              {(['props', 'term', 'test'] as const).map((t) => (
-                <button key={t} type="button" role="tab" aria-selected={tab === t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)} data-testid={`netsim-tab-${t}`}>
-                  {t === 'props' ? 'Propriedades' : t === 'term' ? 'Terminal' : 'Testar'}
+              {(inCh ? (['goals', 'props', 'term', 'test'] as const) : (['props', 'term', 'test'] as const)).map((t) => (
+                <button key={t} type="button" role="tab" aria-selected={curTab === t} className={curTab === t ? 'on' : ''} onClick={() => setTab(t)} data-testid={`netsim-tab-${t}`}>
+                  {t === 'goals' ? `Objetivos ${results.filter((r) => r.ok).length}/${results.length}` : t === 'props' ? 'Propriedades' : t === 'term' ? 'Terminal' : 'Testar'}
                 </button>
               ))}
             </div>
             <div className="ns-tabbody" role="tabpanel">
-              {tab === 'props' && topo && (
+              {curTab === 'goals' && inCh && <GoalsTab ch={challenge} session={session} results={results} result={ui.result} />}
+              {curTab === 'props' && topo && (
                 <>
                   {selDev && <DeviceProps topo={topo} dev={selDev} canEdit={canEdit} apply={(ops) => void apply(ops)} onDelete={() => void del()} />}
                   {selCable && <CableProps topo={topo} cable={selCable} canEdit={canEdit} apply={(ops) => void apply(ops)} />}
                   {!selDev && !selCable && <p className="ns-dim">Selecione um dispositivo ou cabo no desenho (ou na lista) para ver e ajustar as propriedades.</p>}
                 </>
               )}
-              {tab === 'term' && topo && <Terminal topo={topo} devId={selDev?.id ?? null} canEdit={canEdit} />}
-              {tab === 'test' && topo && <TestTab topo={topo} devId={selDev?.id ?? null} />}
+              {curTab === 'term' && topo && <Terminal topo={topo} devId={selDev?.id ?? null} canEdit={canEdit} />}
+              {curTab === 'test' && topo && <TestTab topo={topo} devId={selDev?.id ?? null} />}
             </div>
           </div>
         </div>
+        )}
       </div>
     </Window>
   );

@@ -74,5 +74,7 @@ export const api = {
     if (devName) devName = r.profile.displayName; // o atalho de dev identifica pelo nome: acompanha a troca
     return r.profile;
   }),
+  forgotPassword: (email: string) => request<{ ok: true; message: string }>('POST', '/api/password/forgot', { email }),
+  resetPassword: (token: string, password: string) => request<{ ok: true }>('POST', '/api/password/reset', { token, password }),
   changePassword: (current: string, next: string) => request<{ account: AccountView }>('POST', '/api/account/password', { current, next }).then((r) => r.account),
 };

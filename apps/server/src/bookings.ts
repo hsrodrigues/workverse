@@ -273,7 +273,9 @@ export class BookingService {
       if (NEVER_BOOKABLE_ROOM_IDS.includes(id)) continue;
       const s = this.settingOf(p.orgId, id);
       if (!s.bookable && !manager) continue;
-      out.push({ roomId: id, name: room.built.def.name, bookable: s.bookable, requiresApproval: s.requiresApproval, capacity: room.built.def.maxPlayers });
+      // Mesma regra de World.roomListFor: o nome real de sala privada so aparece a quem pode entrar nela.
+      const hidden = roomAccessOf(room.built.def) === 'private' && !manager && !this.host.canEnter(p, id).allow;
+      out.push({ roomId: id, name: hidden ? 'Sala privada' : room.built.def.name, bookable: s.bookable, requiresApproval: s.requiresApproval, capacity: room.built.def.maxPlayers });
     }
     return out;
   }
@@ -300,9 +302,10 @@ export class BookingService {
           ...(detail ? { title: b.title, ownerName: this.nameOf(b.ownerId), guests: b.guestIds.map((g) => this.nameOf(g)) } : {}),
         });
       }
+      const entered = manager || this.host.canEnter(p, chosen.roomId).allow;
       for (const b of all.filter((x) => x.status === 'queued' && overlaps(x, win)).sort(queueCompare)) {
         const mine = b.ownerId === p.accountId;
-        queue.push({ id: b.id, startAt: b.startAt, endAt: b.endAt, position: queuePosition(b, all), ownerName: this.nameOf(b.ownerId), mine, ...(mine || manager ? { title: b.title } : {}) });
+        queue.push({ id: b.id, startAt: b.startAt, endAt: b.endAt, position: queuePosition(b, all), ...(mine || entered ? { ownerName: this.nameOf(b.ownerId) } : {}), mine, ...(mine || manager ? { title: b.title } : {}) });
       }
     }
     const msg: Extract<BookingServerMessage, { t: 'bookings' }> = {
