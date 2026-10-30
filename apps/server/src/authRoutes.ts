@@ -115,6 +115,9 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthDeps) {
   // CSRF / cross-site writes: EVERY mutating /api route is covered here, including ones added later.
   app.addHook('onRequest', async (req, reply) => {
     if (!STATE_CHANGING.has(req.method) || !req.url.startsWith('/api/')) return;
+    // O webhook do LiveKit e chamado servidor a servidor (sem Origin, sem cookie) e se autentica pela assinatura do corpo; a propria rota
+    // recusa qualquer requisicao COM Origin. Sem esta excecao a lista de origens de producao derrubava todo evento real (403).
+    if (req.method === 'POST' && req.url.split('?')[0] === '/api/media/webhook') return;
     if (!originAllowed(req.headers, deps)) return fail(reply, 403, 'forbidden_origin', 'Origem não permitida.');
   });
 

@@ -222,6 +222,19 @@ describe('site estatico + cabecalhos', () => {
   });
 });
 
+describe('webhook do LiveKit em producao (lista de origens ligada)', () => {
+  it('a rota nao e barrada pela checagem de Origin (o LiveKit chama sem Origin); outras escritas sem Origin continuam barradas', async () => {
+    const { app } = await setup({ production: true, allowedOrigins: ['https://escritorio.example.com'] });
+    const hook = await app.inject({ method: 'POST', url: '/api/media/webhook', headers: { 'content-type': 'application/webhook+json' }, payload: '{}' });
+    // sem chaves do LiveKit nesta instancia a rota responde 503; o que importa: NAO e o 403 forbidden_origin do CSRF
+    expect(hook.statusCode).not.toBe(403);
+    expect(hook.json().error.code).not.toBe('forbidden_origin');
+    const other = await app.inject({ method: 'POST', url: '/api/login', payload: { email: 'a@example.com', password: 'x' } });
+    expect(other.statusCode).toBe(403);
+    expect(other.json().error.code).toBe('forbidden_origin');
+  });
+});
+
 describe('REGISTRATION_MODE', () => {
   const reg = (app: FastifyInstance, body: Record<string, unknown>) =>
     app.inject({ method: 'POST', url: '/api/register', payload: { password: PASSWORD, ...body } });
