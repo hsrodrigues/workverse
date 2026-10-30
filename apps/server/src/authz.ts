@@ -184,19 +184,20 @@ export const MESSAGE_POLICY: Readonly<Record<string, Permission | null>> = {
   climate_set: 'room.enter',
   inventory_query: 'dir.search',
   inventory_action: 'dir.search',
-  // simulador de rede da TI: ver/testar e para membros; editar so a TI (o mundo checa, ver netsim.ts)
-  netsim_get: 'dir.search',
-  netsim_edit: 'dir.search',
-  netsim_undo: 'dir.search',
-  netsim_reset: 'dir.search',
-  netsim_run: 'dir.search',
+  // simulador de rede da TI: ver/testar e para membros; editar so a TI (o mundo checa, ver netsim.ts). A politica e 'room.enter' (qualquer um na sala)
+  // de proposito: visitantes chegam ao NetsimService, que responde com um erro claro em vez de o mundo descartar a mensagem sem resposta.
+  netsim_get: 'room.enter',
+  netsim_edit: 'room.enter',
+  netsim_undo: 'room.enter',
+  netsim_reset: 'room.enter',
+  netsim_run: 'room.enter',
   // desafios da rede: sandbox por pessoa, qualquer membro (nao visitante)
-  netsim_challenges: 'dir.search',
-  netsim_challenge_start: 'dir.search',
-  netsim_challenge_edit: 'dir.search',
-  netsim_challenge_check: 'dir.search',
-  netsim_challenge_hint: 'dir.search',
-  netsim_challenge_quit: 'dir.search',
+  netsim_challenges: 'room.enter',
+  netsim_challenge_start: 'room.enter',
+  netsim_challenge_edit: 'room.enter',
+  netsim_challenge_check: 'room.enter',
+  netsim_challenge_hint: 'room.enter',
+  netsim_challenge_quit: 'room.enter',
   // pet do escritorio (Byte): qualquer pessoa na sala; o servidor limita distancia, taxa e petiscos
   pet_do: 'room.enter',
   // batimento de midia (conectado / transmitindo): so quem pode usar midia
