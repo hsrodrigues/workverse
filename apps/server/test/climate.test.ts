@@ -228,25 +228,34 @@ describe('temperatura ambiente e superaquecimento', () => {
     expect(room.climate.temp).toBeGreaterThanOrEqual(room.climate.target - 0.01);
   });
 
-  it('a Sala da TI esquenta pelos racks; sem ar passa de 30 °C, avisa no chat e acende o alerta; ligar o ar resolve', () => {
+  it('a Sala da TI tem o ar SEMPRE ligado: comeca ligado, nao desliga (nem por timer ou modo ventilar) e os racks nao superaquecem', () => {
     const c = login('Tec', 'ti');
     const room = world.rooms.get('ti')!;
+    expect(room.climate.on).toBe(true);
+    expect(room.climate.mode).toBe('cool');
     wait(CLIMATE_STEP_MS * 100);
-    expect(room.climate.temp).toBeGreaterThan(OVERHEAT_TEMP);
-    expect(room.climate.overheat).toBe(true);
-    expect(c.last('climate')).toMatchObject({ overheat: true });
-    expect(c.all('chat').some((m) => m.kind === 'system' && m.text === 'Sala da TI superaquecendo!')).toBe(true);
-    // só um aviso por episódio
-    wait(CLIMATE_STEP_MS * 20);
-    expect(c.all('chat').filter((m) => m.text === 'Sala da TI superaquecendo!').length).toBe(1);
-    c.strikes = 0;
-    now += 2100;
-    near(c);
-    world.handle(c, { t: 'climate_set', power: true } as never);
-    expect(room.climate.overheat).toBe(false);
-    wait(CLIMATE_STEP_MS * 150);
     expect(room.climate.temp).toBeLessThan(OVERHEAT_TEMP - 3);
     expect(room.climate.overheat).toBe(false);
+    near(c);
+    // tentar desligar, ligar o timer ou so ventilar: ignorado, com aviso no chat do sistema
+    now += 2100;
+    world.handle(c, { t: 'climate_set', power: false } as never);
+    expect(room.climate.on).toBe(true);
+    expect(c.all('chat').some((m) => m.kind === 'system' && m.text.includes('sempre ligado'))).toBe(true);
+    now += 2100;
+    world.handle(c, { t: 'climate_set', timerMin: 30 } as never);
+    expect(room.climate.timerLeftMs).toBe(0);
+    now += 2100;
+    world.handle(c, { t: 'climate_set', mode: 'fan' } as never);
+    expect(room.climate.on).toBe(true);
+    expect(room.climate.mode).toBe('cool');
+    // a meta continua livre
+    now += 2100;
+    world.handle(c, { t: 'climate_set', target: 20 } as never);
+    expect(room.climate.target).toBe(20);
+    expect(room.climate.on).toBe(true);
+    // as unidades de ar ficam ligadas no estado dos moveis
+    for (const f of room.built.def.furniture.filter((x) => isAcUnit(x.kind))) expect(room.furniState[f.id]).toBe(true);
   });
 
   it('salas sem racks nunca superaquecem; reiniciar o servidor volta ao padrão', () => {
@@ -254,6 +263,7 @@ describe('temperatura ambiente e superaquecimento', () => {
     wait(CLIMATE_STEP_MS * 200);
     expect(world.rooms.get('office')!.climate.overheat).toBe(false);
     const fresh = new World({ store: new MemoryAccountStore(), allowDevLogin: true, clock: () => now });
-    expect(fresh.org('default').rooms.get('ti')!.climate).toEqual(defaultClimate());
+    expect(fresh.org('default').rooms.get('ti')!.climate).toMatchObject({ on: true, target: 22, mode: 'cool' });
+    expect(fresh.org('default').rooms.get('office')!.climate).toEqual(defaultClimate());
   });
 });

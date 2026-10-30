@@ -153,6 +153,10 @@ export function cleanChat(raw: string): string {
   return out.replace(/\s+/g, ' ').trim().slice(0, MAX_CHAT_LENGTH);
 }
 
+/** Salas cujo ar-condicionado nunca desliga (comecam ligadas na meta abaixo). */
+const ALWAYS_ON_CLIMATE_ROOMS: ReadonlySet<string> = new Set(['ti']);
+const ALWAYS_ON_TARGET = 22;
+
 export class RoomInstance {
   /** Replaced (never mutated) when the layout changes: see `applyLayout`. */
   built: BuiltRoom;
@@ -179,6 +183,23 @@ export class RoomInstance {
     private readonly hooks: RoomHooks,
   ) {
     this.built = buildRoom(def);
+    this.keepClimateOn();
+  }
+
+  /** Salas de servidores: o ar-condicionado fica SEMPRE ligado (comeca ligado, nao desliga nem por timer; so a meta muda). */
+  private keepClimateOn() {
+    if (!ALWAYS_ON_CLIMATE_ROOMS.has(this.id)) return;
+    const units = this.acUnits();
+    if (units.length === 0) return;
+    const c = this.climate;
+    if (!c.on) {
+      c.on = true;
+      c.target = ALWAYS_ON_TARGET;
+      c.mode = 'cool';
+      for (const u of units) this.furniState[u.id] = true;
+    }
+    for (const u of units) if (!this.furniState[u.id]) this.furniState[u.id] = true;
+    this.timerEndsAt = 0;
   }
 
   get id() {
@@ -228,6 +249,7 @@ export class RoomInstance {
     // new air-conditioning units start in the state of the room, and the overheating alert follows the new racks
     for (const f of def.furniture) if (isAcUnit(f.kind) && (this.furniState[f.id] ?? false) !== this.climate.on) this.furniState[f.id] = this.climate.on;
     if (this.climate.on && !def.furniture.some((f) => isAcUnit(f.kind))) this.climate.on = false;
+    this.keepClimateOn();
     this.climate.overheat = overheating(this.climate.overheat, this.climate.temp, this.rackCount(), isCooling(this.climate.on, this.climate.mode));
     this.broadcast({ t: 'furniture_changed', roomId: this.id, version: meta.version, customized: meta.customized, furniture: def.furniture, ...(meta.by ? { by: meta.by } : {}) });
 
@@ -616,6 +638,12 @@ export class RoomInstance {
       this.climateSetAt = now;
     }
     this.climateNowMs = now;
+    if (ALWAYS_ON_CLIMATE_ROOMS.has(this.id) && (req.power === false || req.mode === 'fan' || (req.timerMin ?? 0) > 0)) {
+      // sala de servidores: nada de desligar, de so ventilar ou de timer de desligamento (a meta, o ventilador e as aletas seguem livres)
+      const { power: _p, timerMin: _t, ...rest } = req;
+      req = rest.mode === 'fan' ? { ...rest, mode: 'cool' } : rest;
+      by?.send({ t: 'chat', id: null, name: '', text: 'O ar-condicionado desta sala fica sempre ligado (servidores).', kind: 'system' });
+    }
     const c = this.climate;
     const wasOn = c.on;
     if (req.target !== undefined) c.target = req.target;
