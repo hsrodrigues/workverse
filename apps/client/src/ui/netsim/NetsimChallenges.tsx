@@ -16,6 +16,16 @@ export function Difficulty({ d }: { d: Challenge['difficulty'] }) {
 
 export function ChallengeListView({ list, busy }: { list: ListData | null; busy: boolean }) {
   const [open, setOpen] = useState<string | null>(null);
+  // se o servidor nao responde (ex. versao antiga do servidor), avisa em vez de carregar para sempre
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (list) {
+      setSlow(false);
+      return;
+    }
+    const t = setTimeout(() => setSlow(true), 6000);
+    return () => clearTimeout(t);
+  }, [list]);
   const byId = new Map(list?.progress.map((p) => [p.id, p]));
   const solved = list?.progress.filter((p) => p.solved).length ?? 0;
   return (
@@ -24,7 +34,7 @@ export function ChallengeListView({ list, busy }: { list: ListData | null; busy:
         <b>Conserte a rede</b>: cada desafio traz uma rede com defeitos escondidos. Use as mesmas ferramentas do painel (propriedades, terminal e testes) para consertar e depois clique em <b>Verificar</b>. Você edita uma <b>cópia</b>: a rede real da organização nunca é alterada.
       </p>
       <p className="ns-dim" data-testid="netsim-ch-summary">
-        {list ? `${solved} de ${CHALLENGES.length} resolvidos · ${list.totalPoints} pontos` : 'Carregando…'}
+        {list ? `${solved} de ${CHALLENGES.length} resolvidos · ${list.totalPoints} pontos` : slow ? 'O servidor não respondeu aos desafios. Dê Ctrl+F5; se persistir, o servidor está numa versão antiga e precisa reiniciar.' : 'Carregando…'}
         {busy ? ' · aguarde…' : ''}
       </p>
       <ul className="ns-chitems">
