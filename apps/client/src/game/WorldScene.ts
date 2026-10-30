@@ -1041,7 +1041,8 @@ export class WorldScene extends Phaser.Scene {
     const availH = this.scale.height - 190;
     let idx = ZOOMS.indexOf(1);
     ZOOMS.forEach((z, i) => {
-      if (bw * z <= availW && bh * z <= availH) idx = i;
+      // the automatic fit never goes below 1x (0.5x is only reachable with the zoom-out button)
+      if (z >= 1 && bw * z <= availW && bh * z <= availH) idx = i;
     });
     this.zoomIndex = idx;
     cam.setZoom(ZOOMS[idx]);
