@@ -25,3 +25,4 @@ tools/cloudflared/
 vite.*.tmp.config.ts
 vite.tmp*.config.ts
 vite.e2e*.config.ts
+vite.*tmp*.config.mjs

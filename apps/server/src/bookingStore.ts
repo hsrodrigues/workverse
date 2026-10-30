@@ -151,7 +151,10 @@ export class BookingStore {
     const before = now - retentionMs;
     let n = 0;
     for (const r of [...this.rows.values()]) {
-      if (isHolder(r.status) || r.status === 'queued' || r.endAt >= before) continue;
+      if (isHolder(r.status) || r.status === 'queued') continue;
+      // canceladas, recusadas e expiradas somem mais cedo (7 dias): nao servem de historico e enchiam a memoria/banco
+      const cutoff = r.status === 'cancelled' || r.status === 'declined' || r.status === 'expired' ? now - 7 * 24 * 60 * 60 * 1000 : before;
+      if (r.endAt >= cutoff) continue;
       this.rows.delete(r.id);
       this.byRoom.get(roomKey(r.orgId, r.roomId))?.delete(r.id);
       n++;

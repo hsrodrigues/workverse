@@ -77,7 +77,7 @@ export function buildInventory(ctx: InventoryContext): InventoryResult {
         // sala privada para quem consulta: nada que a identifique (nome, posicao, hostname e IP genericos)
         const n = (hiddenSeq[kind] = (hiddenSeq[kind] ?? 0) + 1);
         const id = `oculto-${kind}-${n}`;
-        hosts.push({ id, hostname: `${kind === 'computer' ? 'PC' : kind === 'command_desk' ? 'CMD' : 'LAB'}-RES-${String(n).padStart(2, '0')}`, ip: `10.0.0.${Math.min(250, n)}`, kind, hidden: true, status, users, cpu: simCpu(key, ctx.now, status) });
+        hosts.push({ id, hostname: `${kind === 'computer' ? 'PC' : kind === 'command_desk' ? 'CMD' : 'LAB'}-RES-${String(n).padStart(2, '0')}`, ip: `10.0.0.${Math.min(250, n)}`, kind, hidden: true, status, users: [], cpu: simCpu(key, ctx.now, status) });
       }
     }
   }

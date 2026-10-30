@@ -249,6 +249,9 @@ describe('inventário de PCs: conteúdo derivado do mundo real', () => {
     }
     expect(asTech.rooms.some((r) => r.id === 'private')).toBe(false);
     expect(JSON.stringify(asTech)).not.toContain('Sala Privada');
+    // quem trabalha na sala privada nao vaza para a TI (revisao de seguranca M5): sem usuarios nos hosts ocultos
+    for (const h of hidden) expect(h.users).toEqual([]);
+    expect(JSON.stringify(asTech)).not.toContain('Reservado');
     // o dono entra na sala privada: vê a sala
     const asBoss = query(bossConn)!;
     expect(asBoss.hosts.filter((h) => h.hidden).length).toBe(0);

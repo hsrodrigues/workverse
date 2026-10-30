@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto';
+
+/** Teto de linhas de reserva por pessoa (qualquer status) nos ultimos 7 dias. */
+const MAX_RECENT_BOOKING_ROWS = 120;
 import {
   BOOKING_EXTEND_MS,
   BOOKING_GRID_MS,
@@ -12,6 +15,7 @@ import {
   MAX_BOOKING_SLOTS,
   MAX_BOOKING_TITLE,
   NEVER_BOOKABLE_ROOM_IDS,
+  roomAccessOf,
   NOTIFIED,
   checkPersonLimits,
   conflictsWith,
@@ -126,6 +130,10 @@ export class BookingService {
   /** A sala existe nesta organizacao e pode ser reservada (padrao: so a Sala Privada; a organizacao liga as demais). */
   settingOf(orgId: string, roomId: string): { bookable: boolean; requiresApproval: boolean } {
     if (NEVER_BOOKABLE_ROOM_IDS.includes(roomId) || !this.host.org(orgId).rooms.has(roomId)) return { bookable: false, requiresApproval: false };
+    // Reservar vira acesso de "participante" durante a janela (ignora equipe/convite): so salas abertas a organizacao ou privadas por padrao
+    // podem ser reservadas, senao qualquer membro entraria numa sala de equipe/convite so por reserva-la (revisao de seguranca M3).
+    const access = roomAccessOf(this.host.org(orgId).rooms.get(roomId)!.built.def);
+    if (access !== 'org' && access !== 'private') return { bookable: false, requiresApproval: false };
     const s = this.store.getRoom(orgId, roomId);
     if (s) return { bookable: s.bookable, requiresApproval: s.requiresApproval };
     return { bookable: DEFAULT_BOOKABLE_ROOM_IDS.includes(roomId), requiresApproval: false };
@@ -427,6 +435,11 @@ export class BookingService {
 
     const limits = this.limits(orgId);
     const manager = this.isManagerPlayer(p);
+    // freio contra criar/cancelar em laco (revisao de seguranca M4): teto de linhas por pessoa em qualquer status nos ultimos 7 dias
+    const recent = this.store.ofOwner(orgId, p.accountId).filter((b) => b.createdAt >= now - 7 * 24 * 60 * 60 * 1000).length;
+    if (!manager && recent + msg.slots.length > MAX_RECENT_BOOKING_ROWS) {
+      return this.fail(p, msg.rid, 'too_many', 'Você fez muitas reservas nos últimos dias. Aguarde um pouco antes de pedir outras.'), true;
+    }
     const results: BookingSlotResult[] = [];
     const sorted = [...msg.slots].sort((a, b) => a.startAt - b.startAt);
     for (const s of sorted) {

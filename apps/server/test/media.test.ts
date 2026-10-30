@@ -103,7 +103,7 @@ describe('POST /api/media/token', () => {
     expect(c.name).toBe('Ana');
     expect(c.iss).toBe('devkey');
     expect(c.exp - c.nbf).toBeGreaterThan(0);
-    expect(c.exp - c.nbf).toBeLessThanOrEqual(1800);
+    expect(c.exp - c.nbf).toBeLessThanOrEqual(600);
     expect(c.video).toMatchObject({ room: 'wv:default:office', roomJoin: true, canSubscribe: true, canPublish: true, canPublishData: false });
     expect(c.video.canPublishSources).toEqual(expect.arrayContaining(['microphone', 'camera', 'screen_share']));
   });

@@ -49,7 +49,7 @@ export const DEFAULT_ECONOMY: EconomyConfig = {
   hiddenTabSeconds: DEFAULT_MEDIA_POLICY.hiddenTabSeconds,
   maxPeoplePerRoom: DEFAULT_MEDIA_POLICY.maxPeoplePerRoom,
   maxVideoPublishers: DEFAULT_MEDIA_POLICY.maxVideoPublishers,
-  tokenTtlSeconds: 1800,
+  tokenTtlSeconds: 600,
   monthlyMinutes: DEFAULT_MONTHLY_MINUTES,
   quotaTzOffsetMinutes: -180,
 };

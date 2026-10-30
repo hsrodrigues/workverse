@@ -121,7 +121,7 @@ describe('economia de midia: limites na emissao do token', () => {
     const cfg = resolveEconomyConfig({ MEDIA_ECONOMY: 'off' } as never);
     expect(cfg.enabled).toBe(false);
     expect(cfg.tokenTtlSeconds).toBe(600);
-    expect(resolveEconomyConfig({} as never).tokenTtlSeconds).toBe(1800);
+    expect(resolveEconomyConfig({} as never).tokenTtlSeconds).toBe(600);
     const { world, enter, token, rep } = await setup({ mediaEconomy: { ...cfg, maxPeoplePerRoom: 1, maxVideoPublishers: 1 } });
     const a = enter('Ana');
     enter('Beto');
