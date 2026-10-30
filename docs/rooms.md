@@ -56,7 +56,7 @@ Reunião 1, Reunião 2 e Sala de Equipe têm um `tv_stand` (ids `tvstand-*`, fix
 
 ## Sala da TI (`ti`)
 
-Porta na parede oeste da recepção (placa **TI**), volta para `(1,5)` da recepção. Aberta à organização por padrão (`access: 'org'`, sem visitantes) e compatível com todo o controle de acesso (equipe/convite/privada). Visual: piso escuro com faixas de LED, paredes de painéis metálicos com friso ciano (`theme.paper: 'tech'`, `fx: 'tech'` em `roomArt.ts`), brilhos ciano do videowall e dos racks (`dayLighting.ts`).
+Porta na parede oeste da recepção (placa **TI**), volta para `(1,5)` da recepção. Aberta à organização por padrão (`access: 'org'`, sem visitantes) e compatível com todo o controle de acesso (equipe/convite/privada). Visual (redesign "NOC premium", paleta grafite/azul-marinho + ciano, âmbar só para alerta): piso de porcelanato escuro com juntas finas e brilho em faixas (sem ruído), faixas de LED guia em corredores definidos, tapete grafite do descanso e plataforma do NOC (`theme.fx: 'tech'`, `floor`/`techFx` em `roomArt.ts`); paredes de painéis modulares escuros com friso ciano fino, rodapé técnico e placas de segurança pintadas acima das máquinas (`techPixel`/`techSign`); luz de teto = calhas lineares de LED frio suspensas (`TECH_BARS` em `dayLighting.ts`, desenhadas acima da camada de tom da noite, apagam com o interruptor, com poças de luz em bandas no piso); racks uniformes com porta perfurada, coluna de LEDs de status (verde, um âmbar por rack, vermelho no superaquecimento) e bandeja de cabos no topo; videowall limpo com cabeçalho (SALA DA TI · NOC, uptime, relógio), mapa-múndi em pontos com rotas e painéis de latência, tráfego e saúde (`furnitureTech.ts`); mesa de comando com teclados retroiluminados. As luminárias de piso soltas foram removidas.
 
 Móveis novos (`furniture.ts` + `furnitureTech.ts`): `server_rack` (LEDs que piscam: a cena troca 2 sprites, ver `blinkers` em `WorldScene.ts`), `command_desk` (3 segmentos formam a ferradura, monitores com telas vivas), `ergo_chair`, `videowall` (5x1 na parede), `arch_board`, `hardware_bench` e `espresso` (entrega café como a cafeteira, `FURNI_HOLDS`). O tipo de sala `it` entra em `RoomType`. Testes: `packages/shared/test/ti.test.ts` e os de layout/interruptor/editor, que varrem todas as salas.
 
@@ -67,6 +67,31 @@ Cada sala pode ter "equipes que passam" (`room_settings.pass_team_ids`, migraç�
 ### Máquinas de lanches, bebidas e micro-ondas
 
 Móveis usáveis de 1x1 encostados na parede (`WALL_BACKED_KINDS`), categoria Copa no editor e sem restrição de tipo de sala: `snack_machine` (entrega `snack`, pacote de salgadinho), `soda_machine` (`soda`, latinha) e `microwave` (`meal`, marmita). O uso passa pelas regras de `interact` (distância, rate limit) e `FURNI_HOLDS` define o item; `HeldItem` ganhou `snack`, `soda` e `meal` (atividade `holding:<item>`, visível a todos, 25 s de `HOLD_MS`). O micro-ondas tem atraso (`FURNI_DELAY_MS`, 3 s): a luz acende (estado `furni`), o item só vai para a mão depois, e andar para longe cancela. Desenho em `furniture.ts` (`vendingMachine`; o display das máquinas pisca via `blinkers`); itens na mão em `avatar/held.ts` e `drawers/specials.ts` (`sp.snack`, `sp.can`, `sp.lunchbox`, poses full/adapted/hidden como o copo; o gesto de comer reutiliza o de beber). Posições: copa (micro-ondas ao lado da bancada, máquinas na parede oeste), recepção (lanches no canto noroeste) e Sala da TI (lanches, bebidas e micro-ondas na parede norte). Salas já personalizadas mantêm a lista própria: peças novas não aparecem nelas, mas podem ser colocadas pelo editor. Testes: `packages/shared/test/machines.test.ts` e `apps/server/test/machines.test.ts`.
+
+## Corredor / Hall 2 e as nove salas novas
+
+A recepção tem poucas paredes livres (portas só nas paredes norte e oeste), então ela ganhou **uma** porta (oeste, y = 1) para o **Corredor / Hall 2** (`hall2`, tipo `hall`, nunca reservável). O corredor (20x7) concentra as nove portas na parede norte (x = 2, 4, ... 18, nesta ordem) e cada sala devolve ao corredor pela porta oeste, chegando ao tile logo abaixo da sua porta (x, 1). As salas ficam em `packages/shared/src/roomsExtra.ts` (ids de móvel estáveis por sala: `sala-prefixoN`) e as peças novas em `apps/client/src/game/furnitureRooms.ts`.
+
+| Sala | id / tipo | Tamanho | Acesso | Reserva padrão | Destaques |
+|---|---|---|---|---|---|
+| Sala de Treinamento | `training` | 14x10 | org | sim | 16 carteiras voltadas para a TV (apresentação por TV), mesa do instrutor, quadros brancos, ar |
+| RH / Atendimento | `rh` (`hr`) | 10x8 | org | sim | balcão de atendimento com PC, 2 cadeiras de entrevista, estante, quadro de avisos |
+| Diretoria | `board` | 14x10 | convite (`invited`) | **nunca** | mesa longa de nogueira com 14 poltronas, aparador com bebidas, TV; a equipe "Diretoria" passa mesmo trancada |
+| Laboratório / Dev | `lab` | 14x10 | org | não | 5 bancadas de vários monitores (hosts de PC), racks, impressoras 3D, bancada de hardware, café |
+| Refeitório | `cafeteria` | 16x10 | org | não | 4 mesas de almoço com bancos, self-service (entrega refeição), geladeiras, micro-ondas, máquinas |
+| Sala de Jogos | `games` | 14x10 | org | não | ping-pong, 2 pebolins e 4 fliperamas **jogáveis** (balão + animação), sofá e pufes |
+| Terraço | `terrace` | 16x10 | org | não | **área aberta**: sem teto, sem interruptor e sem ar (há guarda-sol, jardim e guarda-corpo); varal de luzinhas acende à noite |
+| Biblioteca / Silenciosa | `library` | 12x10 | org | não | estantes altas, mesas de estudo; **sala silenciosa** (ver abaixo) |
+| Estúdio / Podcast | `studio` | 10x8 | org | não | mesa redonda com 4 microfones, painéis acústicos, câmera em tripé, luz de **NO AR** |
+
+Regras comuns: toda sala tem interruptor de luz, ar-condicionado e termostato, exceto o Terraço (só luzinhas). Placas das portas: TREINO, RH, DIRETORIA, LAB, REFEITÓRIO, JOGOS, TERRAÇO, BIBLIOTECA, ESTÚDIO. Lotação (`maxPlayers`) entre 60% dos assentos e metade do piso (testado). Reserváveis por padrão: Sala Privada, Treinamento e RH (`DEFAULT_BOOKABLE_ROOM_IDS`); salas de equipe/convite não podem ser reservadas nem se a organização tentar (`booking_room_set` recusa), porque reservar ignora equipe e convite.
+
+- **Terraço**: o tema `open` desliga as luminárias de teto; o varal (festão nas paredes e dois fios em diagonal) é desenhado em `dayLighting.ts` e só brilha quando escurece. O guarda-corpo (`railing`) cerca as bordas sul e leste.
+- **Biblioteca silenciosa**: `SILENT_ROOM_IDS` faz `publishRights` devolver `none`: ninguém recebe microfone, câmera ou tela ali (o token de mídia sai sem permissão de publicar). O aviso "Silêncio" está na descrição da sala.
+- **Estúdio**: a luz de NO AR (`on_air`) é só do cliente: acende quando algum jogador da sala tem o microfone ligado (`mediaIndicators`).
+- **Jogos**: `FURNI_PLAY` define o balão de cada jogo; a peça anima por `PLAY_MS` e há uma partida por vez. O self-service usa `FURNI_HOLDS.buffet = meal` com frase própria (`FURNI_CHAT`).
+- **Hosts**: estações de PC novas (computador do instrutor e do RH, mesas de comando do Laboratório) entram no inventário e no "Restaurar padrão" da rede (agora até 16 salas com PCs).
+- **Decoração de eventos**: os testes garantem vagas de chão e parede sem colidir em cada sala nova (`packages/shared/test/hall2.test.ts`).
 
 ## Ar-condicionado e temperatura
 

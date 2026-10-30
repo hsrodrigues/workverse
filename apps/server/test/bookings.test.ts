@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { BOOKING_DAY, BOOKING_HOUR, BOOKING_MINUTE, DEFAULT_BOOKING_LIMITS, type BookingSlotResult, type ClientMessage, type Role, type ServerMessage } from '@workverse/shared';
+import { BOOKING_DAY, DEFAULT_BOOKABLE_ROOM_IDS, ROOM_DEFS, BOOKING_HOUR, BOOKING_MINUTE, DEFAULT_BOOKING_LIMITS, type BookingSlotResult, type ClientMessage, type Role, type ServerMessage } from '@workverse/shared';
 import { World, type Connection } from '../src/world';
 import { MemoryAccountStore, type Account } from '../src/store';
 
@@ -595,9 +595,9 @@ describe('privacidade e isolamento', () => {
     expect(request(cAna, 'meeting1', [[at(14), at(15)]])).toMatchObject({ ok: false, code: 'not_bookable' });
     expect(request(cAna, 'sala-inexistente', [[at(14), at(15)]])).toMatchObject({ ok: false, code: 'not_bookable' });
     expect(act(cAdm, 'booking_room_set', { roomId: 'office', bookable: true, requiresApproval: false })).toMatchObject({ ok: false, code: 'room' });
-    expect(sync(cAna).rooms.map((r) => r.roomId)).toEqual(['private']);
+    expect(sync(cAna).rooms.map((r) => r.roomId).sort()).toEqual(ROOM_DEFS.filter((d) => DEFAULT_BOOKABLE_ROOM_IDS.includes(d.id)).map((d) => d.id).sort());
     act(cAdm, 'booking_room_set', { roomId: 'meeting1', bookable: true, requiresApproval: false });
-    expect(sync(cAna).rooms.map((r) => r.roomId).sort()).toEqual(['meeting1', 'private']);
+    expect(sync(cAna).rooms.map((r) => r.roomId).sort()).toEqual([...ROOM_DEFS.filter((d) => DEFAULT_BOOKABLE_ROOM_IDS.includes(d.id)).map((d) => d.id), 'meeting1'].sort());
     // desligar cancela as reservas vivas da sala
     const m = slot0(request(cAna, 'meeting1', [[at(14), at(15)]]));
     act(cAdm, 'booking_room_set', { roomId: 'meeting1', bookable: false, requiresApproval: false });

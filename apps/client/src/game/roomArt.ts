@@ -28,7 +28,9 @@ export interface Theme {
   wains: string;
   /** Moldings (chair rail, crown, window frames). */
   trim: string;
-  paper: 'stripe' | 'diamond' | 'plain' | 'acoustic' | 'tech';
+  paper: 'stripe' | 'diamond' | 'plain' | 'acoustic' | 'tech' | 'brick';
+  /** Open air (terrace): no ceiling, so no ceiling lights; the sky and string lights light the place (see dayLighting.ts). */
+  open?: boolean;
   door: string;
   /** Extra floor treatment: lit aisle, spot pools and entrance mat (auditorium). */
   fx?: 'hall' | 'tech';
@@ -136,6 +138,117 @@ export const THEMES: Record<string, Theme> = {
     door: '#1d3b52',
     fx: 'tech',
   },
+  // Hall 2: warm grey stone-look carpet, cream walls, deep teal panelling
+  hall2: {
+    floorStyle: 'carpet',
+    floor: ['#b9b2a6', '#b0a99d', '#968f84'],
+    wallA: '#f1ede3',
+    wallB: '#dfd9cb',
+    wains: '#2c5560',
+    trim: '#fbf8f0',
+    paper: 'plain',
+    door: '#2c5560',
+  },
+  // Training room: light grey-blue carpet, white walls, warm orange panelling
+  training: {
+    floorStyle: 'carpet',
+    floor: ['#aeb7c4', '#a5aebc', '#8a94a4'],
+    wallA: '#f4f4f1',
+    wallB: '#e1e2df',
+    wains: '#c46a32',
+    trim: '#ffffff',
+    paper: 'plain',
+    door: '#8a4a22',
+  },
+  // HR: pale maple floor, warm cream walls, sage panelling
+  rh: {
+    floorStyle: 'wood',
+    floor: ['#d8c29a', '#cdb78e', '#e0cba6', '#c3ad84'],
+    wallA: '#f6efe2',
+    wallB: '#e6dccb',
+    wains: '#5f8a6a',
+    trim: '#fffaf0',
+    paper: 'plain',
+    door: '#4a6e55',
+  },
+  // Boardroom: dark walnut floor, deep burgundy panelling, warm ivory walls
+  board: {
+    floorStyle: 'wood',
+    floor: ['#6b4a34', '#5f4130', '#745238', '#553a29'],
+    wallA: '#e4d8c2',
+    wallB: '#d0c2a8',
+    wains: '#5a2330',
+    trim: '#f1e6cf',
+    paper: 'stripe',
+    door: '#3a1620',
+  },
+  // Lab: cool grey-blue carpet, white walls, teal panelling
+  lab: {
+    floorStyle: 'carpet',
+    floor: ['#a9b8c4', '#a0b0bd', '#8497a6'],
+    wallA: '#eef2f4',
+    wallB: '#dae1e5',
+    wains: '#1f6a78',
+    trim: '#ffffff',
+    paper: 'plain',
+    door: '#174f5a',
+  },
+  // Cafeteria: cream tile-look floor, warm yellow walls, terracotta panelling
+  cafeteria: {
+    floorStyle: 'carpet',
+    floor: ['#e6dcc6', '#dcd0b6', '#c4b697'],
+    wallA: '#f6e6b8',
+    wallB: '#e6d3a0',
+    wains: '#b4533a',
+    trim: '#fff6dc',
+    paper: 'plain',
+    door: '#8a3d2a',
+  },
+  // Games room: deep purple carpet, midnight walls, magenta panelling
+  games: {
+    floorStyle: 'carpet',
+    floor: ['#3d2f6b', '#362a62', '#2a2049'],
+    wallA: '#35295e',
+    wallB: '#2c2250',
+    wains: '#7a1f6e',
+    trim: '#d8c8ff',
+    paper: 'plain',
+    door: '#4a1f6a',
+  },
+  // Terrace: weathered grey-brown deck, terracotta brick facade, open sky (no ceiling lights)
+  terrace: {
+    floorStyle: 'wood',
+    floor: ['#a88a62', '#9c7f58', '#b39469', '#8f734f'],
+    wallA: '#b4694c',
+    wallB: '#a05c42',
+    wains: '#5f4636',
+    trim: '#efe6d6',
+    paper: 'brick',
+    door: '#3f5a4a',
+    open: true,
+  },
+  // Library: dark oak floor, forest green walls, brass-cream trim
+  library: {
+    floorStyle: 'wood',
+    floor: ['#7a5636', '#6e4d30', '#85603c', '#634428'],
+    wallA: '#d9d2b8',
+    wallB: '#c5bd9f',
+    wains: '#2f5a43',
+    trim: '#efe3c0',
+    paper: 'diamond',
+    door: '#2a4a38',
+  },
+  // Studio: charcoal carpet, dark walls with an amber cove, acoustic look
+  studio: {
+    floorStyle: 'carpet',
+    floor: ['#34343d', '#2e2e37', '#25252d'],
+    wallA: '#3d3a46',
+    wallB: '#34313e',
+    wains: '#1a1820',
+    trim: '#d9a24a',
+    paper: 'plain',
+    door: '#241f2c',
+  },
   // Focus space: deep blue carpet, soft cool walls
   focus: {
     floorStyle: 'carpet',
@@ -176,7 +289,7 @@ export function windowSpots(room: BuiltRoom, theme?: Theme): WindowSpot[] {
   const busyW = new Set<number>();
   for (const f of room.def.furniture) {
     // wall hangings, and tall pieces leaning on the wall (shelf, rack, fridge), would hide the window
-    const tall = f.kind === 'bookshelf' || f.kind === 'rack' || f.kind === 'fridge' || f.kind === 'snack_machine' || f.kind === 'soda_machine' || f.kind === 'server_rack';
+    const tall = f.kind === 'bookshelf' || f.kind === 'tall_shelf' || f.kind === 'rack' || f.kind === 'fridge' || f.kind === 'snack_machine' || f.kind === 'soda_machine' || f.kind === 'server_rack';
     if (!FURNI_KINDS[f.kind].wall && !tall) continue;
     // hangings: dir 0 = north wall, 1 = west wall. Floor pieces: furniFront 1 (+y) leans on the north wall, 0 (+x) on the west
     const north = FURNI_KINDS[f.kind].wall ? f.dir % 2 === 0 : furniFront(f) === 1;
@@ -271,6 +384,15 @@ export function renderFloor(room: BuiltRoom, theme: Theme): Layer {
         else if (pf < 0.26) amt += 0.04;
         if (fk < 0.035) amt -= 0.2;
         else if (fk < 0.07) amt += 0.03;
+      } else if (theme.fx === 'tech') {
+        // porcelanato escuro: juntas finas, brilho em faixas largas e nenhum ruido
+        c = (tx + ty) & 1 ? pal[1] : pal[0];
+        if (u < 0.03 || v < 0.03) amt -= 0.2;
+        else if (u < 0.06 || v < 0.06) amt += 0.03;
+        else if (u > 0.94 || v > 0.94) amt -= 0.04;
+        const band = (((X * 0.8 - Y * 0.45) % 7) + 7) % 7;
+        if (band < 1.1) amt += 0.03;
+        else if (band < 1.6) amt += 0.015;
       } else {
         const border = tx === 0 || ty === 0 || tx === W - 1 || ty === H - 1;
         c = border ? pal[2] : (tx + ty) & 1 ? pal[1] : pal[0];
@@ -430,7 +552,7 @@ function acousticPixel(side: 'n' | 'w', a: number, z: number): RGB {
   return shadeRgb(c, dk);
 }
 
-/** LED strips of the IT room floor: a path from the door, a loop around the command desk and the edges of the server aisle. */
+/** LED guide strips of the IT room floor: door spine, a loop around the command desk and the edges of the server aisle. */
 const LED_STRIPS: ReadonlyArray<readonly [number, number, number, number]> = [
   [0.2, 5.5, 3.6, 5.5],
   [3.6, 3.6, 9.4, 3.6],
@@ -438,13 +560,23 @@ const LED_STRIPS: ReadonlyArray<readonly [number, number, number, number]> = [
   [9.4, 7.6, 3.6, 7.6],
   [3.6, 7.6, 3.6, 3.6],
   [9.4, 5.6, 17.6, 5.6],
-  [10.3, 1.12, 17.6, 1.12],
-  [10.3, 2.88, 17.6, 2.88],
-  [10.3, 1.12, 10.3, 2.88],
+  [10.3, 1.1, 17.6, 1.1],
+  [10.3, 2.9, 17.6, 2.9],
+  [10.3, 1.1, 10.3, 2.9],
 ];
 
 function techFx(c: RGB, X: number, Y: number, px: number, py: number): RGB {
+  void px;
+  void py;
   let out = c;
+  // tapete grafite da area de descanso e plataforma do NOC (leve, com fio ciano fino na borda)
+  const inRect = (x0: number, y0: number, x1: number, y1: number) => X >= x0 && X <= x1 && Y >= y0 && Y <= y1;
+  if (inRect(13.4, 7.4, 17.9, 11.9)) {
+    const edge = Math.min(X - 13.4, 17.9 - X, Y - 7.4, 11.9 - Y);
+    out = mixRgb(out, edge < 0.05 ? [53, 216, 255] : [36, 46, 74], edge < 0.05 ? 0.35 : 0.7);
+  } else if (inRect(3.6, 3.6, 9.4, 7.6)) {
+    out = mixRgb(out, [44, 58, 94], 0.35);
+  }
   let best = 9;
   for (const [x0, y0, x1, y1] of LED_STRIPS) {
     const dx = x1 - x0;
@@ -453,39 +585,64 @@ function techFx(c: RGB, X: number, Y: number, px: number, py: number): RGB {
     const d = Math.hypot(X - (x0 + dx * t), Y - (y0 + dy * t));
     if (d < best) best = d;
   }
-  if (best < 0.035) out = mixRgb(out, [170, 245, 255], 0.95);
-  else if (best < 0.07) out = mixRgb(out, [53, 216, 255], 0.7);
-  else if (best < 0.12) out = mixRgb(out, [40, 170, 230], 0.4);
-  else if (best < 0.2) out = mixRgb(out, [40, 170, 230], 0.16);
+  if (best < 0.025) out = mixRgb(out, [190, 248, 255], 0.95);
+  else if (best < 0.055) out = mixRgb(out, [53, 216, 255], 0.7);
+  else if (best < 0.1) out = mixRgb(out, [40, 170, 230], 0.28);
+  else if (best < 0.17) out = mixRgb(out, [40, 170, 230], 0.1);
   return out;
 }
 
-/** IT room wall: graphite metal panels, a cyan LED cove under the crown and a faint cable light near the floor panelling. */
+/** IT room wall: dark modular panels with seams, a thin cyan cove under the crown, a technical skirting and safety signs. */
 function techPixel(side: 'n' | 'w', a: number, z: number): RGB {
   const H = WALL_H;
   const dk = side === 'w' ? -0.1 : 0;
   const cove: Record<number, RGB> = {
-    [H - 8]: [20, 26, 48],
-    [H - 9]: [60, 200, 245],
-    [H - 10]: [190, 245, 255],
-    [H - 11]: [60, 200, 245],
-    [H - 12]: [34, 80, 130],
-    [H - 13]: [26, 34, 62],
+    [H - 8]: [14, 18, 34],
+    [H - 9]: [40, 150, 200],
+    [H - 10]: [150, 232, 250],
+    [H - 11]: [50, 170, 220],
+    [H - 12]: [26, 56, 100],
+    [H - 13]: [20, 26, 48],
   };
   const cv = cove[z];
   if (cv) return shadeRgb(cv, dk);
   const mod = Math.floor(a / 32);
   const pa = ((a % 32) + 32) % 32;
-  let c: RGB = mod % 2 === 0 ? [44, 54, 86] : [38, 47, 78];
-  if (pa === 0) c = shadeRgb(c, 0.16);
-  else if (pa === 31) c = shadeRgb(c, -0.3);
-  else if (pa === 16 && z % 8 < 4) c = shadeRgb(c, 0.06);
-  if (z === 39) c = shadeRgb(c, -0.3);
-  if (z === 40) c = [53, 216, 255];
-  else if (z === 41) c = mixRgb(c, [53, 216, 255], 0.3);
-  if (z < H - 13 && z > H - 28) c = mixRgb(c, [90, 200, 245], 0.14 * (1 - (H - 13 - z) / 15));
-  if (hash2(a, z, 6) < 0.05) c = shadeRgb(c, -0.05);
+  let c: RGB = mod % 2 === 0 ? [34, 42, 68] : [31, 38, 63];
+  // vertical seams between modules and a horizontal seam halfway up
+  if (pa === 0) c = shadeRgb(c, 0.14);
+  else if (pa === 31) c = shadeRgb(c, -0.32);
+  if (z === 70) c = shadeRgb(c, -0.22);
+  else if (z === 71) c = shadeRgb(c, 0.06);
+  // perforated acoustic strip behind the sign band
+  if (z >= 44 && z <= 46 && pa % 4 === 1 && z % 2 === 0) c = shadeRgb(c, -0.16);
+  // technical skirting: dark rail with a thin cyan line
+  if (z === 39) c = shadeRgb(c, -0.34);
+  if (z === 40) c = mixRgb(c, [53, 216, 255], 0.55);
+  else if (z === 41) c = mixRgb(c, [53, 216, 255], 0.16);
+  // safety signs (painted on the wall; the free stretches are above the machines and next to the door)
+  const sign = side === 'n' ? techSign(a, z) : null;
+  if (sign) c = sign;
+  if (z < H - 13 && z > H - 28) c = mixRgb(c, [90, 200, 245], 0.08 * (1 - (H - 13 - z) / 15));
   return shadeRgb(c, dk);
+}
+
+/** Small safety pictograms: exit (green), extinguisher (red), hazard (amber) and a notice board. */
+function techSign(a: number, z: number): RGB | null {
+  const box = (a0: number, z0: number, w: number, h: number, bg: RGB): RGB | null => {
+    if (a < a0 || a >= a0 + w || z < z0 || z >= z0 + h) return null;
+    const edge = a === a0 || a === a0 + w - 1 || z === z0 || z === z0 + h - 1;
+    return edge ? shadeRgb(bg, -0.45) : bg;
+  };
+  // above the vending machines (north wall, tiles 9..11): hazard triangle, extinguisher and exit
+  const bx = ((a % 1024) + 1024) % 1024;
+  const hz = box(300, 76, 12, 12, [240, 178, 60]);
+  if (hz) return (bx === 305 || bx === 306) && z >= 79 && z <= 84 && z !== 83 ? [30, 24, 20] : hz;
+  const ex = box(320, 76, 12, 12, [214, 62, 62]);
+  if (ex) return bx >= 324 && bx <= 327 && z >= 78 && z <= 85 ? [250, 236, 230] : ex;
+  const ok = box(340, 76, 20, 12, [38, 170, 98]);
+  if (ok) return bx >= 346 && bx <= 353 && z === 82 ? [240, 255, 245] : ok;
+  return null;
 }
 
 /** One pixel of the textured wall face: `a` px along the wall, `z` px above the floor. */
@@ -506,6 +663,14 @@ function wallPixel(t: WallColors, side: 'n' | 'w', a: number, z: number): RGB {
       // painted wall: faint vertical roller marks and speckle instead of a pattern
       amt += ap < 8 ? 0.012 : -0.008;
       if (hash2(a >> 1, z >> 1, 14) < 0.07) amt -= 0.022;
+    } else if (t.style === 'brick') {
+      // running-bond brick: 8x4 px bricks, dark mortar lines, a little tone variation per brick
+      const row = Math.floor(zp / 4);
+      const bx = a + (row % 2) * 4;
+      const brickId = Math.floor(bx / 8);
+      amt += (hash2(brickId, row, 12) - 0.5) * 0.16;
+      if (zp % 4 === 0 || ((bx % 8) + 8) % 8 === 0) amt = (side === 'w' ? -0.1 : 0) - 0.2;
+      else if (zp % 4 === 3) amt += 0.05;
     } else if (t.style === 'stripe') {
       amt += ap < 8 ? 0.022 : -0.012;
       if (ap < 2) amt -= 0.045;

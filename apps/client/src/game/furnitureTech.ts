@@ -2,6 +2,8 @@ import type { Furniture, FurniKind } from '@workverse/shared';
 import { Plane, boxPlane, hash2, project, shade, softEllipse, type Box, type Ctx } from './pixel';
 import { wallText } from './eventArt';
 import type { Builder, Parts } from './furniture';
+import { NOC_LIVE_OPT_MIN } from './nocLive';
+import { liveScreen, type LiveKind } from './nocScreens';
 
 /**
  * Pieces of the IT room (Sala da TI): server rack, command desk, videowall, architecture board and hardware bench.
@@ -50,7 +52,7 @@ const CYAN = '#35d8ff';
 const CYAN_DK = '#1a8fb5';
 const GREEN = '#58e08a';
 const AMBER = '#ffb347';
-const MAGENTA = '#ff5fb0';
+const MAGENTA = AMBER; // paleta disciplinada: ciano + ambar de alerta
 
 /** Live-looking content of one screen (a0..a1 x z0..z1 of the plane `p`); `idx` picks the kind, `ph` is the blink phase. */
 function screenArt(p: Plane, a0: number, a1: number, z0: number, z1: number, idx: number, ph: number, S: (c: string) => string) {
@@ -91,15 +93,15 @@ function screenArt(p: Plane, a0: number, a1: number, z0: number, z1: number, idx
     for (let i = 0; i < n; i++) {
       const bh = 2 + Math.floor(hash2(i, idx, 3 + ph) * (h - 5));
       const a = a0 + 2 + i * 4;
-      p.rect(a, a + 3, z0 + 2, z0 + 2 + bh, S(bh > h * 0.7 ? AMBER : GREEN));
-      p.rect(a, a + 1, z0 + 2, z0 + 2 + bh, S(shade(bh > h * 0.7 ? AMBER : GREEN, 0.3)));
+      p.rect(a, a + 3, z0 + 2, z0 + 2 + bh, S(bh > h * 0.8 ? AMBER : CYAN_DK));
+      p.rect(a, a + 1, z0 + 2, z0 + 2 + bh, S(shade(bh > h * 0.8 ? AMBER : CYAN_DK, 0.3)));
     }
   } else if (kind === 3) {
     // terminal
     for (let r = 0; r < Math.floor((h - 3) / 4); r++) {
       const len = 3 + Math.floor(hash2(r, idx, 5) * (w - 12));
       const a = a0 + 2 + (r % 3 === 1 ? 3 : 0);
-      p.rect(a, Math.min(a1 - 2, a + len), z1 - 4 - r * 4, z1 - 3 - r * 4, S(r % 4 === 0 ? CYAN : GREEN));
+      p.rect(a, Math.min(a1 - 2, a + len), z1 - 4 - r * 4, z1 - 3 - r * 4, S(r % 4 === 0 ? '#e9fcff' : CYAN_DK));
     }
     if (ph === 0) p.rect(a0 + 2, a0 + 5, z0 + 2, z0 + 4, S('#e9fff1'));
   } else if (kind === 4) {
@@ -107,7 +109,7 @@ function screenArt(p: Plane, a0: number, a1: number, z0: number, z1: number, idx
     for (let r = 0; r < Math.floor((h - 2) / 4); r++) {
       for (let c = 0; c < Math.floor((w - 2) / 4); c++) {
         const v = hash2(c, r, 9 + ph * 3 + idx);
-        p.rect(a0 + 2 + c * 4, a0 + 5 + c * 4, z0 + 2 + r * 4, z0 + 5 + r * 4, S(v < 0.6 ? '#1f8f5a' : v < 0.85 ? '#d6b02a' : '#d94b4b'));
+        p.rect(a0 + 2 + c * 4, a0 + 5 + c * 4, z0 + 2 + r * 4, z0 + 5 + r * 4, S(v < 0.6 ? '#164a66' : v < 0.88 ? '#2a9ac0' : AMBER));
       }
     }
   } else {
@@ -131,7 +133,7 @@ function screenArt(p: Plane, a0: number, a1: number, z0: number, z1: number, idx
 }
 
 /** One monitor on the desk: rear shell when its back faces the camera. */
-function monitor(l0: number, l1: number, s0: number, s1: number, alongX: boolean, side: 'n' | 'w', idx: number, ph: number, back: boolean): Box {
+function monitor(l0: number, l1: number, s0: number, s1: number, alongX: boolean, side: 'n' | 'w', idx: number, ph: number, back: boolean, live?: LiveKind): Box {
   const z = 26;
   const h = 15;
   const base = alongX ? { x: l0, y: s0, w: l1 - l0, d: s1 - s0 } : { x: s0, y: l0, w: s1 - s0, d: l1 - l0 };
@@ -148,7 +150,8 @@ function monitor(l0: number, l1: number, s0: number, s1: number, alongX: boolean
     }
     p.rect(0, W, 0, h, S('#0b0e18'));
     p.rect(0, W, h - 1, h, S('#3a4468'));
-    screenArt(p, 1, W - 1, 1, h - 1, idx, ph, S);
+    if (live) liveScreen(p, 1, W - 1, 1, h - 1, live, ph, S);
+    else screenArt(p, 1, W - 1, 1, h - 1, idx, ph, S);
   });
 }
 
@@ -159,7 +162,8 @@ export const TECH_BUILDERS: Record<Extract<FurniKind, 'server_rack' | 'command_d
     // superaquecimento (opt = 1): os LEDs piscam em vermelho e a faixa do topo fica vermelha
     const hot = opt === 1;
     const H = 78;
-    const body = withDetail({ x: 0.08, y: 0.1, z: 0, w: 0.84, d: 0.8, h: H, top: '#1d2336', left: '#151a2a', right: '#0d101b' }, (ctx, ox, oy, b) => {
+    const unitTone = ['#1a2238', '#1e2640'];
+    const body = withDetail({ x: 0.03, y: 0.1, z: 0, w: 0.94, d: 0.8, h: H, top: '#232b45', left: '#151a2a', right: '#0d101b' }, (ctx, ox, oy, b) => {
       const p = boxPlane(ctx, ox, oy, b, side);
       const W = Math.round((side === 'n' ? b.w : b.d) * 32);
       const t = (c: string) => tone(side, c);
@@ -169,46 +173,66 @@ export const TECH_BUILDERS: Record<Extract<FurniKind, 'server_rack' | 'command_d
         p.rect(0, W, H - 2, H, t('#2a3350'));
         return;
       }
-      p.rect(0, W, 0, H, t('#10141f'));
-      p.rect(0, 2, 0, H, t('#2c3552'));
-      p.rect(W - 2, W, 0, H, t('#0b0e18'));
-      // cyan accent line on the cap and a base plinth
+      // moldura grafite, plinto e porta de tela perfurada com luz de borda
+      p.rect(0, W, 0, H, t('#0e1220'));
+      p.rect(0, 1, 0, H, t('#34406a'));
+      p.rect(W - 1, W, 0, H, t('#080b14'));
+      p.rect(0, W, 0, 3, t('#080b14'));
+      p.rect(0, W, 3, 4, t('#2a3350'));
+      p.rect(2, W - 8, 5, H - 6, t('#121827'));
+      // 9 unidades (1U) atras da tela: tampa clara fosca, separador e fenda de ventilacao
+      for (let u = 0; u < 9; u++) {
+        const z0 = 6 + u * 8;
+        p.rect(3, W - 9, z0, z0 + 7, t(unitTone[u % 2]!));
+        p.rect(3, W - 9, z0 + 6, z0 + 7, t('#2a3350'));
+        p.rect(3, W - 9, z0, z0 + 1, t('#0a0d18'));
+        p.rect(5, 11, z0 + 3, z0 + 4, t('#0a0d18'));
+      }
+      // perfuracao regular da porta (sem ruido): pontos escuros em grade
+      p.rectFn(2, W - 8, 5, H - 6, (a, z) => (a % 3 === 1 && z % 3 === 1 ? t('#06080f') : null));
+      // coluna de LEDs de status em ritmo regular: verde, e um ambar por rack
+      const amberAt = Math.floor(hash2(f.x * 5, f.y * 3, 4) * 9);
+      for (let u = 0; u < 9; u++) {
+        const z0 = 6 + u * 8;
+        const a = W - 5;
+        if (hot) {
+          p.px(a, z0 + 4, ph ? '#ff3b3b' : '#4a1a22');
+          p.px(a, z0 + 3, ph ? 'rgba(255,59,59,0.4)' : 'rgba(255,59,59,0.08)');
+          p.px(a - 2, z0 + 4, ph ? '#ff3b3b' : '#4a1a22');
+          continue;
+        }
+        const alert = u === amberAt;
+        const act = (u + ph + (f.x & 1)) % 3 === 0;
+        p.px(a, z0 + 4, alert ? AMBER : GREEN);
+        p.px(a, z0 + 3, alert ? 'rgba(255,179,71,0.35)' : 'rgba(88,224,138,0.28)');
+        p.px(a - 2, z0 + 4, act ? CYAN : '#1f2c46');
+      }
+      // trilho vertical de luz ciano na borda da porta e puxador
+      p.rect(W - 7, W - 6, 6, H - 7, t(hot ? '#ff4a4a' : CYAN_DK));
+      p.rect(W - 3, W - 2, H / 2 - 6, H / 2 + 6, t('#8791aa'));
+      // topo: tampa com faixa de acento
       p.rect(0, W, H - 3, H, t('#1a2036'));
       p.rect(2, W - 2, H - 3, H - 2, t(hot ? '#ff4a4a' : CYAN));
-      p.rect(0, W, 0, 3, t('#0b0e18'));
-      // 9 server units, each with vents, a drive bay and blinking LEDs
-      for (let u = 0; u < 9; u++) {
-        const z0 = 4 + u * 8;
-        const sel = hash2(u, f.x * 3 + f.y, 4);
-        p.rect(2, W - 2, z0, z0 + 7, t(sel < 0.3 ? '#2b3350' : '#222a44'));
-        p.rect(2, W - 2, z0 + 6, z0 + 7, t('#3a4468'));
-        p.rect(2, W - 2, z0, z0 + 1, t('#0b0e18'));
-        p.rectFn(4, 13, z0 + 2, z0 + 5, (a, z) => (a % 2 === 0 || z === z0 + 3 ? t('#0f1322') : null));
-        if (sel > 0.55) p.rect(14, 19, z0 + 2, z0 + 5, t('#161b2e'));
-        for (let k = 0; k < 3; k++) {
-          const a = W - 10 + k * 3;
-          const r = hash2(u * 3 + k, f.x + f.y * 7, 6 + ph * 5);
-          if (hot) {
-            // alerta: todos os LEDs piscam juntos em vermelho (a fase `on` alterna aceso/apagado)
-            p.px(a, z0 + 4, ph ? '#ff3b3b' : '#4a1a22');
-            p.px(a, z0 + 3, ph ? 'rgba(255,59,59,0.4)' : 'rgba(255,59,59,0.08)');
-            continue;
-          }
-          p.px(a, z0 + 4, r < 0.55 ? GREEN : r < 0.78 ? AMBER : r < 0.9 ? CYAN : '#2a3350');
-          p.px(a, z0 + 3, r < 0.55 ? 'rgba(88,224,138,0.35)' : 'rgba(53,216,255,0.2)');
-        }
-      }
-      // glass door reflection
-      for (let z = 8; z < H - 6; z += 1) {
-        const a = Math.round(((z - 8) / (H - 14)) * (W - 8)) + 3;
-        p.px(a, z, 'rgba(255,255,255,0.10)');
-        p.px(a + 1, z, 'rgba(255,255,255,0.06)');
+      // reflexo de vidro em faixa unica, sutil
+      for (let z = 8; z < H - 8; z += 1) {
+        const a = Math.round(((z - 8) / (H - 16)) * (W - 14)) + 4;
+        p.px(a, z, 'rgba(255,255,255,0.07)');
+        p.px(a + 1, z, 'rgba(255,255,255,0.045)');
       }
     });
-    return { z1: H + 2, shadow: { alpha: 0.32 }, boxes: [body] };
+    // calha de cabos no topo: bandeja de aco continua com feixes organizados saindo para a parede
+    const tray = withDetail({ x: 0, y: 0.14, z: H, w: 1, d: 0.42, h: 3, top: '#2f3852', left: '#1c2338', right: '#10152a', noOutline: true }, (ctx, ox, oy, b) => {
+      const p = boxPlane(ctx, ox, oy, b, side);
+      const W = Math.round((side === 'n' ? b.w : b.d) * 32);
+      const t = (c: string) => tone(side, c);
+      p.rect(0, W, 0, 3, t('#1c2338'));
+      p.rect(0, W, 2, 3, t('#3a4468'));
+      for (let a = 3; a < W - 2; a += 6) p.rect(a, a + 2, 0, 2, t(a % 12 === 3 ? CYAN_DK : '#0b0e18'));
+    });
+    return { z1: H + 6, shadow: { alpha: 0.34 }, boxes: [body, tray] };
   },
 
-  command_desk: (fw, fd, f, on): Parts => {
+  command_desk: (fw, fd, f, on, opt): Parts => {
     const ph = on ? 1 : 0;
     const alongX = fw >= fd;
     const L = alongX ? fw : fd;
@@ -242,7 +266,9 @@ export const TECH_BUILDERS: Record<Extract<FurniKind, 'server_rack' | 'command_d
         if (Math.abs(s - (facing ? 0.9 : 0.1)) < 0.03) return CYAN;
         if (Math.abs(s - sitter) < 0.06) return '#1f2c4d';
         if (Math.abs(l - Math.round(l)) < 0.02) return '#1a2442';
-        return hash2(px, py, 4) < 0.03 ? '#1c2748' : null;
+        void px;
+        void py;
+        return null;
       });
     });
     const boxes: Box[] = [base, top];
@@ -250,12 +276,21 @@ export const TECH_BUILDERS: Record<Extract<FurniKind, 'server_rack' | 'command_d
     const ms: [number, number] = facing ? [0.1, 0.17] : [0.83, 0.9];
     const after: Box[] = [];
     for (let i = 0; i < L; i++) {
-      const idx = Math.floor(hash2(f.x + i, f.y, 12) * 6);
+      // a estacao 'ti-noc-desk' (de frente ao videowall) mostra so graficos vivos: linha, barras, linha
+      const idx = f.id === 'ti-noc-desk' ? 0 : Math.floor(hash2(f.x + i, f.y, 12) * 6);
       boxes.push(mk(i + 0.4, i + 0.6, ms[0] - 0.02, ms[1] + 0.02, 24, 2, '#1c2238', '#2a3350', '#10152a', { noOutline: true }));
-      boxes.push(monitor(i + 0.07, i + 0.93, ms[0], ms[1], alongX, side, idx + (i % 2) * 2, ph, !facing));
+      boxes.push(monitor(i + 0.07, i + 0.93, ms[0], ms[1], alongX, side, idx + (i % 2) * 2, ph, !facing, (opt ?? 0) >= NOC_LIVE_OPT_MIN ? (['online', 'temp', 'bars'] as const)[i % 3] : undefined));
       const ks = facing ? 0.56 : 0.2;
-      boxes.push(mk(i + 0.22, i + 0.7, ks, ks + 0.2, 24, 1, '#3a4468', '#262e4a', '#171d34', { noOutline: true }));
-      boxes.push(mk(i + 0.74, i + 0.82, ks + 0.04, ks + 0.12, 24, 1, '#58e08a', '#2f9f60', '#1f6f40', { noOutline: true }));
+      boxes.push(
+        withDetail(mk(i + 0.22, i + 0.7, ks, ks + 0.2, 24, 1, '#1a2036', '#262e4a', '#171d34', { noOutline: true }), (ctx, ox, oy, b) => {
+          paintTop(ctx, ox, oy, b.x, b.y, b.x + b.w, b.y + b.d, b.z + b.h, (X, Y) => {
+            const l = (alongX ? X - b.x : Y - b.y) / (alongX ? b.w : b.d);
+            const q = (alongX ? Y - b.y : X - b.x) / (alongX ? b.d : b.w);
+            return Math.floor(l * 9) % 2 === 0 && Math.floor(q * 4) % 2 === 0 ? '#2a8fb8' : '#3a4a7a';
+          });
+        }),
+      );
+      boxes.push(mk(i + 0.74, i + 0.82, ks + 0.04, ks + 0.12, 24, 1, '#35d8ff', '#1a8fb5', '#10607a', { noOutline: true }));
     }
     // a mug and a small status lamp on the first tile
     after.push(mk(L - 0.3, L - 0.18, facing ? 0.5 : 0.3, facing ? 0.62 : 0.42, 24, 5, '#ffffff', '#e8e8e8', '#b8bcc6'));
@@ -271,7 +306,7 @@ export const TECH_BUILDERS: Record<Extract<FurniKind, 'server_rack' | 'command_d
     };
   },
 
-  videowall: (_fw, _fd, f, on): Parts => {
+  videowall: (_fw, _fd, f, on, opt): Parts => {
     const ph = on ? 1 : 0;
     return {
       boxes: [],
@@ -281,23 +316,89 @@ export const TECH_BUILDERS: Record<Extract<FurniKind, 'server_rack' | 'command_d
       post: onWall(f, (p, side) => {
         const S = (c: string) => shade(c, side === 'w' ? -0.1 : 0);
         const A1 = 160;
-        wallShadow(p, 2, A1, 12, 87);
-        // frame with a cyan under-glow line
-        p.rect(2, A1, 14, 87, S('#05070d'));
-        p.rect(3, A1 - 1, 15, 86, S('#161c30'));
-        p.rect(3, A1 - 1, 85, 86, S('#3a4468'));
+        wallShadow(p, 2, A1, 12, 88);
+        // moldura grafite fina com luz ciano embaixo (sombra de contato + reflexo no piso vem do glow)
+        p.rect(2, A1, 14, 88, S('#05070d'));
+        p.rect(3, A1 - 1, 15, 87, S('#10172a'));
+        p.rect(3, A1 - 1, 86, 87, S('#2a3350'));
         p.rect(2, A1, 12, 14, S(CYAN));
-        p.rect(2, A1, 11, 12, 'rgba(53,216,255,0.35)');
-        const cols = [5, 57, 109];
-        const rows: Array<[number, number]> = [[50, 84], [17, 48]];
-        let idx = 0;
-        for (const [z0, z1] of rows) {
-          for (const a0 of cols) {
-            p.rect(a0 - 1, a0 + 50, z0 - 1, z1 + 1, S('#0b0e18'));
-            screenArt(p, a0, a0 + 49, z0, z1, idx, ph, S);
-            idx++;
+        p.rect(2, A1, 11, 12, 'rgba(53,216,255,0.28)');
+        const panel = (a0: number, a1: number, z0: number, z1: number) => {
+          p.rect(a0 - 1, a1 + 1, z0 - 1, z1 + 1, S('#05070d'));
+        };
+        // cabecalho: placa da sala, relogio e uptime
+        p.rect(5, A1 - 3, 76, 85, S('#0b1224'));
+        p.rect(5, A1 - 3, 76, 77, S('#1a2a46'));
+        wallText(p, 9, 79, 'SALA DA TI', S('#e9fcff'), 1);
+        wallText(p, 52, 79, 'NOC', S(CYAN), 1);
+        p.rect(70, 71, 78, 84, S('#2a3550'));
+        wallText(p, 75, 79, ph ? 'UP 99.98%' : 'UP 99.98%', S('#8fdcf0'), 1);
+        wallText(p, 126, 79, ph ? '12:00' : '12 00', S('#e9fcff'), 1);
+        p.rect(A1 - 14, A1 - 10, 78, 79, S(GREEN));
+        // mapa-mundi em pontos (painel grande) com rotas e nos de rede
+        panel(5, 85, 16, 73);
+        p.rect(5, 85, 16, 73, S('#07101e'));
+        for (let a = 8; a < 85; a += 8) p.rect(a, a + 1, 17, 72, S('#0c1a2e'));
+        for (let z = 20; z < 73; z += 8) p.rect(6, 84, z, z + 1, S('#0c1a2e'));
+        const map = [
+          '........................................',
+          '.....###.........#####.....#######......',
+          '...#######......#######..##############.',
+          '..#########......######.################',
+          '..########.......######..###############',
+          '...######.........####....#####.#######.',
+          '....#####.........#####....####..######.',
+          '.....####........########...###....##..',
+          '......##.........#########........#....',
+          '.......###.......########.........###..',
+          '.......####.......#######.........###..',
+          '.......####........#####.........###..',
+          '........###........####...........##..',
+          '........##..........##.........####....',
+          '.........#...................#######...',
+          '...............................#####...',
+        ];
+        const mx = 7;
+        const mz = 62;
+        map.forEach((row, r) => {
+          for (let c = 0; c < row.length; c++) {
+            if (row[c] === '#') p.rect(mx + c * 2, mx + c * 2 + 1, mz - r * 2 - 1, mz - r * 2, S('#1c6f94'));
           }
+        });
+        const cities: Array<[number, number]> = [[7, 6], [10, 13], [19, 4], [21, 9], [29, 5], [33, 7], [36, 14]];
+        const links: Array<[number, number]> = [[0, 2], [2, 4], [4, 5], [1, 3], [3, 5], [5, 6], [2, 3]];
+        const cpt = (n: [number, number]): [number, number] => [mx + n[0] * 2, mz - n[1] * 2 - 1];
+        for (const [x, y] of links) {
+          const A = cpt(cities[x]!);
+          const B = cpt(cities[y]!);
+          p.line(A[0], A[1], B[0], B[1], S('#2a8fb8'));
         }
+        cities.forEach((n, k) => {
+          const [a, z] = cpt(n);
+          const hotNode = k === 3 && ph === 1;
+          p.rect(a - 1, a + 2, z - 1, z + 2, S(hotNode ? AMBER : CYAN));
+          p.px(a, z, S('#ffffff'));
+          if ((k + ph) % 2 === 0) {
+            p.rect(a - 2, a + 3, z - 2, z - 1, 'rgba(53,216,255,0.25)');
+            p.rect(a - 2, a + 3, z + 2, z + 3, 'rgba(53,216,255,0.25)');
+          }
+        });
+        wallText(p, 8, 66, 'REDE GLOBAL', S('#8fdcf0'), 1);
+        // coluna de paineis modulares alinhados: latencia, trafego e saude
+        const col = [[89, 157]] as const;
+        const [c0, c1] = col[0];
+        panel(c0, c1, 46, 73);
+        // dados reais (pessoas online e temperatura da sala, ver nocLive.ts) quando o desenho e vivo; senao a arte fixa
+        const live = (opt ?? 0) >= NOC_LIVE_OPT_MIN;
+        if (live) liveScreen(p, c0, c1, 46, 73, 'online', ph, S);
+        else screenArt(p, c0, c1, 46, 73, 0, ph, S);
+        wallText(p, c0 + 3, 66, live ? 'PESSOAS ONLINE' : 'LATENCIA', S('#8fdcf0'), 1);
+        panel(c0, c0 + 32, 16, 43);
+        if (live) liveScreen(p, c0, c0 + 32, 16, 43, 'temp', ph, S);
+        else screenArt(p, c0, c0 + 32, 16, 43, 2, ph, S);
+        panel(c0 + 36, c1, 16, 43);
+        if (live) liveScreen(p, c0 + 36, c1, 16, 43, 'numbers', ph, S);
+        else screenArt(p, c0 + 36, c1, 16, 43, 5, ph, S);
       }),
     };
   },
@@ -397,10 +498,12 @@ export const TECH_BUILDERS: Record<Extract<FurniKind, 'server_rack' | 'command_d
         }
       }
     });
-    const top = withDetail(mk(0, L, 0.04, 0.96, BT, 3, '#2d6a4f', '#1f4d39', '#163a2b'), (ctx, ox, oy, b) => {
+    const top = withDetail(mk(0, L, 0.04, 0.96, BT, 3, '#3a4458', '#2a3246', '#1c2234'), (ctx, ox, oy, b) => {
       paintTop(ctx, ox, oy, b.x + 0.02, b.y + 0.02, b.x + b.w - 0.02, b.y + b.d - 0.02, b.z + b.h, (X, Y, px, py) => {
         const l = alongX ? X - b.x : Y - b.y;
-        return Math.abs(l * 4 - Math.round(l * 4)) < 0.06 ? '#3a8a68' : hash2(px, py, 8) < 0.04 ? '#24583f' : null;
+        void px;
+        void py;
+        return Math.abs(l * 4 - Math.round(l * 4)) < 0.03 ? '#4a566e' : null;
       });
     });
     const z0 = BT + 3;

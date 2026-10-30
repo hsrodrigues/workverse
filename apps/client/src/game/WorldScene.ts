@@ -46,10 +46,12 @@ import { DoorSigns } from './doorSigns';
 import { DayLighting } from './dayLighting';
 import { EventDecor } from './eventDecor';
 import { PetActor } from './petActor';
+import { nocLive } from './nocLive';
 import { shouldSendPlay } from './petLogic';
+import { mediaIndicators } from '../media/indicators';
 
 import { DEPT_PX, NAME_PX, STAFF_PX, TEXT_FONT as FONT, buildBubble, buildTag, crisp, snap, texelOf } from './text';
-import { RECEPTIONIST, badgeTextColor, deptShort, safeDeptColor, type ProfileTag } from '@workverse/shared';
+import { RECEPTIONIST, badgeTextColor, deptShort, nocStation, safeDeptColor, type ProfileTag } from '@workverse/shared';
 /** Which sprite view (and mirroring) represents each of the eight facing directions. */
 const VIEW_FOR_DIR: ReadonlyArray<{ view: View; flip: boolean }> = [
   { view: 'front34', flip: false }, // 0  +x   south-east
@@ -706,6 +708,8 @@ export class WorldScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, offPlay);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, offLocate);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.unsubscribe?.());
+    const offNoc = nocLive.subscribe(() => this.refreshNocScreens());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, offNoc);
     this.events.once(Phaser.Scenes.Events.DESTROY, () => this.unsubscribe?.());
     if (import.meta.env?.DEV) {
       // Dev-only helper for browser tests: canvas position of a tile centre.
@@ -885,6 +889,8 @@ export class WorldScene extends Phaser.Scene {
     this.roomObjects.forEach((o) => o.destroy());
     this.roomObjects = [];
     this.furni = [];
+    this.nocStationId = def.id === 'ti' ? nocStation(def.furniture)?.id : undefined;
+    this.onAirLast = null;
     this.screens.forEach((s) => s.destroy());
     this.screens = [];
     this.climateFx.clear();
@@ -960,6 +966,45 @@ export class WorldScene extends Phaser.Scene {
     this.furn.refresh();
   }
 
+  /** Luz de "NO AR" do Estudio: acende enquanto alguem da sala esta com o microfone ligado (estado so do cliente, vindo dos indicadores de midia). */
+  private onAirLast: boolean | null = null;
+  private onAirAt = 0;
+  private onAirTick(now: number) {
+    if (now < this.onAirAt) return;
+    this.onAirAt = now + 250;
+    const signs = this.furni.filter((fa) => fa.f.kind === 'on_air');
+    if (signs.length === 0) return;
+    let live = false;
+    for (const id of this.actors.keys()) if (mediaIndicators.get(id)?.micOn) live = true;
+    if (live === this.onAirLast) return;
+    this.onAirLast = live;
+    for (const fa of signs) {
+      const s = renderFurniture(fa.f, live, this.optOf(fa.f));
+      fa.sprite.setTexture(this.canvasTexture(s.key, s.canvas));
+    }
+  }
+
+  /** Id da estacao de frente ao videowall na sala atual (regra geometrica do shared). */
+  private nocStationId: string | undefined;
+
+  /** Os numeros vivos mudaram (a cada ~30 s): redesenha so o videowall e a estacao, mantendo a fase do piscar. */
+  private refreshNocScreens() {
+    for (const fa of this.furni) {
+      if (fa.f.kind !== 'videowall' && !(fa.f.kind === 'command_desk' && fa.f.id === this.nocStationId)) continue;
+      const s = renderFurniture(fa.f, this.blinkOn(fa) ?? this.furniOn[fa.f.id] === true, this.optOf(fa.f));
+      const o = tileToScreen(fa.f.x, fa.f.y);
+      const key = this.canvasTexture(s.key, s.canvas);
+      fa.sprite.setTexture(key).setPosition(o.x - s.ax, o.y - s.ay);
+      void key;
+    }
+    // texturas de digests antigos saem do Phaser (memoria constante); as em uso ficam
+    for (const k of this.textures.getTextureKeys()) {
+      if (!/^fu:(videowall|command_desk):.*~1\d{6}$/.test(k)) continue;
+      if (this.furni.some((fa) => fa.sprite.texture?.key === k)) continue;
+      this.textures.remove(k);
+    }
+  }
+
   private blinkTick(now: number) {
     for (const b of this.blinkers) {
       const phase = Math.floor((now + b.offset) / b.period) % 2;
@@ -972,6 +1017,8 @@ export class WorldScene extends Phaser.Scene {
 
   /** Estado extra do desenho de uma peca (ver Builder em furniture.ts): alvo do ar, leitura do termostato, alerta dos racks. */
   private optOf(f: Furniture): number {
+    // telas vivas da Sala da TI: o videowall e a estacao de frente a ele mostram os numeros reais (nocLive.ts)
+    if (f.kind === 'videowall' || (f.kind === 'command_desk' && f.id === this.nocStationId)) return this.built?.def.id === 'ti' ? nocLive.opt() : 0;
     const c = this.climate;
     if (!c) return 0;
     if (f.kind === 'ac_split' || f.kind === 'ac_floor') return AC_MODE_LIST.indexOf(c.mode) * 100 + c.target;
@@ -1300,6 +1347,7 @@ export class WorldScene extends Phaser.Scene {
     this.dayLight.tick(performance.now());
     this.eventDecor.tick(performance.now());
     this.blinkTick(performance.now());
+    this.onAirTick(performance.now());
     this.climateFx.tick(performance.now());
     this.drawLocator(performance.now());
     this.marker.clear();

@@ -1,0 +1,461 @@
+/* NOC · Monitoramento: painel escuro da Sala da TI (ciano de destaque, âmbar de alerta), gráficos SVG feitos à mão. */
+.win.panel-noc {
+  --noc-bg: #070d1a;
+  --noc-card: #0d1730;
+  --noc-line: #1b2a4a;
+  --noc-text: #dff6ff;
+  --noc-dim: #8fb0c4;
+  --noc-cyan: #35d8ff;
+  --noc-cyan-dk: #1a8fb5;
+  --noc-amber: #ffb347;
+  --noc-green: #58e08a;
+  position: fixed;
+  left: 50%;
+  right: auto;
+  top: 48px;
+  transform: translateX(-50%);
+  width: min(1000px, calc(100vw - 24px));
+  max-height: calc(100vh - 110px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--noc-bg);
+  border-color: #040810;
+  box-shadow:
+    inset 0 0 0 2px var(--noc-line),
+    4px 4px 0 rgba(0, 0, 0, 0.55);
+  color: var(--noc-text);
+}
+.panel-noc .win-title {
+  background: #0b1224;
+  color: var(--noc-cyan);
+  text-shadow: none;
+  border-bottom: 2px solid var(--noc-line);
+  letter-spacing: 1px;
+}
+.panel-noc .win-title .x {
+  background: #0b1224;
+  color: var(--noc-cyan);
+  border-color: var(--noc-line);
+}
+.win.panel-noc .win-body.noc-body {
+  background: var(--noc-bg);
+  padding: 10px 12px 12px;
+  min-height: 0;
+  overflow-y: auto;
+}
+.noc {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.noc-bar-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.noc-windows {
+  display: inline-flex;
+  border: 1px solid var(--noc-line);
+}
+.noc-windows button {
+  background: var(--noc-card);
+  color: var(--noc-dim);
+  border: 0;
+  border-right: 1px solid var(--noc-line);
+  padding: 8px 14px;
+  min-height: 36px;
+  min-width: 56px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.noc-windows button:last-child {
+  border-right: 0;
+}
+.noc-windows button.on {
+  background: var(--noc-cyan);
+  color: #04202b;
+}
+.noc-windows button:focus-visible {
+  outline: 2px solid var(--noc-amber);
+  outline-offset: -2px;
+}
+.noc-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--noc-dim);
+  font-size: 12px;
+}
+.noc-live i {
+  width: 8px;
+  height: 8px;
+  background: var(--noc-green);
+  animation: noc-pulse 2s steps(2) infinite;
+}
+.noc-live.stale i {
+  background: var(--noc-amber);
+  animation: none;
+}
+@keyframes noc-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+.noc-notice {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--noc-amber);
+  color: var(--noc-amber);
+}
+.noc-empty {
+  margin: 0;
+  color: var(--noc-dim);
+}
+.noc-grid-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.noc-card {
+  background: var(--noc-card);
+  border: 1px solid var(--noc-line);
+  padding: 10px 12px 12px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.noc-card.wide {
+  grid-column: 1 / -1;
+}
+.noc-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.noc-card h3 {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--noc-cyan);
+}
+.noc-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border: 1px solid var(--noc-line);
+  color: var(--noc-dim);
+}
+.noc-badge.ok {
+  color: var(--noc-green);
+  border-color: #1d5a39;
+}
+.noc-badge.warn,
+.noc-badge.alert {
+  color: var(--noc-amber);
+  border-color: var(--noc-amber);
+}
+.noc-badge.alert {
+  background: rgba(255, 179, 71, 0.12);
+  font-weight: 700;
+}
+.noc-big {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.noc-big strong {
+  font-size: 34px;
+  line-height: 1;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.noc-big .unit {
+  color: var(--noc-cyan);
+  font-weight: 700;
+}
+.noc-big small {
+  color: var(--noc-dim);
+  font-size: 12px;
+  flex-basis: 100%;
+}
+.noc-big.alert strong {
+  color: var(--noc-amber);
+}
+.noc-foot {
+  margin: 0;
+  color: var(--noc-dim);
+  font-size: 12px;
+}
+
+/* gráficos */
+.noc-chart,
+.noc-spark {
+  width: 100%;
+  min-width: 0;
+}
+.noc-chart svg,
+.noc-spark svg {
+  display: block;
+  max-width: 100%;
+}
+.noc-grid {
+  stroke: var(--noc-line);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+.noc-axis {
+  fill: var(--noc-dim);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.noc-line {
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.noc-line.step {
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+}
+.noc-area {
+  fill: currentColor;
+  opacity: 0.16;
+}
+.noc-dot {
+  fill: currentColor;
+  stroke: var(--noc-bg);
+  stroke-width: 1.5;
+}
+.noc-track {
+  fill: #101c38;
+}
+.noc-bar {
+  fill: var(--noc-cyan);
+}
+.noc-bar.alert {
+  fill: var(--noc-amber);
+}
+.noc-barlabel {
+  fill: var(--noc-text);
+  font-size: 12px;
+}
+.noc-barnote {
+  fill: var(--noc-dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.noc-climate {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+.noc-gauge {
+  display: block;
+  margin: 0 auto;
+}
+.noc-gauge-track {
+  stroke: #101c38;
+  stroke-width: 14;
+  stroke-linecap: butt;
+}
+.noc-gauge-fill {
+  stroke: var(--noc-cyan);
+  stroke-width: 14;
+  stroke-linecap: butt;
+}
+.noc-gauge-fill.warm,
+.noc-gauge-fill.hot {
+  stroke: var(--noc-amber);
+}
+.noc-gauge-target {
+  stroke: #fff;
+  stroke-width: 3;
+}
+.noc-gauge-value {
+  fill: #fff;
+  font-size: 30px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.noc-gauge-value.warm,
+.noc-gauge-value.hot {
+  fill: var(--noc-amber);
+}
+.noc-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  color: var(--noc-dim);
+  font-size: 12px;
+}
+.noc-legend .sw {
+  display: inline-block;
+  width: 14px;
+  height: 4px;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+.noc-legend .sw.cyan {
+  background: var(--noc-cyan);
+}
+.noc-legend .sw.amber {
+  background: repeating-linear-gradient(90deg, var(--noc-amber) 0 5px, transparent 5px 8px);
+}
+.noc-others {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.noc-others li {
+  display: grid;
+  grid-template-columns: minmax(80px, 1.2fr) minmax(60px, 1fr) 64px 54px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.noc-others .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.noc-others b {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.noc-others b.alert {
+  color: var(--noc-amber);
+}
+.noc-others small {
+  color: var(--noc-dim);
+}
+.noc-meter {
+  height: 8px;
+  background: #101c38;
+  border: 1px solid var(--noc-line);
+}
+.noc-meter i {
+  display: block;
+  height: 100%;
+  background: var(--noc-cyan);
+}
+.noc-meter.warn i,
+.noc-meter.alert i {
+  background: var(--noc-amber);
+}
+.noc-kv {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+}
+.noc-kv div {
+  min-width: 0;
+}
+.noc-kv dt {
+  color: var(--noc-dim);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.noc-kv dd {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.noc-kv dd small {
+  font-size: 11px;
+  color: var(--noc-dim);
+  font-weight: 400;
+}
+.noc-sparks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.noc-sparks figure {
+  margin: 0;
+}
+.noc-sparks figcaption {
+  color: var(--noc-dim);
+  font-size: 11px;
+}
+.noc-events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 3px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.noc-events li {
+  display: grid;
+  grid-template-columns: 46px 18px minmax(0, 1fr);
+  gap: 6px;
+  align-items: baseline;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--noc-line);
+}
+.noc-events time {
+  color: var(--noc-dim);
+  font-variant-numeric: tabular-nums;
+}
+.noc-events .ic {
+  color: var(--noc-cyan);
+  font-weight: 700;
+  text-align: center;
+}
+.noc-events li.warn .ic,
+.noc-events li.alert .ic {
+  color: var(--noc-amber);
+}
+.noc-events li.alert {
+  color: #ffe2b8;
+}
+
+@media (max-width: 720px) {
+  .win.panel-noc {
+    top: 8px;
+    max-height: calc(100vh - 80px);
+  }
+  .noc-grid-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .noc-climate {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .noc-others li {
+    grid-template-columns: minmax(70px, 1fr) minmax(50px, 0.8fr) 56px;
+  }
+  .noc-others li small {
+    display: none;
+  }
+  .noc-big strong {
+    font-size: 30px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .noc-live i {
+    animation: none;
+  }
+}

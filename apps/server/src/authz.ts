@@ -198,6 +198,8 @@ export const MESSAGE_POLICY: Readonly<Record<string, Permission | null>> = {
   netsim_challenge_check: 'room.enter',
   netsim_challenge_hint: 'room.enter',
   netsim_challenge_quit: 'room.enter',
+  // painel NOC: o mundo checa se a pessoa e da TI (ou staff/admin/dono); visitantes chegam ao mundo e recebem a recusa
+  noc_query: 'room.enter',
   // pet do escritorio (Byte): qualquer pessoa na sala; o servidor limita distancia, taxa e petiscos
   pet_do: 'room.enter',
   // batimento de midia (conectado / transmitindo): so quem pode usar midia

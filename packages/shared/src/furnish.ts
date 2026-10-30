@@ -48,9 +48,9 @@ export const KIND_ROOM_TYPES: Readonly<Partial<Record<FurniKind, readonly RoomTy
   podium: ['auditorium'],
   screen: ['auditorium'],
   auditorium_seat: ['auditorium'],
-  reception_desk: ['reception', 'office', 'lounge'],
+  reception_desk: ['reception', 'office', 'lounge', 'hr'],
   // the presentation TV: meeting-like rooms (the auditorium has its own stage and screen)
-  tv_stand: ['meeting', 'team', 'private', 'office', 'lounge', 'focus'],
+  tv_stand: ['meeting', 'team', 'private', 'office', 'lounge', 'focus', 'training', 'board'],
   // o console de monitoramento mostra o inventario de PCs: so faz sentido na Sala da TI
   noc_console: ['it'],
 };
@@ -89,6 +89,24 @@ const CATEGORY_TABLE: Readonly<Partial<Record<FurniKind, FurniCategory>>> = {
   table: 'meeting',
   tv_stand: 'meeting',
   whiteboard: 'wall',
+  notice_board: 'wall',
+  board_table: 'meeting',
+  sideboard: 'kitchen',
+  printer3d: 'network',
+  bench: 'kitchen',
+  long_table: 'kitchen',
+  buffet: 'kitchen',
+  foosball: 'lounge',
+  pingpong: 'lounge',
+  arcade: 'lounge',
+  railing: 'decor',
+  parasol: 'decor',
+  garden_bed: 'decor',
+  tall_shelf: 'work',
+  podcast_table: 'meeting',
+  acoustic_panel: 'wall',
+  on_air: 'wall',
+  camera_tripod: 'decor',
   tv: 'wall',
   sofa: 'lounge',
   armchair: 'lounge',
@@ -342,7 +360,7 @@ function friendly(raw: string): string {
 }
 
 function typeLabel(t: RoomType): string {
-  return ({ reception: 'recepção', team: 'sala de equipe', meeting: 'sala de reunião', private: 'sala privada', focus: 'sala de foco', lounge: 'lounge', auditorium: 'auditório', office: 'escritório', it: 'sala da TI' } as const)[t];
+  return ({ reception: 'recepção', team: 'sala de equipe', meeting: 'sala de reunião', private: 'sala privada', focus: 'sala de foco', lounge: 'lounge', auditorium: 'auditório', office: 'escritório', it: 'sala da TI', hall: 'corredor', training: 'sala de treinamento', hr: 'RH', board: 'diretoria', lab: 'laboratório', cafeteria: 'refeitório', games: 'sala de jogos', terrace: 'terraço', library: 'biblioteca', studio: 'estúdio' } as const)[t];
 }
 
 function walkChecks(base: RoomDef, pieces: Furniture[], f: { width: number; height: number; floor: boolean[] }, arrivals: Point[], errors: FurnishIssue[]) {

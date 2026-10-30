@@ -17,6 +17,7 @@ import {
 } from './pixel';
 import { TECH_BUILDERS } from './furnitureTech';
 import { CLIMATE_BUILDERS } from './furnitureClimate';
+import { ROOM_BUILDERS } from './furnitureRooms';
 
 /**
  * Procedural furniture. Each kind returns boxes in footprint tile-space; the
@@ -1761,6 +1762,7 @@ const BUILDERS: Record<FurniKind, Builder> = {
   // ---- IT room (Sala da TI): the rest lives in furnitureTech.ts
   ...TECH_BUILDERS,
   ...CLIMATE_BUILDERS,
+  ...ROOM_BUILDERS,
   ergo_chair: (_fw, _fd, f) => chairParts(f, '#2c4a78', '#1d2f52', 9),
   espresso: (fw, fd, f, on) => {
     const alongX = fw >= fd;
@@ -1816,6 +1818,7 @@ const BUILDERS: Record<FurniKind, Builder> = {
 };
 
 const cache = new Map<string, FurniSprite>();
+const liveKeys: string[] = [];
 const MAX_Z = 96;
 const PAD = 6;
 
@@ -1869,5 +1872,10 @@ export function renderFurniture(f: Furniture, on = false, opt = 0): FurniSprite 
   }
   const sprite: FurniSprite = { canvas: main.canvas, key, ax, ay, front, z0: parts.z0 ?? 0, z1: parts.z1 };
   cache.set(key, sprite);
+  // desenhos com dados vivos (NOC) mudam a cada ~30 s: guarda so os mais recentes para a memoria nao crescer
+  if (opt >= 1_000_000) {
+    liveKeys.push(key);
+    while (liveKeys.length > 12) cache.delete(liveKeys.shift()!);
+  }
   return sprite;
 }

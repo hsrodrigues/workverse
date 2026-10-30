@@ -11,7 +11,7 @@ describe('Sala da TI', () => {
     const reception = ROOM_DEFS.find((r) => r.id === 'reception')!;
     expect(reception.portals.some((p) => p.toRoom === 'ti')).toBe(true);
     expect(ti.portals.some((p) => p.toRoom === 'reception')).toBe(true);
-    expect(ROOM_DEFS.length).toBe(10);
+    expect(ROOM_DEFS.length).toBeGreaterThanOrEqual(10);
   });
 
   it('tem racks, mesa de comando em ferradura, videowall, bancada, cafe premium e interruptor', () => {

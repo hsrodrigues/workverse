@@ -230,10 +230,17 @@ describe('reception hub and the other rooms', () => {
         expect(dest, `${d.id} -> ${p.toRoom}`).toBeDefined();
         expect(dest.portals.some((q) => q.toRoom === d.id), `${p.toRoom} has no way back to ${d.id}`).toBe(true);
       }
-      if (d.id !== 'reception') expect(d.portals.some((p) => p.toRoom === 'reception'), d.id).toBe(true);
+      // the reception is the hub of the first floor; the Hall 2 corridor is the hub of the nine rooms that leave from it
+      if (d.id !== 'reception' && d.type !== undefined) expect(d.portals.some((p) => p.toRoom === 'reception' || p.toRoom === 'hall2'), d.id).toBe(true);
     }
-    const reached = new Set(byId('reception').portals.map((p) => p.toRoom));
-    for (const d of ROOM_DEFS) if (d.id !== 'reception') expect(reached.has(d.id), d.id).toBe(true);
+    // every room is reachable from the reception, directly or through the Hall 2 corridor
+    const reached = new Set<string>(['reception']);
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const id of [...reached]) for (const p of byId(id).portals) if (!reached.has(p.toRoom)) (reached.add(p.toRoom), (grew = true));
+    }
+    for (const d of ROOM_DEFS) expect(reached.has(d.id), d.id).toBe(true);
+    expect(byId('reception').portals.some((p) => p.toRoom === 'hall2')).toBe(true);
   });
 
   it('lands each portal on a free tile next to the return door, reachable from the destination spawn', () => {

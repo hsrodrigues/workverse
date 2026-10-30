@@ -279,7 +279,7 @@ export function doorOf(holders: readonly BookingWindow[], now: number): { state:
   return { state: 'free' };
 }
 
-/** Sala reservavel por padrao (a Sala Privada); as demais so quando a organizacao liga. */
-export const DEFAULT_BOOKABLE_ROOM_IDS: readonly string[] = ['private'];
+/** Salas reservaveis por padrao (Sala Privada, Treinamento e RH); as demais so quando a organizacao liga. A Diretoria (acesso por equipe/convite) NUNCA e reservavel: reservar ignora equipe e convite. */
+export const DEFAULT_BOOKABLE_ROOM_IDS: readonly string[] = ['private', 'training', 'rh'];
 /** Salas que nunca podem ser reservadas: sao por onde todos passam. */
-export const NEVER_BOOKABLE_ROOM_IDS: readonly string[] = ['office', 'reception'];
+export const NEVER_BOOKABLE_ROOM_IDS: readonly string[] = ['office', 'reception', 'hall2'];

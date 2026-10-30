@@ -14,7 +14,7 @@ export const OPEN_ROOMS: readonly string[] = ['office', 'reception'];
  * Equipes que passam mesmo com a sala TRANCADA (acesso restrito ou trancada pela staff) quando a organizacao nao escolheu outras:
  * nomes de equipe (setor) comparados sem acento nem caixa. So a Sala da TI traz padrao.
  */
-export const DEFAULT_PASS_TEAM_NAMES: Readonly<Record<string, readonly string[]>> = { ti: ['ti', 'tecnologia da informacao'] };
+export const DEFAULT_PASS_TEAM_NAMES: Readonly<Record<string, readonly string[]>> = { ti: ['ti', 'tecnologia da informacao'], board: ['diretoria', 'direcao', 'board'] };
 
 export const normTeamName = normDeptName;
 

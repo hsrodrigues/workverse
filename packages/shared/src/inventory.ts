@@ -73,6 +73,16 @@ export const ROOM_CODES: Readonly<Record<string, string>> = {
   private: 'PRV',
   focus: 'FOC',
   ti: 'TI',
+  hall2: 'HL2',
+  training: 'TRE',
+  rh: 'RH',
+  board: 'DIR',
+  lab: 'LAB',
+  cafeteria: 'REF',
+  games: 'JOG',
+  terrace: 'TER',
+  library: 'BIB',
+  studio: 'EST',
 };
 export const roomCode = (roomId: string): string => ROOM_CODES[roomId] ?? (roomId.replace(/[^a-z0-9]/gi, '').slice(0, 3).toUpperCase() || 'SLA');
 

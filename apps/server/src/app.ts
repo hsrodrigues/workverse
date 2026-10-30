@@ -287,6 +287,7 @@ export async function createApp(opts: AppOptions): Promise<{ app: FastifyInstanc
     const t0 = performance.now();
     world.tick();
     m.tick(performance.now() - t0);
+    world.noc.recordTick(performance.now() - t0);
   }, opts.tickMs ?? 100);
   timer.unref();
   const sweeper = setInterval(() => opts.store.deleteExpiredSessions(clock()), 60 * 60_000);

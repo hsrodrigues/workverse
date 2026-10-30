@@ -87,7 +87,7 @@ function wallBusy(room: BuiltRoom): { n: Set<number>; w: Set<number> } {
   const n = new Set<number>();
   const w = new Set<number>();
   for (const f of room.def.furniture) {
-    const tall = f.kind === 'bookshelf' || f.kind === 'rack' || f.kind === 'fridge' || f.kind === 'snack_machine' || f.kind === 'soda_machine' || f.kind === 'server_rack' || f.kind === 'ac_floor';
+    const tall = f.kind === 'bookshelf' || f.kind === 'tall_shelf' || f.kind === 'rack' || f.kind === 'fridge' || f.kind === 'snack_machine' || f.kind === 'soda_machine' || f.kind === 'server_rack' || f.kind === 'ac_floor';
     const hangs = !!FURNI_KINDS[f.kind].wall;
     if (!hangs && !tall) continue;
     const north = hangs ? f.dir % 2 === 0 : furniFront(f) === 1;
@@ -100,7 +100,7 @@ function wallBusy(room: BuiltRoom): { n: Set<number>; w: Set<number> } {
 }
 
 /** Pecas penduradas que chegam ate a faixa alta da parede (split, TV, telao, relogio...): faixas e bandeirolas nao passam por cima. */
-const HIGH_WALL = new Set(['ac_split', 'tv', 'videowall', 'screen', 'router', 'cable_tray', 'logo', 'arch_board', 'clock', 'whiteboard']);
+const HIGH_WALL = new Set(['ac_split', 'tv', 'videowall', 'screen', 'router', 'cable_tray', 'logo', 'arch_board', 'clock', 'whiteboard', 'notice_board', 'on_air', 'acoustic_panel']);
 function highWall(room: BuiltRoom): { n: Set<number>; w: Set<number> } {
   const n = new Set<number>();
   const w = new Set<number>();

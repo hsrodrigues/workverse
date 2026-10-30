@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { FURNI_KINDS, ROOM_DEFS, buildRoom, findPath, idx, interactiveAt, isWalkable } from '../src';
 
 describe('interruptor de luz', () => {
-  it('toda sala tem exatamente um interruptor, numa parede, usavel e sem bloquear', () => {
-    for (const def of ROOM_DEFS) {
+  it('o terraco (area aberta) nao tem interruptor: so luzinhas', () => {
+    for (const def of ROOM_DEFS.filter((d) => d.type === 'terrace')) expect(def.furniture.some((f) => f.kind === 'light_switch'), def.id).toBe(false);
+  });
+
+  it('toda sala (fora o terraco) tem exatamente um interruptor, numa parede, usavel e sem bloquear', () => {
+    for (const def of ROOM_DEFS.filter((d) => d.type !== 'terrace')) {
       const switches = def.furniture.filter((f) => f.kind === 'light_switch');
       expect(switches, def.id).toHaveLength(1);
       const sw = switches[0];
@@ -14,7 +18,7 @@ describe('interruptor de luz', () => {
   });
 
   it('o interruptor fica alcancavel a pe e nao esconde porta nem outro movel de parede', () => {
-    for (const def of ROOM_DEFS) {
+    for (const def of ROOM_DEFS.filter((d) => d.type !== 'terrace')) {
       const room = buildRoom(def);
       const sw = def.furniture.find((f) => f.kind === 'light_switch')!;
       expect(interactiveAt(room, sw.x, sw.y)?.id, def.id).toBe(sw.id);

@@ -2,6 +2,8 @@ import { useSyncExternalStore } from 'react';
 import { DEFAULT_TEAM, presentationOf, type ClimateView, type ClimateSet, type InventoryAction, type InventoryResult, type DirResult, type ProfileTag, type AvatarConfig, type Deck, type OnlineEntry, type PresenceStatus, type RoomAdminEntry, type RoomDef, type ServerMessage, type SlideState, type StaffLevel, type StaffLogEntry, type StaffSelf, type StageView } from '@workverse/shared';
 import { net } from './net';
 import { netsimStore } from './ui/netsim/netsimStore';
+import { nocStore } from './ui/noc/nocStore';
+import { nocLive } from './game/nocLive';
 
 export interface RosterEntry extends ProfileTag {
   id: string;
@@ -197,6 +199,7 @@ function receiveDm(peer: string, self: boolean, text: string, at: number) {
 }
 
 net.on((msg: ServerMessage) => {
+  nocLive.observe(msg);
   switch (msg.t) {
     case 'session':
       set({ youId: msg.id, myStatus: msg.status ?? 'available', team: msg.team ?? DEFAULT_TEAM, staff: msg.staff ?? null });
@@ -279,6 +282,10 @@ net.on((msg: ServerMessage) => {
     case 'netsim_challenge_result':
       netsimStore.onMessage(msg);
       break;
+    case 'noc_open':
+    case 'noc_result':
+      nocStore.onMessage(msg);
+      break;
     case 'inventory_open':
       set({ inventory: { ...state.inventory, open: true, busy: true, notice: null } });
       net.send({ t: 'inventory_query' });
@@ -329,6 +336,7 @@ net.on((msg: ServerMessage) => {
     case 'error':
       if (state.dir.busy && (msg.code === 'rate_limited' || msg.code === 'forbidden')) set({ dir: { ...state.dir, busy: false, notice: msg.message } });
       if (state.inventory.open && (msg.code === 'rate_limited' || msg.code === 'it_only' || msg.code === 'forbidden')) set({ inventory: { ...state.inventory, busy: false, pending: {}, notice: msg.message } });
+      if (nocStore.get().open && (msg.code === 'rate_limited' || msg.code === 'it_only' || msg.code === 'forbidden')) nocStore.onError(msg.message);
       if (msg.code === 'it_only') addLine('system', '', msg.message);
       if (['rate_limited', 'room_full', 'room_locked', 'room_denied', 'forbidden', 'muted', 'unmuted', 'kicked_room', 'off_duty'].includes(msg.code)) addLine('system', '', msg.message);
       if (msg.code === 'dm_offline' || msg.code === 'dm_self') set({ socialNotice: msg.message });

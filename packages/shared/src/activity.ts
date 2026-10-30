@@ -31,7 +31,16 @@ export const FURNI_HOLDS: Partial<Record<FurniKind, HeldItem>> = {
   snack_machine: 'snack',
   soda_machine: 'soda',
   microwave: 'meal',
+  buffet: 'meal',
 };
+
+/** Frase propria de alguns aparelhos (no lugar da frase do item): o self-service do refeitorio nao esquenta marmita. */
+export const FURNI_CHAT: Partial<Record<FurniKind, string>> = { buffet: 'se serviu no self-service.' };
+
+/** Jogos da Sala de Jogos: usar a peca mostra o balao com esta frase e anima a peca por alguns segundos (sem item na mao). */
+export const FURNI_PLAY: Partial<Record<FurniKind, string>> = { foosball: '⚽ GOOOL! Partida de pebolim!', pingpong: '🏓 Ping... pong... ping... pong!', arcade: '🕹 INSERT COIN... fase 1!' };
+/** Quanto tempo a peca de jogo fica animada depois de usada. */
+export const PLAY_MS = 4000;
 
 /** Aparelhos que demoram a entregar: a luz fica acesa (estado `furni`) por este tempo e só então o item vai para a mão. */
 export const FURNI_DELAY_MS: Partial<Record<FurniKind, number>> = { microwave: 3000 };

@@ -24,6 +24,16 @@ const SHORT: Record<string, string> = {
   private: 'PRIVADA',
   focus: 'CONCENTRAÇÃO',
   ti: 'TI',
+  hall2: 'HALL 2',
+  training: 'TREINO',
+  rh: 'RH',
+  board: 'DIRETORIA',
+  lab: 'LAB',
+  cafeteria: 'REFEITÓRIO',
+  games: 'JOGOS',
+  terrace: 'TERRAÇO',
+  library: 'BIBLIOTECA',
+  studio: 'ESTÚDIO',
 };
 
 export const doorLabel = (p: Pick<Portal, 'toRoom' | 'label'>): string => SHORT[p.toRoom] ?? p.label.toUpperCase().slice(0, 14);

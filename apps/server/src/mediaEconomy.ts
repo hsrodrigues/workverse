@@ -7,6 +7,7 @@ import {
   monthKey,
   quotaLevel,
   quotaPercent,
+  SILENT_ROOM_IDS,
   staffCan,
   type MediaActive,
   type MediaPolicy,
@@ -92,6 +93,8 @@ type StageLookup = Pick<StageManager, 'hasPresentation' | 'rightsOf'>;
  */
 export function publishRights(roomId: string, player: Player, kind: MediaKind = 'room', stage?: StageLookup): PublishRights {
   if (stage?.hasPresentation(roomId)) return stage.rightsOf(roomId, player);
+  // sala silenciosa (Biblioteca): ninguem publica audio nem video; a regra vale para todos, inclusive quem administra
+  if (SILENT_ROOM_IDS.includes(roomId)) return 'none';
   return kind === 'stage' ? 'none' : 'all';
 }
 

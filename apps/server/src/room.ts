@@ -1,10 +1,13 @@
 import {
   FURNI_KINDS,
   FURNI_DELAY_MS,
+  FURNI_CHAT,
   FURNI_HOLDS,
+  FURNI_PLAY,
   type HeldItem,
   WORKSTATION_KINDS,
   HELD_CHAT,
+  PLAY_MS,
   HOLD_MS,
   heldOf,
   isAcUnit,
@@ -116,6 +119,8 @@ export class Player {
   readonly dirBucket: TokenBucket;
   /** Inventario de PCs da TI (consultas e acoes). */
   readonly invBucket: TokenBucket;
+  /** Consultas do painel NOC (a tela pergunta a cada 5 s). */
+  readonly nocBucket: TokenBucket;
 
   constructor(
     readonly id: string,
@@ -134,6 +139,7 @@ export class Player {
     this.adminBucket = new TokenBucket(12, 3, now);
     this.dirBucket = new TokenBucket(6, 1, now);
     this.invBucket = new TokenBucket(6, 1, now);
+    this.nocBucket = new TokenBucket(8, 0.5, now);
   }
 }
 
@@ -576,7 +582,7 @@ export class RoomInstance {
     } else if (isAcUnit(f.kind) || f.kind === 'thermostat') {
       // the remote control opens on the client of whoever used the unit (changes come back as `climate_set`)
       p.send({ t: 'climate_open' });
-    } else if (f.kind === 'server_rack' || f.kind === 'noc_console') {
+    } else if (f.kind === 'server_rack' || f.kind === 'noc_console' || f.kind === 'command_desk') {
       this.hooks.onTerminal?.(p, f.id);
     } else if (f.kind === 'podium' || f.kind === 'tv_stand') {
       // the podium takes the stage, the TV on its stand takes the presentation of the room (see StageManager)
@@ -594,7 +600,13 @@ export class RoomInstance {
         return;
       }
       this.setActivity(p, `holding:${item}`);
-      this.broadcast({ t: 'chat', id: null, name: '', text: `${p.name} ${HELD_CHAT[item]}`, kind: 'system' });
+      this.broadcast({ t: 'chat', id: null, name: '', text: `${p.name} ${FURNI_CHAT[f.kind] ?? HELD_CHAT[item]}`, kind: 'system' });
+    } else if (FURNI_PLAY[f.kind]) {
+      // jogo: balao sobre a cabeca e a peca anima por PLAY_MS (uma partida por vez em cada peca)
+      if ((this.heatUntil.get(f.id) ?? 0) > this.lastNow) return;
+      this.heatUntil.set(f.id, this.lastNow + PLAY_MS);
+      this.setFurni(f.id, true);
+      this.broadcast({ t: 'chat', id: p.id, name: p.name, text: FURNI_PLAY[f.kind]!, kind: 'say' });
     }
   }
 

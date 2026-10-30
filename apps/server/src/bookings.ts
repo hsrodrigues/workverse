@@ -669,6 +669,11 @@ export class BookingService {
     if (this.throttled(p, msg.rid, now)) return true;
     const orgId = p.orgId;
     if (NEVER_BOOKABLE_ROOM_IDS.includes(msg.roomId) || !this.host.org(orgId).rooms.has(msg.roomId)) return this.fail(p, msg.rid, 'room', 'Essa sala não pode ser reservada.'), true;
+    // salas de equipe ou convite (a Diretoria) nunca viram reservaveis: reservar daria acesso de participante e ignoraria a regra de acesso
+    if (msg.bookable) {
+      const access = roomAccessOf(this.host.org(orgId).rooms.get(msg.roomId)!.built.def);
+      if (access !== 'org' && access !== 'private') return this.fail(p, msg.rid, 'room', 'Salas restritas a uma equipe ou a convidados não podem ser reservadas.'), true;
+    }
     this.store.putRoom({ orgId, roomId: msg.roomId, bookable: msg.bookable, requiresApproval: msg.requiresApproval, updatedBy: p.accountId, updatedAt: now });
     if (!msg.bookable) {
       for (const b of this.store.liveOfRoom(orgId, msg.roomId)) {

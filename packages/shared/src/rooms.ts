@@ -1,5 +1,6 @@
 import { furniDirToDir8, type Dir8, type Point } from './geometry';
 import { idx, type Grid } from './pathfinding';
+import { buildExtraRooms } from './roomsExtra';
 
 /**
  * Furniture catalog. Behaviour lives here as data so new objects can be added
@@ -57,7 +58,25 @@ export type FurniKind =
   | 'ac_split'
   | 'ac_floor'
   | 'thermostat'
-  | 'noc_console';
+  | 'noc_console'
+  | 'notice_board'
+  | 'board_table'
+  | 'sideboard'
+  | 'printer3d'
+  | 'bench'
+  | 'long_table'
+  | 'buffet'
+  | 'foosball'
+  | 'pingpong'
+  | 'arcade'
+  | 'railing'
+  | 'parasol'
+  | 'garden_bed'
+  | 'tall_shelf'
+  | 'podcast_table'
+  | 'acoustic_panel'
+  | 'on_air'
+  | 'camera_tripod';
 
 export interface FurniKindDef {
   label: string;
@@ -109,7 +128,7 @@ export const FURNI_KINDS: Record<FurniKind, FurniKindDef> = {
   /** Sala da TI: rack de servidor alto, com portas de vidro e LEDs que piscam (vale por 1 tile; fileiras formam o corredor de racks). */
   server_rack: { label: 'Rack de servidor', w: 1, d: 1, blocks: true, seat: false, usable: true },
   /** Segmento da mesa de comando (3 tiles) com monitores; três peças em U formam a ferradura. A frente (monitores virados para quem senta) segue `furniFront`. */
-  command_desk: { label: 'Mesa de comando', w: 3, d: 1, blocks: true, seat: false, usable: false },
+  command_desk: { label: 'Mesa de comando', w: 3, d: 1, blocks: true, seat: false, usable: true },
   ergo_chair: { label: 'Poltrona ergonômica', w: 1, d: 1, blocks: true, seat: true, usable: false },
   /** Videowall: grade de telas grandes na parede (5 tiles). */
   videowall: { label: 'Videowall', w: 5, d: 1, blocks: false, seat: false, usable: false, wall: true },
@@ -133,6 +152,42 @@ export const FURNI_KINDS: Record<FurniKind, FurniKindDef> = {
   thermostat: { label: 'Termostato', w: 1, d: 1, blocks: false, seat: false, usable: true, wall: true },
   /** Console de monitoramento (NOC) da Sala da TI: abre o inventario de PCs conectados (so equipe de TI). */
   noc_console: { label: 'Console de monitoramento', w: 2, d: 1, blocks: true, seat: false, usable: true },
+  /** Quadro de avisos de cortiça, com papéis fixados (RH, corredores). */
+  notice_board: { label: 'Quadro de avisos', w: 2, d: 1, blocks: false, seat: false, usable: false, wall: true },
+  /** Mesa de reunião longa de madeira escura da Diretoria (5x2): cadeiras ergonômicas em volta. */
+  board_table: { label: 'Mesa de diretoria', w: 5, d: 2, blocks: true, seat: false, usable: false },
+  /** Aparador de madeira escura com bebidas (garrafas, taças e balde de gelo); encosta na parede como as bancadas. */
+  sideboard: { label: 'Aparador com bebidas', w: 3, d: 1, blocks: true, seat: false, usable: false },
+  /** Impressora 3D com cabine de vidro, fio laranja e uma peca sendo impressa (Laboratório). */
+  printer3d: { label: 'Impressora 3D', w: 1, d: 1, blocks: true, seat: false, usable: false },
+  /** Banco de madeira sem encosto do refeitorio: um tile cada, em fila ao lado da mesa comprida; senta de frente para ela. */
+  bench: { label: 'Banco de refeitório', w: 1, d: 1, blocks: true, seat: true, usable: false },
+  /** Mesa comprida do refeitorio (2x1): duas ou mais lado a lado formam a mesa de almoco. */
+  long_table: { label: 'Mesa comprida', w: 2, d: 1, blocks: true, seat: false, usable: false },
+  /** Balcao de self-service com cuba aquecida e protetor de vidro: quem usa se serve (pega uma refeicao). */
+  buffet: { label: 'Balcão de self-service', w: 3, d: 1, blocks: true, seat: false, usable: true },
+  /** Mesa de pebolim (2x1): quem usa joga uma partida (balao e bolinha animada por alguns segundos). */
+  foosball: { label: 'Mesa de pebolim', w: 2, d: 1, blocks: true, seat: false, usable: true },
+  /** Mesa de ping-pong (3x2) com rede: quem usa joga uma partida. */
+  pingpong: { label: 'Mesa de ping-pong', w: 3, d: 2, blocks: true, seat: false, usable: true },
+  /** Fliperama (cabine de arcade, 1x1) que encosta na parede: quem usa joga uma partida. */
+  arcade: { label: 'Fliperama', w: 1, d: 1, blocks: true, seat: false, usable: true },
+  /** Guarda-corpo de vidro e metal de um tile (terraco): `dir` 0 corre ao longo de x na borda sul, 1 ao longo de y na borda leste, 2 e 3 nas bordas norte e oeste. */
+  railing: { label: 'Guarda-corpo', w: 1, d: 1, blocks: true, seat: false, usable: false },
+  /** Mesa externa com guarda-sol listrado (terraco). */
+  parasol: { label: 'Mesa com guarda-sol', w: 1, d: 1, blocks: true, seat: false, usable: false },
+  /** Mini-jardim: canteiro de madeira com grama, flores e pedras (3x1). */
+  garden_bed: { label: 'Mini-jardim', w: 3, d: 1, blocks: true, seat: false, usable: false },
+  /** Estante alta de biblioteca (2x1, quase ate o teto) cheia de livros; encosta na parede. */
+  tall_shelf: { label: 'Estante alta', w: 2, d: 1, blocks: true, seat: false, usable: false },
+  /** Mesa redonda de podcast (2x2) com quatro microfones em braco articulado e fones. */
+  podcast_table: { label: 'Mesa de podcast', w: 2, d: 2, blocks: true, seat: false, usable: false },
+  /** Painel acustico de espuma (2x1) na parede. */
+  acoustic_panel: { label: 'Painel acústico', w: 2, d: 1, blocks: false, seat: false, usable: false, wall: true },
+  /** Luz de "NO AR" (2x1) na parede: acende enquanto alguem da sala esta com o microfone ligado. */
+  on_air: { label: 'Luz de NO AR', w: 2, d: 1, blocks: false, seat: false, usable: false, wall: true },
+  /** Camera de video em tripe (1x1): decoracao do estudio, virada para a mesa. */
+  camera_tripod: { label: 'Câmera em tripé', w: 1, d: 1, blocks: true, seat: false, usable: false },
   auditorium_seat: { label: 'Poltrona', w: 1, d: 1, blocks: true, seat: true, usable: false },
   /** Raised platform, drawn flat: avatars walk on it. */
   stage: { label: 'Palco', w: 8, d: 3, blocks: false, seat: false, usable: false },
@@ -152,7 +207,26 @@ export const FURNI_KINDS: Record<FurniKind, FurniKindDef> = {
 };
 
 /** What a room is for. The server uses it for the default access policy and the furniture allow-list (furnish.ts). */
-export type RoomType = 'reception' | 'team' | 'meeting' | 'private' | 'focus' | 'lounge' | 'auditorium' | 'office' | 'it';
+export type RoomType =
+  | 'reception'
+  | 'team'
+  | 'meeting'
+  | 'private'
+  | 'focus'
+  | 'lounge'
+  | 'auditorium'
+  | 'office'
+  | 'it'
+  | 'hall'
+  | 'training'
+  | 'hr'
+  | 'board'
+  | 'lab'
+  | 'cafeteria'
+  | 'games'
+  | 'terrace'
+  | 'library'
+  | 'studio';
 /**
  * Who may enter (enforced by the server, see docs/rooms.md):
  *  - `org`: every active member of the organization (guests still need `guestAllowed`);
@@ -309,7 +383,7 @@ export function furniFront(f: Furniture): 0 | 1 | 2 | 3 {
 }
 
 /** Pieces that belong against the north or west wall with their front toward the room (see furniFront). */
-export const WALL_BACKED_KINDS: readonly FurniKind[] = ['bookshelf', 'fridge', 'cooler', 'coffee', 'printer', 'rack', 'counter', 'espresso', 'hardware_bench', 'snack_machine', 'soda_machine', 'microwave', 'ac_floor'];
+export const WALL_BACKED_KINDS: readonly FurniKind[] = ['bookshelf', 'fridge', 'cooler', 'coffee', 'printer', 'rack', 'counter', 'espresso', 'hardware_bench', 'snack_machine', 'soda_machine', 'microwave', 'ac_floor', 'sideboard', 'buffet', 'arcade', 'tall_shelf'];
 
 const rect = (w: number, h: number) => Array.from({ length: h }, () => '.'.repeat(w));
 
@@ -571,6 +645,7 @@ const RECEPTION: RoomDef = {
     { x: 0, y: 3, toRoom: 'auditorium', toX: 1, toY: 4, label: 'Auditório' },
     { x: 0, y: 7, toRoom: 'focus', toX: 1, toY: 4, label: 'Espaço de Concentração' },
     { x: 0, y: 5, toRoom: 'ti', toX: 1, toY: 5, label: 'Sala da TI' },
+    { x: 0, y: 1, toRoom: 'hall2', toX: 1, toY: 2, label: 'Corredor / Hall 2' },
   ],
   furniture: [
     { id: fid('rug'), kind: 'rug', x: 9, y: 6, dir: 0 },
@@ -614,8 +689,8 @@ const RECEPTION: RoomDef = {
     { id: fid('plant'), kind: 'plant', x: 0, y: 0, dir: 0 },
     // Water cooler on the north wall, in the corner next to the last door
     { id: fid('cooler'), kind: 'cooler', x: 21, y: 0, dir: 1 },
-    // Máquina de lanches no canto noroeste do hall
-    { id: fid('vend'), kind: 'snack_machine', x: 0, y: 1, dir: 0 },
+    // Máquina de lanches na parede oeste, logo abaixo da porta do Corredor / Hall 2
+    { id: fid('vend'), kind: 'snack_machine', x: 0, y: 2, dir: 0 },
     // Wall: logo above the desk, TV, clock and frames
     { id: fid('frame'), kind: 'frame', x: 7, y: 0, dir: 0 },
     { id: fid('ac'), kind: 'ac_split', x: 8, y: 0, dir: 0 },
@@ -823,7 +898,7 @@ const TI: RoomDef = {
   portals: [{ x: 0, y: 5, toRoom: 'reception', toX: 1, toY: 5, label: 'Recepção Central' }],
   furniture: [
     // Command desk: three segments in a horseshoe open to the south, ergonomic chairs inside facing the videowall
-    { id: fid('cmd'), kind: 'command_desk', x: 5, y: 4, dir: 0 },
+    { id: 'ti-noc-desk', kind: 'command_desk', x: 5, y: 4, dir: 0 }, // estacao de frente ao videowall: grafico vivo (dados reais do NOC)
     { id: fid('cmd'), kind: 'command_desk', x: 4, y: 4, dir: 1 },
     { id: fid('cmd'), kind: 'command_desk', x: 8, y: 4, dir: 3 },
     { id: fid('ergo'), kind: 'ergo_chair', x: 5, y: 5, dir: 3 },
@@ -856,8 +931,6 @@ const TI: RoomDef = {
     { id: fid('plant'), kind: 'plant', x: 0, y: 0, dir: 0 },
     { id: fid('plant'), kind: 'plant', x: 13, y: 11, dir: 0 },
     { id: fid('plant'), kind: 'plant', x: 0, y: 11, dir: 0 },
-    { id: fid('lamp'), kind: 'lamp', x: 3, y: 3, dir: 0 },
-    { id: fid('lamp'), kind: 'lamp', x: 10, y: 5, dir: 0 },
     { id: fid('bin'), kind: 'bin', x: 9, y: 11, dir: 0 },
     // Walls: videowall above the command desk, architecture board and clock
     { id: fid('wall'), kind: 'videowall', x: 4, y: 0, dir: 0 },
@@ -878,7 +951,8 @@ const TI: RoomDef = {
  * cujo vizinho do piso seja andavel. Assim o interruptor existe em toda sala sem editar cada layout a mao.
  */
 function withLightSwitch(def: RoomDef): RoomDef {
-  if (def.furniture.some((f) => f.kind === 'light_switch')) return def;
+  // o terraco e area aberta (sem teto): nao ha luz de teto para apagar, so o varal de luzinhas
+  if (def.type === 'terrace' || def.furniture.some((f) => f.kind === 'light_switch')) return def;
   const taken = new Set<string>();
   const solid = new Set<string>();
   for (const f of def.furniture) {
@@ -907,7 +981,13 @@ function withLightSwitch(def: RoomDef): RoomDef {
   return def;
 }
 
-export const ROOM_DEFS: RoomDef[] = [OFFICE, LOUNGE, AUDITORIUM, RECEPTION, TEAM, MEETING1, MEETING2, PRIVATE, FOCUS, TI].map(withLightSwitch);
+/** Salas silenciosas (Biblioteca): o servidor nao concede microfone, camera nem tela a ninguem aqui (ver publishRights). */
+export const SILENT_ROOM_IDS: readonly string[] = ['library'];
+
+/** Corredor / Hall 2 e as nove salas que saem dele (ver roomsExtra.ts). */
+const EXTRA = buildExtraRooms({ rect });
+
+export const ROOM_DEFS: RoomDef[] = [OFFICE, LOUNGE, AUDITORIUM, RECEPTION, TEAM, MEETING1, MEETING2, PRIVATE, FOCUS, TI, EXTRA.hall2, ...EXTRA.rooms].map(withLightSwitch);
 /**
  * First room of a new account. It stays the office on purpose: existing accounts and the store tests already
  * persist 'office' as `lastRoom`. Switching new accounts to the reception means changing only this constant.

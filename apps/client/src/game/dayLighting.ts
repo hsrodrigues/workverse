@@ -107,6 +107,38 @@ function fixtureCanvas(): HTMLCanvasElement {
   return canvas;
 }
 
+/**
+ * Calha linear de LED (Sala da TI): barra fina e escura suspensa por dois tirantes, com o nucleo de luz fria no meio.
+ * `n` tiles de comprimento ao longo do eixo x (cresce para a direita/baixo) ou y (cresce para a esquerda/baixo).
+ */
+function fixtureBarCanvas(n: number, axis: 'x' | 'y'): HTMLCanvasElement {
+  const L = 32 * n;
+  const W = L + 8;
+  const H = 16 * n + 44;
+  const { canvas, ctx } = createCanvas(W, H);
+  const px = (x: number, y: number, w: number, h: number, c: string) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(x, y, w, h);
+  };
+  const yAt = (k: number) => 22 + Math.floor(axis === 'x' ? k / 2 : (L - 1 - k) / 2);
+  // tirantes de aco ate o teto (somem para cima do quadro)
+  for (const k of [Math.floor(L * 0.18), Math.floor(L * 0.82)]) {
+    px(4 + k, 0, 1, yAt(k), '#2b3350');
+    px(3 + k, 0, 3, 2, '#3a4468');
+  }
+  for (let k = 0; k < L; k++) {
+    const y = yAt(k);
+    const end = k < 2 || k > L - 3;
+    px(4 + k, y, 1, 1, '#4a5578'); // topo (aresta clara)
+    px(4 + k, y + 1, 1, 2, end ? '#232b45' : '#141b2e'); // corpo
+    px(4 + k, y + 3, 1, 1, end ? '#35d8ff' : '#f2fdff'); // nucleo de luz
+    px(4 + k, y + 4, 1, 1, end ? '#1f7f9f' : '#7fe6ff'); // difusor
+    px(4 + k, y + 5, 1, 1, end ? '#0c1220' : '#35d8ff'); // halo
+    px(4 + k, y + 6, 1, 1, '#0a0f1c'); // base
+  }
+  return canvas;
+}
+
 // ---------------------------------------------------------------------------
 // Dithered additive glows
 
@@ -131,9 +163,11 @@ function glowCanvas(w: number, h: number, color: RGB, power = 1.7, banded = fals
   return canvas;
 }
 
-type GlowKind = 'ceilPool' | 'ceilPoolL' | 'lampPool' | 'lampHead' | 'screen' | 'tvPool' | 'cyanPool' | 'cyanSpot' | 'spotRed' | 'spotBlue' | 'spotGold';
+type GlowKind = 'techPool' | 'ceilPool' | 'ceilPoolL' | 'lampPool' | 'lampHead' | 'screen' | 'tvPool' | 'cyanPool' | 'cyanSpot' | 'spotRed' | 'spotBlue' | 'spotGold';
 const GLOWS: Record<GlowKind, { w: number; h: number; color: RGB; power?: number; banded?: boolean }> = {
   // luz de teto (luminarias embutidas): ampla, branco-quente, fica ligada tambem de dia
+  // luz de teto fria da Sala da TI: banda limpa, sem pontilhado
+  techPool: { w: 200, h: 100, color: [110, 200, 255], power: 2.1, banded: true },
   ceilPool: { w: 200, h: 100, color: [255, 214, 140], power: 1.9, banded: true },
   ceilPoolL: { w: 250, h: 126, color: [255, 214, 140], power: 1.9, banded: true },
   lampPool: { w: 176, h: 88, color: [255, 190, 100], power: 1.5 },
@@ -168,12 +202,23 @@ const STAGE_SPOTS: ReadonlyArray<readonly [number, number, GlowKind]> = [
   [11.6, 4.55, 'spotRed'],
 ];
 
+/** Calhas de LED da Sala da TI: [centro x, centro y (tiles), eixo, comprimento em tiles]. */
+const TECH_BARS: ReadonlyArray<readonly [number, number, 'x' | 'y', number]> = [
+  [6.5, 2.4, 'x', 4], // diante do videowall
+  [6.5, 6.6, 'x', 4], // sobre a mesa de comando
+  [11, 9, 'y', 2], // mesa de incidentes
+  [15.5, 9.2, 'x', 3], // descanso
+  [1.8, 8.6, 'y', 3], // laboratorio
+];
+
 export class DayLighting {
   private overlay: Phaser.GameObjects.Rectangle | null = null;
   private sky: { layer: SkyLayer; img: Phaser.GameObjects.Image } | null = null;
   private beams: Phaser.GameObjects.Image | null = null;
   private lights: Light[] = [];
   private fixtures: Phaser.GameObjects.Image[] = [];
+  /** Varal de luzinhas do terraco (fio e lampadas desenhados num Graphics). */
+  private strings: Phaser.GameObjects.Graphics | null = null;
   /** Interruptores de luz da sala (estado `true` = apagada) e se as luzes estao apagadas agora. */
   private switches = new Set<string>();
   private lightsOff = false;
@@ -209,6 +254,8 @@ export class DayLighting {
   }
 
   clear() {
+    this.strings?.destroy();
+    this.strings = null;
     this.overlay?.destroy();
     this.sky?.img.destroy();
     this.beams?.destroy();
@@ -300,7 +347,28 @@ export class DayLighting {
     }
     // luz artificial de teto: luminarias espalhadas num reticulado regular (a cada 4 tiles) pela sala toda,
     // penduradas por cabos; tom quente, ligadas o dia todo (mais fortes a noite) e controladas pelo interruptor
-    if (theme.fx !== 'hall') {
+    if (theme.fx === 'tech') {
+      // Sala da TI: calhas lineares de LED frio em fileiras alinhadas com os corredores (em vez das luminarias quadradas)
+      for (const [cx, cy, axis, n] of TECH_BARS) {
+        const c = tileToScreen(cx, cy);
+        const fy = c.y - 100;
+        const sp = furniture.find((f) => f.kind === 'light_switch');
+        if (sp) {
+          const s2 = tileToScreen(sp.x + 0.5, sp.y + 0.5);
+          if (Math.abs(c.x - s2.x) < 40 + 16 * n && Math.abs(fy - (s2.y - 43)) < 30) continue;
+        }
+        const key = `fixture:bar:${axis}:${n}`;
+        if (!this.scene.textures.exists(key)) this.scene.textures.addCanvas(key, fixtureBarCanvas(n, axis));
+        // luz propria: acima da camada de tom da noite (nao escurece), e some junto com o interruptor
+        this.fixtures.push(this.scene.add.image(Math.round(c.x), Math.round(fy), key).setOrigin(0.5, 0.5).setDepth(GLOW_DEPTH).setData('tech', true));
+        // poca de luz no piso por baixo, uma a cada 2 tiles da barra
+        for (let k = 0; k < n; k += 2) {
+          const t = (k + Math.min(2, n - k) / 2 - n / 2) * 1;
+          const p2 = axis === 'x' ? tileToScreen(cx + t, cy) : tileToScreen(cx, cy + t);
+          this.addGlow('techPool', p2.x, p2.y, 0.24, { dayMin: 0.3, room: true });
+        }
+      }
+    } else if (theme.fx !== 'hall' && !theme.open) {
       const g = built.grid;
       const key = 'fixture:ceil';
       if (!this.scene.textures.exists(key)) this.scene.textures.addCanvas(key, fixtureCanvas());
@@ -321,6 +389,7 @@ export class DayLighting {
         }
       }
     }
+    if (theme.open) this.buildStringLights(built);
     if (theme.fx === 'hall') {
       for (const [x, y, kind] of STAGE_SPOTS) {
         const c = tileToScreen(x, y);
@@ -330,6 +399,48 @@ export class DayLighting {
     this.apply(effectiveHour(), true);
     this.nextAt = performance.now() + REFRESH_MS;
     this.modeVersion = dayModeVersion();
+  }
+
+  /**
+   * Varal de luzinhas do terraco: festao ao longo das paredes norte e oeste e dois fios em diagonal presos nas duas paredes.
+   * O fio e as lampadas sao desenhados no mundo; cada lampada ganha um brilho que so aparece quando escurece (luz natural de dia).
+   */
+  private buildStringLights(built: BuiltRoom) {
+    const g = this.scene.add.graphics().setDepth(FIXTURE_DEPTH);
+    this.strings = g;
+    const W = built.grid.width;
+    const H = built.grid.height;
+    const Z = 92;
+    const pt = (x: number, y: number, z: number) => {
+      const c = tileToScreen(x, y);
+      return { x: Math.round(c.x), y: Math.round(c.y - z) };
+    };
+    const bulb = (x: number, y: number, k: number) => {
+      const col = [0xffe08a, 0xff9fb4, 0x9fe0ff, 0xb4f08a][k % 4]!;
+      g.fillStyle(0x2b2f3a, 1).fillRect(x, y, 2, 2);
+      g.fillStyle(col, 1).fillRect(x, y + 2, 2, 3);
+      this.addGlow('lampHead', x + 1, y + 4, 0.55, { dayMin: 0 });
+    };
+    // festoes: um arco por tile ao longo de cada parede, presos nas paredes, com uma lampada no meio de cada arco
+    const swag = (x0: number, y0: number, x1: number, y1: number, n: number, sag: number, z0: number, z1: number) => {
+      g.lineStyle(1, 0x2b2f3a, 1);
+      let prev = pt(x0, y0, z0);
+      let k = 0;
+      for (let i = 1; i <= n * 4; i++) {
+        const t = i / (n * 4);
+        const seg = (t * n) % 1;
+        const hang = Math.sin(seg * Math.PI) * sag;
+        const p = pt(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, z0 + (z1 - z0) * t - hang);
+        g.lineBetween(prev.x, prev.y, p.x, p.y);
+        prev = p;
+        if (i % 4 === 2) bulb(p.x - 1, p.y, k++);
+      }
+    };
+    swag(0.5, 0.05, W - 0.5, 0.05, W - 1, 7, Z, Z);
+    swag(0.05, 0.5, 0.05, H - 0.5, H - 1, 7, Z, Z);
+    // dois fios em diagonal de uma parede a outra
+    swag(Math.min(7.5, W - 1), 0.05, 0.05, Math.min(7.5, H - 1), 8, 8, Z + 2, Z + 2);
+    swag(Math.min(13.5, W - 1), 0.05, 0.05, Math.min(9.5, H - 1), 12, 8, Z + 4, Z + 4);
   }
 
   setOn(id: string, on: boolean) {
@@ -353,7 +464,7 @@ export class DayLighting {
   private syncLights(level: number) {
     // luminarias apagadas ficam acinzentadas
     for (const f of this.fixtures) {
-      if (this.lightsOff) f.setTint(0x777c88);
+      if (this.lightsOff) f.setTint(f.getData('tech') ? 0x30384e : 0x777c88);
       else f.clearTint();
     }
     for (const l of this.lights) {

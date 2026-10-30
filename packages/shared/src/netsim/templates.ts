@@ -134,7 +134,7 @@ export function defaultTopology(stations: readonly InvStation[]): DefaultTopo {
   const usedNames = new Set(['internet', 'r-borda', 'sw-core']);
   let omitted = 0;
   let ri = 0;
-  const maxRooms = 12;
+  const maxRooms = 16;
   for (const [roomId, list] of rooms) {
     if (ri >= maxRooms) {
       omitted += list.length;

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { MAX_CHAT_LENGTH, ROOM_DEFS, STATUS_LABELS, badgeTextColor, deptShort, safeDeptColor, tempDigits } from '@workverse/shared';
 import { InventoryPanel } from './inventory/InventoryPanel';
+import { NocPanel } from './noc/NocPanel';
 import { NetsimPanel } from './netsim/NetsimPanel';
 import { RemoteControl } from './climate/RemoteControl';
 import './climate.css';
@@ -336,6 +337,7 @@ export function Hud({ onEditAvatar, onChangePassword, onLeave, onWalkNear, onRec
       <ZoomControls />
       <InventoryPanel />
       <NetsimPanel />
+      <NocPanel />
       <RemoteControl />
       <StaffPanel />
       <AnnounceBanner />

@@ -30,6 +30,9 @@ import {
   MAX_HOST_ID_LENGTH,
   isInventoryAction,
   parseClimateSet,
+  parseNocQuery,
+  nocStation,
+  isAcUnit,
 } from '@workverse/shared';
 import { isAvatarClientMessage, type AvatarClientMessage } from '@workverse/shared';
 import { DEV_UNLOCK_ALL, handleWardrobeMessage, parseUnlockKey, setUnlock } from './wardrobe';
@@ -43,6 +46,7 @@ import { buildInventory, runInventoryAction, type InventoryContext } from './inv
 import { RoomAdmin, isRoomAdminMessage } from './roomAdmin';
 import { BookingService, isBookingMessage } from './bookings';
 import { NetsimService, stationsOf } from './netsim';
+import { NocCollector, type NocSampleOrg, type NocSampleRoom } from './noc';
 import { isNetsimMessageType } from '@workverse/shared';
 import { OrgService } from './org';
 import { OrgWorld } from './orgWorld';
@@ -92,6 +96,8 @@ export interface WorldOptions {
   mediaEconomy?: Partial<EconomyConfig>;
   /** Onde o contador mensal de minutos de participante e guardado (padrao: so em memoria). */
   mediaUsageStore?: UsageStore;
+  /** Intervalo de amostragem do painel NOC em ms (padrao 30 s; env NOC_SAMPLE_MS acelera nos testes). */
+  nocSampleMs?: number;
 }
 
 const MAX_STRIKES = 20;
@@ -134,6 +140,8 @@ export class World {
   readonly bookings: BookingService;
   /** Simulador de rede da Sala da TI (ver netsim.ts e docs/netsim.md). */
   readonly netsim: NetsimService;
+  /** Metricas do painel NOC da Sala da TI (ver noc.ts e docs/noc.md). */
+  readonly noc: NocCollector;
   private readonly removeMedia?: WorldOptions['removeMediaParticipant'];
   /** Byte, o pet do escritorio (nao e jogador; ver pet.ts). */
   readonly pets: PetManager;
@@ -186,6 +194,20 @@ export class World {
       stations: (orgId) => stationsOf(this.org(orgId).rooms),
       canEnter: (p, roomId) => this.canEnter(p, roomId).allow,
     });
+    this.noc = new NocCollector(
+      {
+        clock: this.clock,
+        sample: () => this.nocSample(),
+        media: () => {
+          if (!this.media.economy) return null;
+          const u = this.media.usage();
+          const connections = new Map<string, number>();
+          for (const r of u.rooms) connections.set(r.orgId, (connections.get(r.orgId) ?? 0) + r.connected);
+          return { usedMinutes: u.usedMinutes, limitMinutes: u.limitMinutes, percent: u.percent, level: u.level, connections };
+        },
+      },
+      { sampleMs: opts.nocSampleMs ?? (Number(process.env.NOC_SAMPLE_MS) || undefined) },
+    );
     this.bookings = new BookingService({
       store: opts.store,
       orgService: this.orgService,
@@ -512,6 +534,7 @@ export class World {
     this.roomAdmin.sweep(now);
     this.bookings.tick(now);
     this.media.sweepIfDue(now);
+    this.noc.tick(now);
     // virada do dia / evento forcado: todos veem a mesma decoracao
     if (this.events.changed(now)) this.broadcastEvents();
   }
@@ -727,13 +750,53 @@ export class World {
   }
 
   /** Rack ou console usado na Sala da TI: quem e da TI abre o painel; os demais ouvem uma recusa simpatica. */
-  private terminal(player: Player, _furniId: string) {
+  private terminal(player: Player, furniId: string) {
+    const def = this.roomOf(player)?.built.def;
+    const piece = def?.furniture.find((f) => f.id === furniId);
+    if (piece?.kind === 'command_desk') {
+      // so a estacao de frente ao videowall da Sala da TI abre o painel NOC; as outras mesas de comando nao fazem nada
+      if (def?.id !== 'ti' || nocStation(def.furniture)?.id !== furniId) return;
+      if (this.isIT(player)) player.send({ t: 'noc_open' });
+      else player.send({ t: 'chat', id: null, name: '', text: IT_ONLY_MESSAGE, kind: 'system' });
+      return;
+    }
     if (this.isIT(player)) player.send({ t: 'inventory_open' });
     else {
       player.send({ t: 'chat', id: null, name: '', text: IT_ONLY_MESSAGE, kind: 'system' });
       // membros (nao visitantes) ainda podem ver o simulador de rede em modo leitura
       if (player.role !== 'guest') player.send({ t: 'netsim_open' });
     }
+  }
+
+  /** Estado atual das organizacoes para o coletor do NOC: pessoas e clima por sala (so contagens). */
+  private nocSample(): NocSampleOrg[] {
+    const out: NocSampleOrg[] = [];
+    for (const [orgId, org] of this.orgWorlds) {
+      const rooms: NocSampleRoom[] = [];
+      for (const [id, room] of org.rooms) {
+        let count = 0;
+        for (const p of room.players.values()) if (!p.invisible) count++;
+        const def = room.built.def;
+        const row: NocSampleRoom = { id, name: def.name, count, capacity: def.maxPlayers, ...(id === 'ti' ? { it: true } : {}) };
+        if (def.furniture.some((f) => isAcUnit(f.kind))) {
+          const c = room.climate;
+          row.climate = { temp: Math.round(c.temp * 10) / 10, target: c.target, on: c.on, overheat: c.overheat };
+        }
+        rooms.push(row);
+      }
+      out.push({ orgId, rooms });
+    }
+    return out;
+  }
+
+  /** `noc_query`: so a equipe de TI da organizacao, donos/admins e staff em servico; cada um ve so a propria organizacao. */
+  private nocQuery(conn: Connection, player: Player, msg: ClientMessage, now: number) {
+    const window = parseNocQuery(msg);
+    if (window === null) return this.strike(conn);
+    if (!player.nocBucket.take(now)) return conn.send({ t: 'error', code: 'rate_limited', message: 'Calma! Muitas consultas seguidas ao monitoramento.' });
+    if (!this.isIT(player)) return conn.send({ t: 'error', code: 'it_only', message: IT_ONLY_MESSAGE });
+    const full = (player.staff != null && player.onDuty) || player.role === 'owner' || player.role === 'admin';
+    conn.send({ t: 'noc_result', ...this.noc.view(player.orgId, window, { full, canSee: (roomId) => this.canEnter(player, roomId).allow }, now) });
   }
 
   private inventoryQuery(conn: Connection, player: Player, now: number) {
@@ -805,6 +868,7 @@ export class World {
       return this.strike(conn);
     }
     const msg = data as ClientMessage;
+    this.noc.countMessage();
     if (msg.t === 'ping') {
       if (typeof msg.ts === 'number') conn.send({ t: 'pong', ts: msg.ts });
       return;
@@ -866,6 +930,8 @@ export class World {
         else if (res === 'busy') conn.send({ t: 'error', code: 'rate_limited', message: 'Calma! Espere um instante para mexer no ar de novo.' });
         return;
       }
+      case 'noc_query':
+        return this.nocQuery(conn, player, msg, now);
       case 'inventory_query':
         return this.inventoryQuery(conn, player, now);
       case 'inventory_action':
