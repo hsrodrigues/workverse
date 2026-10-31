@@ -92,7 +92,7 @@ export function createMailer(env: NodeJS.ProcessEnv, production: boolean, opts: 
       enabled: true,
       async send(msg) {
         const body = JSON.stringify({ from: oneLine(from), to: [oneLine(msg.to)], subject: oneLine(msg.subject), text: msg.text, ...(msg.html ? { html: msg.html } : {}) });
-        let res: { ok: boolean; status: number };
+        let res: { ok: boolean; status: number; text?: () => Promise<string> };
         try {
           res = await doFetch(RESEND_URL, {
             method: 'POST',
@@ -104,7 +104,17 @@ export function createMailer(env: NodeJS.ProcessEnv, production: boolean, opts: 
         } catch {
           throw new MailError('falha de rede ao chamar o Resend'); // sem a mensagem original: ela pode conter a URL/cabecalhos
         }
-        if (!res.ok) throw new MailError(`Resend recusou o envio (HTTP ${res.status})`);
+        if (!res.ok) {
+          // O corpo de erro do Resend diz o motivo (ex.: "The domain is not verified", "You can only send testing emails to your own email address");
+          // nao leva a chave nem o destinatario, entao pode ir para o log do servidor (curto e numa linha).
+          let why = '';
+          try {
+            why = oneLine((await res.text?.()) ?? '').slice(0, 240);
+          } catch {
+            /* sem corpo */
+          }
+          throw new MailError(`Resend recusou o envio (HTTP ${res.status})${why ? `: ${why}` : ''}`);
+        }
       },
     };
   }
