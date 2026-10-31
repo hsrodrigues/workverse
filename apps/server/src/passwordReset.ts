@@ -74,6 +74,10 @@ export function registerPasswordReset(app: FastifyInstance, deps: AuthDeps) {
     if (account && account.passwordHash !== '' && !accessBlock(account, clock())) {
       // Em segundo plano: o tempo do provedor de e-mail nao pode diferenciar "existe" de "nao existe".
       void sendLink(account);
+    } else {
+      // Fica so no log do servidor (a resposta ao navegador e sempre a mesma): ajuda quem administra a entender "o e-mail nao chegou".
+      const reason = !account ? 'sem_conta_com_esse_email' : account.passwordHash === '' ? 'conta_sem_senha' : 'conta_bloqueada_ou_desativada';
+      app.log.info({ event: 'password.reset_ignored', reason }, 'audit');
     }
     const wait = minMs - (Date.now() - started);
     if (wait > 0) await sleep(wait);
